@@ -37,6 +37,13 @@ public struct KeyEvent: Sendable {
 public enum KeyCode {
     public static let escape: UInt16 = 53
     public static let tab: UInt16 = 48
+    // Arrow keys (US ANSI layout, same across all keyboard types).
+    public static let leftArrow: UInt16  = 123
+    public static let rightArrow: UInt16 = 124
+    public static let downArrow: UInt16  = 125
+    public static let upArrow: UInt16    = 126
+    // Grave accent / backtick (`~) — used for same-app jump (§6.2).
+    public static let grave: UInt16 = 50
 }
 
 // MARK: - CGEventFlags bit masks (subset used by SafetyGuard)

@@ -11,12 +11,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var onboardingWindow: OnboardingWindow?
     private var hotkeyTap: HotkeyTap?
 
+    // §6.2: state machine owns the switcher logic; wired in startTapIfPossible().
+    private var switcherMachine: SwitcherStateMachine?
+
     // §7.2: panel created once at startup, retained forever.
     private var switcherPanel: SwitcherPanel?
 
     // Real window data source (§5) and pre-scaled icon cache (§8).
     private var windowStore: WindowStore?
     private var iconCache: IconCache?
+
+    // Snapshot of windows from the most recent "show" transition.
+    // Used by sameAppResolver and confirmSelection without re-enumerating.
+    private var lastSwitcherItems: [SwitcherItem] = []
 
     @MainActor
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -117,35 +124,69 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // §7 trigger wiring: Option+Tab → show panel (or advance selection).
-        tap.onTrigger = { [weak self] t0 in
-            guard let self, let panel = self.switcherPanel else { return }
-            if !panel.isVisible {
-                // Initial show: enumerate real windows now (§5) and map to items.
+        // §6.2 / Step 9: route all switcher inputs through the state machine.
+        // The machine is pure logic; we execute its returned action here.
+        // §4.3: the callback runs on the main run loop, and onSwitcherInput
+        // is called synchronously within the tap callback (no async hop needed
+        // for the consume decision). Panel/UI work is cheap enough to do inline
+        // because it only posts display requests — no blocking I/O.
+        let machine = SwitcherStateMachine(sameAppResolver: { [weak self] currentIndex in
+            // Resolve the next window index that belongs to the same app as
+            // the currently selected window. This requires the WindowStore's
+            // last-enumerated list, which AppDelegate caches during showPanel.
+            self?.nextSameAppIndex(from: currentIndex)
+        })
+        self.switcherMachine = machine
+
+        tap.onSwitcherInput = { [weak self] input, t0 in
+            guard let self, let panel = self.switcherPanel else { return false }
+
+            // Supply the current item count only when showing the panel
+            // (MODIFIER_HELD + trigger transition). For all other inputs
+            // the machine ignores itemCount, so 0 is a safe sentinel.
+            let itemCount: Int
+            if case .trigger = input, !panel.isVisible {
+                // This is the "show" transition — enumerate now.
                 let items = self.currentSwitcherItems()
-                // §15 edge case: with no windows, never show the panel.
-                guard !items.isEmpty else { return }
-                panel.show(items: items, selectedIndex: self.initialSelection(count: items.count))
+                self.lastSwitcherItems = items
+                itemCount = items.count
+            } else {
+                itemCount = panel.itemCount
+            }
+
+            let (action, consumed) = machine.handle(input, itemCount: itemCount)
+
+            switch action {
+            case .none:
+                break
+
+            case .showPanel(let initialIndex):
+                // §15 edge case: 0 windows — the machine already returned
+                // .none in that case (itemCount == 0 guard inside machine),
+                // but be defensive here too.
+                let items = self.lastSwitcherItems
+                guard !items.isEmpty else { break }
+                panel.show(items: items, selectedIndex: initialIndex)
                 panel.displayIfNeeded()
                 let n1 = (CFAbsoluteTimeGetCurrent() - t0) * 1000.0
                 NSLog("[CmdTab] N1: %.2fms (callback→display, %d windows)", n1, items.count)
-            } else {
-                // Subsequent press: advance selection over the shown snapshot
-                // (do NOT re-enumerate mid-cycle).
+
+            case .moveSelection(let newIndex):
                 let t2start = CFAbsoluteTimeGetCurrent()
-                let nextIndex = SwitcherLayout.advanceIndex(
-                    panel.currentSelectedIndex, count: panel.itemCount)
-                panel.updateSelection(to: nextIndex)
+                panel.updateSelection(to: newIndex)
                 panel.displayIfNeeded()
                 let n2 = (CFAbsoluteTimeGetCurrent() - t2start) * 1000.0
                 NSLog("[CmdTab] N2 redraw: %.2fms", n2)
-            }
-        }
 
-        // Dumb Option-release wiring: hide the panel when Option is released.
-        tap.onModifierReleased = { [weak self] in
-            guard let panel = self?.switcherPanel, panel.isVisible else { return }
-            panel.hide()
+            case .confirmSelection(let index):
+                NSLog("[CmdTab] Confirm window index %d (AX raise pending Step 10)", index)
+                panel.hide()
+
+            case .cancel:
+                panel.hide()
+            }
+
+            return consumed
         }
 
         hotkeyTap = tap
@@ -169,6 +210,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// are two or more, otherwise the only window (index 0).
     private func initialSelection(count: Int) -> Int {
         count >= 2 ? 1 : 0
+    }
+
+    /// Return the next index that belongs to the same app as `currentIndex`
+    /// in the last-shown snapshot, or nil if there is no other window of
+    /// the same app. Used by the state machine's sameAppResolver closure.
+    @MainActor
+    private func nextSameAppIndex(from currentIndex: Int) -> Int? {
+        let items = lastSwitcherItems
+        guard items.indices.contains(currentIndex) else { return nil }
+        // SwitcherItem carries only icon + title; use WindowStore for pid lookup.
+        // The resolver is best-effort: if we can't identify the app, return nil.
+        guard let windowStore else { return nil }
+        let windows = windowStore.enumerate()
+        guard windows.indices.contains(currentIndex) else { return nil }
+        let currentPID = windows[currentIndex].pid
+        // Search forward (wrapping) for the next window with the same PID.
+        let count = windows.count
+        for offset in 1..<count {
+            let candidate = (currentIndex + offset) % count
+            if windows[candidate].pid == currentPID {
+                return candidate
+            }
+        }
+        return nil
     }
 
     // Prevent AppKit from quitting the process when all windows close.

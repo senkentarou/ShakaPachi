@@ -26,11 +26,18 @@ final class HotkeyTap {
     /// Called on the main queue when Option+Tab keyDown is captured.
     /// The argument is the CFAbsoluteTime recorded at the very top of the
     /// tap callback — before any other work — so callers can measure N1.
+    /// NOTE: kept for backward compatibility but superseded by onSwitcherInput.
     var onTrigger: ((CFAbsoluteTime) -> Void)?
 
     /// Called on the main queue when the Option modifier is released while
-    /// the switcher panel is visible (dumb wiring until Step 9 state machine).
+    /// the switcher panel is visible.
+    /// NOTE: kept for backward compatibility but superseded by onSwitcherInput.
     var onModifierReleased: (() -> Void)?
+
+    /// Delivers an abstract SwitcherInput to the state machine on the main queue.
+    /// The closure returns true if the event should be consumed (nil to system).
+    /// t0 is the tap-entry timestamp so callers can measure N1 on the first trigger.
+    var onSwitcherInput: ((SwitcherInput, CFAbsoluteTime) -> Bool)?
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -173,31 +180,84 @@ final class HotkeyTap {
             break
         }
 
-        // Step 7: consume Option+Tab (both key phases) and fire onTrigger on
-        // keyDown so AppDelegate can show the panel. Consuming keyUp prevents
-        // an orphan keyUp from reaching the frontmost app (Step 5 behaviour
-        // preserved). §4.3: no blocking work — hand off to main queue.
-        if (eventType == .keyDown || eventType == .keyUp),
-           keyCode == KeyCode.tab,
-           event.flags.contains(.maskAlternate) {
-            if eventType == .keyDown {
-                let capturedT0 = t0
-                DispatchQueue.main.async { [weak self] in
-                    self?.onTrigger?(capturedT0)
-                }
+        // Step 9: translate the abstract KeyEvent into a SwitcherInput and
+        // forward it to the state machine via onSwitcherInput.
+        // §4.3: no blocking work here — all panel/UI work is deferred to the
+        // main queue inside onSwitcherInput's implementation in AppDelegate.
+        let hasOption = event.flags.contains(.maskAlternate)
+        let hasShift  = event.flags.contains(.maskShift)
+
+        // Build the switcher-relevant input, if any.
+        let switcherInput: SwitcherInput?
+        switch eventType {
+        case .keyDown:
+            switch keyCode {
+            case KeyCode.tab where hasOption:
+                switcherInput = .trigger(shift: hasShift)
+            case KeyCode.rightArrow, KeyCode.downArrow:
+                switcherInput = .arrowForward
+            case KeyCode.leftArrow, KeyCode.upArrow:
+                switcherInput = .arrowBackward
+            case KeyCode.escape:
+                switcherInput = .escape
+            case KeyCode.grave:
+                switcherInput = .sameAppJump
+            default:
+                switcherInput = .otherKey
+            }
+        case .keyUp:
+            // Consume Tab keyUp so an orphan keyUp doesn't reach the front app.
+            if keyCode == KeyCode.tab, hasOption {
+                return nil
+            }
+            switcherInput = nil
+        case .flagsChanged:
+            // Detect Option modifier transitions.
+            if hasOption {
+                switcherInput = .modifierDown
+            } else {
+                switcherInput = .modifierUp
+            }
+        default:
+            switcherInput = nil
+        }
+
+        guard let input = switcherInput else {
+            return Unmanaged.passUnretained(event)
+        }
+
+        // §4.3: the machine call itself is pure and cheap (no I/O).
+        // Capture what we need before the async hop so we avoid races.
+        let capturedT0 = t0
+        let capturedInput = input
+
+        // Use a semaphore-free synchronous dispatch: we can call the state
+        // machine directly here because AppDelegate installs onSwitcherInput
+        // on the main actor AND the tap callback runs on the main run loop
+        // (CFRunLoopAddSource to .commonModes in enable()). This avoids an
+        // async hop for the consume decision, which must be made before we
+        // return from this callback.
+        //
+        // If onSwitcherInput is not set yet, fall back to legacy handlers
+        // so no regression occurs before AppDelegate wires the machine.
+        if let handler = onSwitcherInput {
+            let consume = handler(capturedInput, capturedT0)
+            return consume ? nil : Unmanaged.passUnretained(event)
+        }
+
+        // Legacy fallback (pre-Step-9 path): kept so the app doesn't break
+        // if onSwitcherInput is not wired (e.g. during tests or early init).
+        if case .trigger = capturedInput, case .keyDown = eventType {
+            DispatchQueue.main.async { [weak self] in
+                self?.onTrigger?(capturedT0)
             }
             return nil
         }
-
-        // Observe Option modifier release (flagsChanged with Option cleared).
-        // Dumb wiring until Step 9 state machine: caller decides whether to hide.
-        if eventType == .flagsChanged,
-           !event.flags.contains(.maskAlternate) {
+        if case .modifierUp = capturedInput {
             DispatchQueue.main.async { [weak self] in
                 self?.onModifierReleased?()
             }
         }
-
         return Unmanaged.passUnretained(event)
     }
 }
