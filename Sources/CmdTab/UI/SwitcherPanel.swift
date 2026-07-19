@@ -19,14 +19,17 @@ final class SwitcherPanel {
     private let panel: NSPanel
     private let effectView: NSVisualEffectView
     private let listView: SwitcherListView
+    private let sheenLayer = CAGradientLayer()
+
+    /// Liquid-glass corner radius (user request: pronounced rounding).
+    private static let cornerRadius: CGFloat = 24
 
     // MARK: - Init
 
     init() {
         // §7.1: panel configuration.
-        let initialRect = NSRect(x: 0, y: 0,
-                                  width: SwitcherLayout.panelWidth,
-                                  height: SwitcherLayout.panelHeight(itemCount: 1))
+        let initialSize = SwitcherLayout.panelSize(itemCount: 1)
+        let initialRect = NSRect(origin: .zero, size: initialSize)
 
         let p = NSPanel(
             contentRect: initialRect,
@@ -42,16 +45,40 @@ final class SwitcherPanel {
         p.backgroundColor = .clear
         p.hasShadow = true
 
-        // §7.1 content: HUD-style NSVisualEffectView with 12pt corner radius.
+        // §7.1 content: NSVisualEffectView, liquid-glass styling.
+        // .popover (not .hudWindow): the user chose the system-standard look
+        // that follows the light/dark appearance over the always-dark HUD.
         let ev = NSVisualEffectView(frame: initialRect.insetBy(dx: 0, dy: 0))
-        ev.material = .hudWindow
+        ev.material = .popover
         ev.blendingMode = .behindWindow
         ev.state = .active
         ev.wantsLayer = true
-        ev.layer?.cornerRadius = 12
+        // behindWindow blur is clipped by the window server, which ignores
+        // layer.cornerRadius — the blur region itself must be shaped through
+        // maskImage or the corners stay square.
+        ev.maskImage = Self.roundedCornerMask(radius: Self.cornerRadius)
+        ev.layer?.cornerRadius = Self.cornerRadius
         ev.layer?.masksToBounds = true
+        // Glass rim: 1px light border reads as the edge of a liquid pane.
+        ev.layer?.borderWidth = 1
+        ev.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
 
-        // SwitcherListView fills the effect view with padding.
+        // Top sheen gradient for the liquid-glass feel.
+        let sheen = sheenLayer
+        sheen.colors = [
+            NSColor.white.withAlphaComponent(0.14).cgColor,
+            NSColor.white.withAlphaComponent(0.04).cgColor,
+            NSColor.clear.cgColor,
+        ]
+        sheen.locations = [0.0, 0.4, 0.75]
+        sheen.startPoint = CGPoint(x: 0.5, y: 1.0)   // layer coords: y=1 is the top
+        sheen.endPoint = CGPoint(x: 0.5, y: 0.0)
+        sheen.cornerRadius = Self.cornerRadius
+        sheen.masksToBounds = true
+        sheen.frame = ev.bounds
+        ev.layer?.addSublayer(sheen)
+
+        // SwitcherListView fills the effect view; padding is drawn internally.
         let lv = SwitcherListView(frame: ev.bounds)
         lv.translatesAutoresizingMaskIntoConstraints = false
         ev.addSubview(lv)
@@ -59,10 +86,8 @@ final class SwitcherPanel {
         NSLayoutConstraint.activate([
             lv.leadingAnchor.constraint(equalTo: ev.leadingAnchor),
             lv.trailingAnchor.constraint(equalTo: ev.trailingAnchor),
-            lv.topAnchor.constraint(equalTo: ev.topAnchor,
-                                    constant: SwitcherLayout.verticalPadding),
-            lv.bottomAnchor.constraint(equalTo: ev.bottomAnchor,
-                                       constant: -SwitcherLayout.verticalPadding),
+            lv.topAnchor.constraint(equalTo: ev.topAnchor),
+            lv.bottomAnchor.constraint(equalTo: ev.bottomAnchor),
         ])
 
         p.contentView = ev
@@ -106,8 +131,7 @@ final class SwitcherPanel {
     // MARK: - Layout (§7.4)
 
     private func repositionPanel(itemCount: Int) {
-        let height = SwitcherLayout.panelHeight(itemCount: itemCount)
-        let width  = SwitcherLayout.panelWidth
+        let size = SwitcherLayout.panelSize(itemCount: itemCount)
 
         // Find the screen containing the mouse cursor; fall back to main.
         let mouseLocation = NSEvent.mouseLocation
@@ -117,14 +141,37 @@ final class SwitcherPanel {
 
         let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0,
                                                           width: 1440, height: 900)
+        // Overflow strategy for very many windows (tile shrink / wrapping) is
+        // a Step 8 concern; for now the width is simply capped to the screen.
+        let width = min(size.width, screenFrame.width - 40)
+        let height = size.height
         let x = screenFrame.midX - width / 2
         let y = screenFrame.midY - height / 2
 
         let newFrame = NSRect(x: x, y: y, width: width, height: height)
         panel.setFrame(newFrame, display: false)
 
-        // Resize the effect view to match.
+        // Resize the effect view and its sheen without implicit animations.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         effectView.frame = NSRect(origin: .zero, size: newFrame.size)
-        effectView.layer?.cornerRadius = 12
+        sheenLayer.frame = effectView.bounds
+        CATransaction.commit()
+    }
+
+    // MARK: - Liquid-glass helpers
+
+    /// Resizable rounded-rect mask that shapes the behind-window blur region.
+    private static func roundedCornerMask(radius: CGFloat) -> NSImage {
+        let edge = radius * 2 + 1
+        let image = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(top: radius, left: radius,
+                                       bottom: radius, right: radius)
+        image.resizingMode = .stretch
+        return image
     }
 }

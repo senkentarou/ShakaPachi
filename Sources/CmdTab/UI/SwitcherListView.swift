@@ -1,7 +1,11 @@
 // SwitcherListView.swift
-// §7.3 NSTableView-based list of SwitcherItems for the switcher panel.
-// Uses fixed row height (28pt) and reused NSTableCellViews.
-// §7.5: selection changes redraw only the two affected rows (old + new).
+// §7.3 (amended by user decision): native App-Switcher-style horizontal
+// icon-tile row instead of the spec's vertical list. Each tile is ONE WINDOW
+// (not an app) — windows of the same app repeat the app icon, AltTab-style —
+// and the selected window's title is drawn beneath the row.
+// Custom draw(_:) implementation (§7.3's fallback path): tiles plus a single
+// title line, so a full pass is trivial and §7.5 selective redraw reduces to
+// invalidating two tile rects plus the title strip.
 
 import AppKit
 
@@ -21,34 +25,54 @@ public struct SwitcherItem: Equatable {
 
 // MARK: - Layout constants shared with SwitcherPanel
 
-/// Shared layout constants used by both the list view and the panel.
+/// Shared layout constants used by both the tile row and the panel.
+/// All geometry functions are pure — unit-testable.
 public enum SwitcherLayout {
-    /// Fixed row height (§7.4).
-    public static let rowHeight: CGFloat = 28
-    /// Panel width (§7.4).
-    public static let panelWidth: CGFloat = 480
-    /// Maximum visible rows before scrolling kicks in (§7.4).
-    public static let maxRows: Int = 20
-    /// Vertical padding above and below the row area.
-    public static let verticalPadding: CGFloat = 8
+    /// Square highlight tile per window (§7.4 amended).
+    public static let tileSize: CGFloat = 76
+    /// App icon drawn centered inside the tile.
+    public static let iconSize: CGFloat = 60
+    /// Gap between adjacent tiles.
+    public static let tileSpacing: CGFloat = 8
+    /// Left/right panel margin around the tile row.
+    public static let horizontalMargin: CGFloat = 20
+    /// Space above the tile row.
+    public static let topPadding: CGFloat = 20
+    /// Gap between the tile row and the title line.
+    public static let titleGap: CGFloat = 6
+    /// Height of the selected-window title line.
+    public static let titleHeight: CGFloat = 20
+    /// Space below the title line.
+    public static let bottomPadding: CGFloat = 14
 
-    /// Compute the total panel height for a given item count (§7.4).
-    /// Pure function — unit-testable.
-    public static func panelHeight(itemCount: Int) -> CGFloat {
-        let visibleRows = min(itemCount, maxRows)
-        return CGFloat(visibleRows) * rowHeight + verticalPadding * 2
+    /// Total panel size for a given window count.
+    public static func panelSize(itemCount: Int) -> NSSize {
+        let count = max(itemCount, 1)
+        let width = horizontalMargin * 2
+                  + CGFloat(count) * tileSize
+                  + CGFloat(count - 1) * tileSpacing
+        let height = topPadding + tileSize + titleGap + titleHeight + bottomPadding
+        return NSSize(width: width, height: height)
+    }
+
+    /// Tile rect for the given index, in flipped (top-left origin) coordinates.
+    public static func tileRect(index: Int) -> NSRect {
+        NSRect(
+            x: horizontalMargin + CGFloat(index) * (tileSize + tileSpacing),
+            y: topPadding,
+            width: tileSize,
+            height: tileSize
+        )
     }
 
     /// Advance the selection index by +1 with wrap-around (§6.2).
-    /// Pure function — unit-testable.
     public static func advanceIndex(_ current: Int, count: Int) -> Int {
         guard count > 0 else { return 0 }
         return (current + 1) % count
     }
 
-    /// Return the two row indices that need redrawing when selection changes.
-    /// Pure function — unit-testable.
-    public static func rowsToRedraw(old: Int, new: Int) -> IndexSet {
+    /// The tile indices needing redraw when the selection moves (§7.5).
+    public static func indicesToRedraw(old: Int, new: Int) -> IndexSet {
         var set = IndexSet()
         set.insert(old)
         if new != old { set.insert(new) }
@@ -58,242 +82,116 @@ public enum SwitcherLayout {
 
 // MARK: - Dummy data
 
-/// Eight hardcoded items used in Step 7 (replaced by real data in Step 8).
+/// Dummy windows used in Step 7 (replaced by real data in Step 8).
+/// Two Safari entries demonstrate the window-level model: same app icon
+/// repeated, distinguished by the title below the row.
 public let dummySwitcherItems: [SwitcherItem] = {
-    // Use SF Symbols available on macOS 13+ for the icons.
     func sfImage(_ name: String) -> NSImage? {
-        NSImage(systemSymbolName: name, accessibilityDescription: nil)
+        NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: 48, weight: .regular))
     }
     return [
-        SwitcherItem(icon: sfImage("safari"),               title: "Safari — GitHub"),
-        SwitcherItem(icon: sfImage("terminal"),             title: "ターミナル — ~/work/cmdtab"),
-        SwitcherItem(icon: sfImage("envelope"),             title: "メール — 受信トレイ (3)"),
-        SwitcherItem(icon: sfImage("music.note"),           title: "ミュージック — 再生中"),
-        SwitcherItem(icon: sfImage("doc.text"),             title: "テキストエディット — 仕様書.txt"),
-        SwitcherItem(icon: sfImage("folder"),               title: "Finder — ダウンロード"),
-        SwitcherItem(icon: sfImage("calendar"),             title: "カレンダー — 今日"),
-        SwitcherItem(icon: sfImage("gearshape"),            title: "システム設定 — 一般"),
+        SwitcherItem(icon: sfImage("safari"),     title: "Safari — GitHub"),
+        SwitcherItem(icon: sfImage("safari"),     title: "Safari — Qiita"),
+        SwitcherItem(icon: sfImage("terminal"),   title: "ターミナル — ~/work/cmdtab"),
+        SwitcherItem(icon: sfImage("envelope"),   title: "メール — 受信トレイ (3)"),
+        SwitcherItem(icon: sfImage("music.note"), title: "ミュージック — 再生中"),
+        SwitcherItem(icon: sfImage("doc.text"),   title: "テキストエディット — 仕様書.txt"),
+        SwitcherItem(icon: sfImage("folder"),     title: "Finder — ダウンロード"),
+        SwitcherItem(icon: sfImage("gearshape"),  title: "システム設定 — 一般"),
     ]
 }()
 
 // MARK: - SwitcherListView
 
-/// NSTableView wrapped in a scroll view for displaying switcher rows.
-/// The outer scroll view is sized to exactly fit up to maxRows rows; the
-/// table itself is transparent so the HUD blur behind shows through.
+/// Horizontal icon-tile row with the selected window's title beneath it.
+/// Fully custom-drawn: no subviews, no Auto Layout in the hot path.
 final class SwitcherListView: NSView {
-
-    // MARK: Subviews
-
-    private let scrollView: NSScrollView
-    private let tableView: NSTableView
 
     // MARK: State
 
     private var items: [SwitcherItem] = []
     private(set) var selectedIndex: Int = 0
 
-    // MARK: Cell reuse identifier
-
-    private static let cellIdentifier = NSUserInterfaceItemIdentifier("SwitcherCell")
-
-    // MARK: Init
-
-    override init(frame: NSRect) {
-        // Build the table view first.
-        let tv = NSTableView(frame: NSRect(x: 0, y: 0,
-                                           width: SwitcherLayout.panelWidth,
-                                           height: 0))
-        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("col"))
-        column.width = SwitcherLayout.panelWidth
-        tv.addTableColumn(column)
-        tv.headerView = nil                    // headerless
-        tv.rowHeight = SwitcherLayout.rowHeight
-        tv.usesAutomaticRowHeights = false     // §7.3: fixed height mandatory
-        tv.backgroundColor = .clear            // HUD blur shows through
-        tv.selectionHighlightStyle = .regular  // selection highlight on the row
-        tv.allowsMultipleSelection = false
-        tv.allowsEmptySelection = false
-        tv.intercellSpacing = NSSize(width: 0, height: 0)
-        tv.focusRingType = .none
-
-        // Wrap in a non-scrolling scroll view (scroll view handles overflow).
-        let sv = NSScrollView(frame: frame)
-        sv.documentView = tv
-        sv.drawsBackground = false
-        sv.backgroundColor = .clear
-        sv.hasVerticalScroller = true
-        sv.autohidesScrollers = true
-        sv.hasHorizontalScroller = false
-        sv.borderType = .noBorder
-
-        self.tableView = tv
-        self.scrollView = sv
-
-        super.init(frame: frame)
-
-        addSubview(sv)
-        tv.dataSource = self
-        tv.delegate = self
-
-        // Auto Layout: fill the entire SwitcherListView.
-        sv.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            sv.leadingAnchor.constraint(equalTo: leadingAnchor),
-            sv.trailingAnchor.constraint(equalTo: trailingAnchor),
-            sv.topAnchor.constraint(equalTo: topAnchor),
-            sv.bottomAnchor.constraint(equalTo: bottomAnchor),
-        ])
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
+    // Top-left origin so tile math matches SwitcherLayout directly.
+    override var isFlipped: Bool { true }
 
     // MARK: Public API
 
     /// Replace the full item list and select the given index.
-    /// Reloads all data (called once per panel show; §7.5 optimisation is for
-    /// subsequent selection moves, not the initial load).
     func setItems(_ items: [SwitcherItem], selectedIndex: Int) {
         self.items = items
         self.selectedIndex = clamp(selectedIndex, count: items.count)
-        tableView.reloadData()
-        applySelectionToTableView()
-        scrollToSelected()
+        needsDisplay = true
     }
 
-    /// Move the selection highlight without reloading the whole table (§7.5).
+    /// Move the selection highlight, invalidating only the two affected tiles
+    /// and the title strip (§7.5).
     func moveSelection(to newIndex: Int) {
         let old = selectedIndex
         let new = clamp(newIndex, count: items.count)
         guard new != old else { return }
 
         selectedIndex = new
-        // Redraw only the two affected rows.
-        let dirty = SwitcherLayout.rowsToRedraw(old: old, new: new)
-        tableView.reloadData(forRowIndexes: dirty,
-                             columnIndexes: IndexSet(integer: 0))
-        applySelectionToTableView()
-        scrollToSelected()
+        for index in SwitcherLayout.indicesToRedraw(old: old, new: new) {
+            setNeedsDisplay(SwitcherLayout.tileRect(index: index).insetBy(dx: -2, dy: -2))
+        }
+        setNeedsDisplay(titleRect)
+    }
+
+    // MARK: Drawing
+
+    override func draw(_ dirtyRect: NSRect) {
+        for (index, item) in items.enumerated() {
+            let tile = SwitcherLayout.tileRect(index: index)
+            guard tile.insetBy(dx: -2, dy: -2).intersects(dirtyRect) else { continue }
+
+            if index == selectedIndex {
+                // Neutral rounded highlight like the native App Switcher.
+                let highlight = NSBezierPath(roundedRect: tile, xRadius: 14, yRadius: 14)
+                NSColor.labelColor.withAlphaComponent(0.16).setFill()
+                highlight.fill()
+            }
+
+            let inset = (SwitcherLayout.tileSize - SwitcherLayout.iconSize) / 2
+            let iconRect = tile.insetBy(dx: inset, dy: inset)
+            item.icon?.draw(
+                in: iconRect,
+                from: .zero,
+                operation: .sourceOver,
+                fraction: 1.0,
+                respectFlipped: true,
+                hints: [.interpolation: NSImageInterpolation.high.rawValue]
+            )
+        }
+
+        if titleRect.intersects(dirtyRect), items.indices.contains(selectedIndex) {
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.alignment = .center
+            paragraph.lineBreakMode = .byTruncatingMiddle   // §7.4 middle truncation
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 13),
+                .foregroundColor: NSColor.labelColor,
+                .paragraphStyle: paragraph,
+            ]
+            let textRect = titleRect.insetBy(dx: SwitcherLayout.horizontalMargin, dy: 0)
+            (items[selectedIndex].title as NSString).draw(in: textRect, withAttributes: attributes)
+        }
     }
 
     // MARK: Private helpers
 
+    private var titleRect: NSRect {
+        NSRect(
+            x: 0,
+            y: SwitcherLayout.topPadding + SwitcherLayout.tileSize + SwitcherLayout.titleGap,
+            width: bounds.width,
+            height: SwitcherLayout.titleHeight
+        )
+    }
+
     private func clamp(_ index: Int, count: Int) -> Int {
         guard count > 0 else { return 0 }
         return max(0, min(index, count - 1))
-    }
-
-    private func applySelectionToTableView() {
-        tableView.selectRowIndexes(IndexSet(integer: selectedIndex),
-                                   byExtendingSelection: false)
-    }
-
-    private func scrollToSelected() {
-        tableView.scrollRowToVisible(selectedIndex)
-    }
-}
-
-// MARK: - NSTableViewDataSource
-
-extension SwitcherListView: NSTableViewDataSource {
-    func numberOfRows(in tableView: NSTableView) -> Int { items.count }
-}
-
-// MARK: - NSTableViewDelegate
-
-extension SwitcherListView: NSTableViewDelegate {
-
-    func tableView(_ tableView: NSTableView,
-                   viewFor tableColumn: NSTableColumn?,
-                   row: Int) -> NSView? {
-        guard row < items.count else { return nil }
-        let item = items[row]
-
-        // Reuse or create a cell view.
-        var cell = tableView.makeView(
-            withIdentifier: SwitcherListView.cellIdentifier,
-            owner: self
-        ) as? SwitcherCellView
-
-        if cell == nil {
-            cell = SwitcherCellView(
-                identifier: SwitcherListView.cellIdentifier
-            )
-        }
-
-        cell?.configure(with: item)
-        return cell
-    }
-
-    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-        SwitcherLayout.rowHeight
-    }
-
-    // Prevent user-initiated selection changes (selection is managed in code).
-    func tableView(_ tableView: NSTableView,
-                   shouldSelectRow row: Int) -> Bool { false }
-}
-
-// MARK: - SwitcherCellView
-
-/// Minimal cell: 20×20 icon + title label.
-/// Uses a flat Auto Layout setup (no nesting) to keep measurement overhead low.
-final class SwitcherCellView: NSTableCellView {
-
-    private let iconView: NSImageView
-    private let titleField: NSTextField
-
-    init(identifier: NSUserInterfaceItemIdentifier) {
-        iconView = NSImageView(frame: .zero)
-        titleField = NSTextField(labelWithString: "")
-
-        super.init(frame: .zero)
-        self.identifier = identifier
-
-        // Icon: 20×20, centred vertically in the 28pt row.
-        iconView.translatesAutoresizingMaskIntoConstraints = false
-        iconView.imageScaling = .scaleProportionallyUpOrDown
-        iconView.setContentCompressionResistancePriority(.required, for: .horizontal)
-        iconView.setContentHuggingPriority(.required, for: .horizontal)
-
-        // Title: single-line, middle truncation (§7.4).
-        titleField.translatesAutoresizingMaskIntoConstraints = false
-        titleField.lineBreakMode = .byTruncatingMiddle
-        titleField.cell?.lineBreakMode = .byTruncatingMiddle
-        titleField.isEditable = false
-        titleField.isSelectable = false
-        titleField.drawsBackground = false
-        titleField.isBordered = false
-        titleField.font = NSFont.systemFont(ofSize: 13)
-        titleField.textColor = .labelColor
-
-        addSubview(iconView)
-        addSubview(titleField)
-        self.imageView = iconView
-        self.textField = titleField
-
-        let padding: CGFloat = 8
-        let iconSize: CGFloat = 20
-        let iconTitleGap: CGFloat = 8
-
-        NSLayoutConstraint.activate([
-            iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: padding),
-            iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: iconSize),
-            iconView.heightAnchor.constraint(equalToConstant: iconSize),
-
-            titleField.leadingAnchor.constraint(
-                equalTo: iconView.trailingAnchor, constant: iconTitleGap),
-            titleField.trailingAnchor.constraint(
-                equalTo: trailingAnchor, constant: -padding),
-            titleField.centerYAnchor.constraint(equalTo: centerYAnchor),
-        ])
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
-
-    func configure(with item: SwitcherItem) {
-        iconView.image = item.icon
-        titleField.stringValue = item.title
     }
 }
