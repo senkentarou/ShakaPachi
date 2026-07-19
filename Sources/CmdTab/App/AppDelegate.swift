@@ -15,6 +15,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItemController = StatusItemController()
     }
 
+    // Prevent AppKit from quitting the process when all windows close.
+    // As a menu-bar accessory the app has no main window, so this callback
+    // would otherwise trigger immediately and exit the process.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return false
+    }
+
     @MainActor
     func applicationWillTerminate(_ notification: Notification) {
         // Reserved for Step 5: disable event tap so modifier keys are not
