@@ -1,22 +1,40 @@
 import AppKit
 
 /// Manages the menu bar status item for CmdTab.
-// StatusItemController is created from applicationDidFinishLaunching
-// (@MainActor), so the init and all methods run on the main thread.
-// We mark the class @MainActor so Swift 6 can verify this.
+// Created and accessed exclusively from applicationDidFinishLaunching (@MainActor).
 @MainActor
 final class StatusItemController {
 
     private let statusItem: NSStatusItem
     private let menu = NSMenu()
+    private let permissionManager: PermissionManager
 
-    init() {
+    // Held references to menu items that need runtime updates.
+    private var permissionStatusItem: NSMenuItem?
+
+    init(permissionManager: PermissionManager) {
+        self.permissionManager = permissionManager
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         setupButton()
         setupMenu()
+        updatePermissionWarning()
     }
 
-    // MARK: - Private
+    // MARK: - Public
+
+    /// Refresh the permission badge on the status icon and menu item.
+    func updatePermissionWarning() {
+        let allGranted = permissionManager.allPermissionsGranted()
+        if let button = statusItem.button {
+            button.image = allGranted ? makeStatusIcon() : makeWarningIcon()
+            button.image?.isTemplate = true
+        }
+        permissionStatusItem?.title = allGranted
+            ? "権限の状態…"
+            : "⚠ 権限の状態…"
+    }
+
+    // MARK: - Private: button
 
     private func setupButton() {
         guard let button = statusItem.button else { return }
@@ -49,6 +67,39 @@ final class StatusItemController {
         return image
     }
 
+    /// Draws a 16x16 warning-variant icon (exclamation mark in triangle).
+    private func makeWarningIcon() -> NSImage {
+        let size = NSSize(width: 16, height: 16)
+        let image = NSImage(size: size)
+        image.lockFocus()
+
+        NSColor.black.setStroke()
+        NSColor.black.setFill()
+
+        // Triangle outline
+        let tri = NSBezierPath()
+        tri.move(to: NSPoint(x: 8, y: 15))
+        tri.line(to: NSPoint(x: 1, y: 2))
+        tri.line(to: NSPoint(x: 15, y: 2))
+        tri.close()
+        tri.lineWidth = 1.5
+        tri.stroke()
+
+        // Exclamation body
+        let rect = NSRect(x: 7, y: 5, width: 2, height: 6)
+        NSBezierPath(rect: rect).fill()
+
+        // Exclamation dot
+        let dot = NSRect(x: 7, y: 2.5, width: 2, height: 2)
+        NSBezierPath(ovalIn: dot).fill()
+
+        image.unlockFocus()
+        image.isTemplate = true
+        return image
+    }
+
+    // MARK: - Private: menu
+
     private func setupMenu() {
         // "About CmdTab" item
         let aboutItem = NSMenuItem(
@@ -58,6 +109,18 @@ final class StatusItemController {
         )
         aboutItem.target = self
         menu.addItem(aboutItem)
+
+        menu.addItem(.separator())
+
+        // Permission status item — shows ⚠ when missing
+        let permItem = NSMenuItem(
+            title: "権限の状態…",
+            action: #selector(showPermissions),
+            keyEquivalent: ""
+        )
+        permItem.target = self
+        menu.addItem(permItem)
+        permissionStatusItem = permItem
 
         menu.addItem(.separator())
 
@@ -73,8 +136,17 @@ final class StatusItemController {
         statusItem.menu = menu
     }
 
+    // MARK: - Menu actions
+
     @objc private func showAbout() {
         NSApp.orderFrontStandardAboutPanel(nil)
+    }
+
+    @objc private func showPermissions() {
+        // Show the onboarding window regardless of current status so
+        // the user can check or re-request permissions at any time.
+        let ow = OnboardingWindow(permissionManager: permissionManager)
+        ow.show()
     }
 
     @objc private func quitApp() {

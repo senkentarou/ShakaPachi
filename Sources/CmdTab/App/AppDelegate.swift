@@ -7,12 +7,32 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var statusItemController: StatusItemController?
+    private var permissionManager: PermissionManager?
+    private var onboardingWindow: OnboardingWindow?
 
     @MainActor
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Run as a menu-bar accessory: no Dock icon, no activation on launch.
         NSApp.setActivationPolicy(.accessory)
-        statusItemController = StatusItemController()
+
+        let pm = PermissionManager()
+        self.permissionManager = pm
+
+        let sc = StatusItemController(permissionManager: pm)
+        self.statusItemController = sc
+
+        // Check permissions and show onboarding if any are missing.
+        if !pm.allPermissionsGranted() {
+            let ow = OnboardingWindow(permissionManager: pm)
+            self.onboardingWindow = ow
+            ow.show()
+            NSLog("[CmdTab] Permissions missing — showing onboarding. " +
+                  "Accessibility: %@  ScreenRecording: %@",
+                  pm.accessibilityStatus() == .granted ? "granted" : "denied",
+                  pm.screenRecordingStatus() == .granted ? "granted" : "denied")
+        } else {
+            NSLog("[CmdTab] All permissions granted — normal startup.")
+        }
     }
 
     // Prevent AppKit from quitting the process when all windows close.
