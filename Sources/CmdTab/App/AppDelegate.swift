@@ -23,7 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Check permissions and show onboarding if any are missing.
         if !pm.allPermissionsGranted() {
-            let ow = OnboardingWindow(permissionManager: pm)
+            let ow = OnboardingWindow(permissionManager: pm) { [weak sc] in
+                sc?.updatePermissionWarning()
+            }
             self.onboardingWindow = ow
             ow.show()
             NSLog("[CmdTab] Permissions missing — showing onboarding. " +

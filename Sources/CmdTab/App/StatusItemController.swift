@@ -12,6 +12,11 @@ final class StatusItemController {
     // Held references to menu items that need runtime updates.
     private var permissionStatusItem: NSMenuItem?
 
+    // Retained while open: NSWindow.delegate is weak, so a local variable
+    // would deallocate the controller and leave the activation policy stuck
+    // at .regular when the window closes.
+    private var onboardingWindow: OnboardingWindow?
+
     init(permissionManager: PermissionManager) {
         self.permissionManager = permissionManager
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -145,7 +150,10 @@ final class StatusItemController {
     @objc private func showPermissions() {
         // Show the onboarding window regardless of current status so
         // the user can check or re-request permissions at any time.
-        let ow = OnboardingWindow(permissionManager: permissionManager)
+        let ow = OnboardingWindow(permissionManager: permissionManager) { [weak self] in
+            self?.updatePermissionWarning()
+        }
+        onboardingWindow = ow
         ow.show()
     }
 
