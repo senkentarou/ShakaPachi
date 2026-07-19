@@ -30,7 +30,11 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
 
         let win = makeWindow()
         win.delegate = self
-        win.contentView = makeContentView()
+        let content = makeContentView()
+        win.contentView = content
+        // The content rect passed to NSWindow.init is a placeholder; size the
+        // window from the Auto Layout fitting size so wrapped labels never clip.
+        win.setContentSize(content.fittingSize)
         win.center()
         win.makeKeyAndOrderFront(nil)
         self.window = win
@@ -63,8 +67,10 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
     // MARK: - Content view
 
     private func makeContentView() -> NSView {
+        // NSWindow manages its contentView's frame directly (autoresizing),
+        // so the container must keep translatesAutoresizingMaskIntoConstraints
+        // enabled; only the inner stack uses Auto Layout.
         let container = NSView()
-        container.translatesAutoresizingMaskIntoConstraints = false
 
         // Title label
         let titleLabel = makeLabel(
@@ -168,21 +174,15 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
         headerRow.orientation = .horizontal
         headerRow.spacing = 6
 
+        // Plain stack instead of NSBox: NSBox does not derive its height from
+        // an Auto Layout contentView, which collapsed the section and overlapped
+        // neighbors (and its default title "Title" leaked into the UI).
         let section = NSStackView(views: [headerRow, reasonLabel, openButton])
         section.orientation = .vertical
         section.alignment = .leading
         section.spacing = 6
 
-        let box = NSBox()
-        // Use .primary boxType which renders a line border without triggering
-        // the deprecated borderType API (borderType is only meaningful for
-        // NSBoxOldStyle which itself is deprecated since macOS 10.15).
-        box.boxType = .primary
-        box.cornerRadius = 6
-        box.contentViewMargins = NSSize(width: 12, height: 10)
-        box.contentView = section
-
-        return box
+        return section
     }
 
     // MARK: - Helpers
