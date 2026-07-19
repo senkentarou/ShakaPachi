@@ -36,6 +36,7 @@ public struct KeyEvent: Sendable {
 
 public enum KeyCode {
     public static let escape: UInt16 = 53
+    public static let tab: UInt16 = 48
 }
 
 // MARK: - CGEventFlags bit masks (subset used by SafetyGuard)

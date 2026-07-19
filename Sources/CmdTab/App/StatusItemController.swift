@@ -11,6 +11,15 @@ final class StatusItemController {
 
     // Held references to menu items that need runtime updates.
     private var permissionStatusItem: NSMenuItem?
+    private var toggleItem: NSMenuItem?
+
+    // Tap state mirrored from HotkeyTap for icon/menu rendering.
+    private var tapEnabled = false
+    private var tapStopReason: String?
+
+    /// Called when the user toggles 「ウィンドウ切替を有効化」.
+    /// Receives the desired new state.
+    var onToggleTap: ((Bool) -> Void)?
 
     // Retained while open: NSWindow.delegate is weak, so a local variable
     // would deallocate the controller and leave the activation policy stuck
@@ -30,13 +39,34 @@ final class StatusItemController {
     /// Refresh the permission badge on the status icon and menu item.
     func updatePermissionWarning() {
         let allGranted = permissionManager.allPermissionsGranted()
-        if let button = statusItem.button {
-            button.image = allGranted ? makeStatusIcon() : makeWarningIcon()
-            button.image?.isTemplate = true
-        }
         permissionStatusItem?.title = allGranted
             ? "権限の状態…"
             : "⚠ 権限の状態…"
+        refreshIcon()
+    }
+
+    /// Reflect the event-tap state on the toggle item and status icon (§10).
+    func updateTapState(enabled: Bool, reason: String?) {
+        tapEnabled = enabled
+        tapStopReason = reason
+        toggleItem?.state = enabled ? .on : .off
+        refreshIcon()
+    }
+
+    // Icon precedence: permission problem > tap stopped > normal.
+    private func refreshIcon() {
+        guard let button = statusItem.button else { return }
+        if !permissionManager.allPermissionsGranted() {
+            button.image = makeWarningIcon()
+            button.toolTip = "CmdTab — 権限が不足しています"
+        } else if !tapEnabled {
+            button.image = makeStoppedIcon()
+            button.toolTip = "CmdTab — 停止中" + (tapStopReason.map { " (\($0))" } ?? "")
+        } else {
+            button.image = makeStatusIcon()
+            button.toolTip = "CmdTab"
+        }
+        button.image?.isTemplate = true
     }
 
     // MARK: - Private: button
@@ -106,6 +136,19 @@ final class StatusItemController {
     // MARK: - Private: menu
 
     private func setupMenu() {
+        // Tap enable/disable toggle (§10) — also the recovery path after an
+        // emergency stop or deadman fire without relaunching the app.
+        let toggle = NSMenuItem(
+            title: "ウィンドウ切替を有効化",
+            action: #selector(toggleTap),
+            keyEquivalent: ""
+        )
+        toggle.target = self
+        menu.addItem(toggle)
+        toggleItem = toggle
+
+        menu.addItem(.separator())
+
         // "About CmdTab" item
         let aboutItem = NSMenuItem(
             title: "CmdTab について",
@@ -141,7 +184,31 @@ final class StatusItemController {
         statusItem.menu = menu
     }
 
+    /// Draws a 16x16 stopped-variant icon (square inside a circle outline).
+    private func makeStoppedIcon() -> NSImage {
+        let size = NSSize(width: 16, height: 16)
+        let image = NSImage(size: size)
+        image.lockFocus()
+
+        NSColor.black.setStroke()
+        NSColor.black.setFill()
+
+        let circle = NSBezierPath(ovalIn: NSRect(x: 1, y: 1, width: 14, height: 14))
+        circle.lineWidth = 1.5
+        circle.stroke()
+
+        NSBezierPath(rect: NSRect(x: 5.5, y: 5.5, width: 5, height: 5)).fill()
+
+        image.unlockFocus()
+        image.isTemplate = true
+        return image
+    }
+
     // MARK: - Menu actions
+
+    @objc private func toggleTap() {
+        onToggleTap?(!tapEnabled)
+    }
 
     @objc private func showAbout() {
         NSApp.orderFrontStandardAboutPanel(nil)

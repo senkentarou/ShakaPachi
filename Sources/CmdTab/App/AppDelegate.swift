@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItemController: StatusItemController?
     private var permissionManager: PermissionManager?
     private var onboardingWindow: OnboardingWindow?
+    private var hotkeyTap: HotkeyTap?
 
     @MainActor
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -21,10 +22,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let sc = StatusItemController(permissionManager: pm)
         self.statusItemController = sc
 
+        // Menu toggle drives the tap lifecycle (also the recovery path after
+        // an emergency stop or deadman fire).
+        sc.onToggleTap = { [weak self] enable in
+            guard let tap = self?.hotkeyTap else { return }
+            if enable {
+                tap.enable()
+            } else {
+                tap.disable(reason: "メニューから無効化")
+            }
+        }
+
         // Check permissions and show onboarding if any are missing.
         if !pm.allPermissionsGranted() {
-            let ow = OnboardingWindow(permissionManager: pm) { [weak sc] in
-                sc?.updatePermissionWarning()
+            let ow = OnboardingWindow(permissionManager: pm) { [weak self] in
+                self?.statusItemController?.updatePermissionWarning()
+                // Start the tap the moment both permissions turn granted.
+                self?.startTapIfPossible()
             }
             self.onboardingWindow = ow
             ow.show()
@@ -34,7 +48,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                   pm.screenRecordingStatus() == .granted ? "granted" : "denied")
         } else {
             NSLog("[CmdTab] All permissions granted — normal startup.")
+            startTapIfPossible()
         }
+    }
+
+    @MainActor
+    private func startTapIfPossible() {
+        guard hotkeyTap == nil,
+              permissionManager?.allPermissionsGranted() == true else { return }
+        let tap = HotkeyTap()
+        tap.onStateChange = { [weak self] state in
+            switch state {
+            case .active:
+                self?.statusItemController?.updateTapState(enabled: true, reason: nil)
+            case .stopped(let reason):
+                self?.statusItemController?.updateTapState(enabled: false, reason: reason)
+            }
+        }
+        hotkeyTap = tap
+        tap.enable()
     }
 
     // Prevent AppKit from quitting the process when all windows close.
@@ -46,7 +78,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor
     func applicationWillTerminate(_ notification: Notification) {
-        // Reserved for Step 5: disable event tap so modifier keys are not
-        // left in a stuck state after the process exits.
+        // §4.6: tear the tap down so modifier keys are not left in a stuck
+        // state after the process exits.
+        hotkeyTap?.disable(reason: "アプリ終了")
     }
 }
