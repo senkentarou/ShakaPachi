@@ -11,10 +11,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var onboardingWindow: OnboardingWindow?
     private var hotkeyTap: HotkeyTap?
 
+    // §7.2: panel created once at startup, retained forever.
+    private var switcherPanel: SwitcherPanel?
+
     @MainActor
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Run as a menu-bar accessory: no Dock icon, no activation on launch.
         NSApp.setActivationPolicy(.accessory)
+
+        // §7.2: create the panel once here; never destroy it.
+        let panel = SwitcherPanel()
+        self.switcherPanel = panel
 
         #if DEBUG
         // N5 timing measurement: run enumerate() 10 times and log min/median/max.
@@ -57,6 +64,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSLog("[CmdTab] All permissions granted — normal startup.")
             startTapIfPossible()
         }
+
+        #if DEBUG
+        // DEBUG self-check (§7 completion gate): simulate one trigger to get an
+        // N1 proxy without synthesising CGEvents. Do this after the tap is set
+        // up so the code path is realistic, but use a synthetic t0 = now.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let self, let panel = self.switcherPanel else { return }
+            let syntheticT0 = CFAbsoluteTimeGetCurrent()
+            panel.show(items: dummySwitcherItems, selectedIndex: 1)
+            panel.displayIfNeeded()
+            let n1 = (CFAbsoluteTimeGetCurrent() - syntheticT0) * 1000.0
+            NSLog("[CmdTab] N1: %.2fms (callback→display) [DEBUG self-check]", n1)
+            if n1 > 50.0 {
+                NSLog("[CmdTab] N1 GATE FAIL: %.2fms exceeds 50ms budget", n1)
+            } else {
+                NSLog("[CmdTab] N1 GATE PASS: %.2fms within 50ms budget", n1)
+            }
+            // Hide after 0.5s so the developer can see the panel.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.switcherPanel?.hide()
+            }
+        }
+        #endif
     }
 
     @MainActor
@@ -72,6 +102,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.statusItemController?.updateTapState(enabled: false, reason: reason)
             }
         }
+
+        // §7 trigger wiring: Option+Tab → show panel (or advance selection).
+        tap.onTrigger = { [weak self] t0 in
+            guard let self, let panel = self.switcherPanel else { return }
+            if !panel.isVisible {
+                // Initial show: present with dummy data, index=1 (§6.2).
+                panel.show(items: dummySwitcherItems, selectedIndex: 1)
+                panel.displayIfNeeded()
+                let n1 = (CFAbsoluteTimeGetCurrent() - t0) * 1000.0
+                NSLog("[CmdTab] N1: %.2fms (callback→display)", n1)
+            } else {
+                // Subsequent press: advance selection with wrap-around.
+                let t2start = CFAbsoluteTimeGetCurrent()
+                let currentIndex = panel.currentSelectedIndex
+                let nextIndex = SwitcherLayout.advanceIndex(
+                    currentIndex, count: dummySwitcherItems.count)
+                panel.updateSelection(to: nextIndex)
+                panel.displayIfNeeded()
+                let n2 = (CFAbsoluteTimeGetCurrent() - t2start) * 1000.0
+                NSLog("[CmdTab] N2 redraw: %.2fms", n2)
+            }
+        }
+
+        // Dumb Option-release wiring: hide the panel when Option is released.
+        tap.onModifierReleased = { [weak self] in
+            guard let panel = self?.switcherPanel, panel.isVisible else { return }
+            panel.hide()
+        }
+
         hotkeyTap = tap
         tap.enable()
     }

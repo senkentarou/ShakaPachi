@@ -23,6 +23,15 @@ final class HotkeyTap {
     /// Always called on the main queue.
     var onStateChange: ((State) -> Void)?
 
+    /// Called on the main queue when Option+Tab keyDown is captured.
+    /// The argument is the CFAbsoluteTime recorded at the very top of the
+    /// tap callback — before any other work — so callers can measure N1.
+    var onTrigger: ((CFAbsoluteTime) -> Void)?
+
+    /// Called on the main queue when the Option modifier is released while
+    /// the switcher panel is visible (dumb wiring until Step 9 state machine).
+    var onModifierReleased: (() -> Void)?
+
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private(set) var isEnabled = false
@@ -106,6 +115,9 @@ final class HotkeyTap {
     // MARK: - Event handling (called from the tap callback)
 
     fileprivate func handleEvent(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        // §4.3 / N1: record entry time before any other work.
+        let t0 = CFAbsoluteTimeGetCurrent()
+
         let eventType: KeyEvent.EventType
         switch type {
         case .keyDown:                eventType = .keyDown
@@ -161,16 +173,29 @@ final class HotkeyTap {
             break
         }
 
-        // Step 5: consume Option+Tab (both key phases so no orphan keyUp
-        // reaches the frontmost app) and log. Everything else passes through.
-        if eventType == .keyDown || eventType == .keyUp,
+        // Step 7: consume Option+Tab (both key phases) and fire onTrigger on
+        // keyDown so AppDelegate can show the panel. Consuming keyUp prevents
+        // an orphan keyUp from reaching the frontmost app (Step 5 behaviour
+        // preserved). §4.3: no blocking work — hand off to main queue.
+        if (eventType == .keyDown || eventType == .keyUp),
            keyCode == KeyCode.tab,
            event.flags.contains(.maskAlternate) {
-            let phase = eventType == .keyDown ? "keyDown" : "keyUp"
-            DispatchQueue.main.async {
-                NSLog("[CmdTab] Captured Option+Tab (%@) — consumed", phase)
+            if eventType == .keyDown {
+                let capturedT0 = t0
+                DispatchQueue.main.async { [weak self] in
+                    self?.onTrigger?(capturedT0)
+                }
             }
             return nil
+        }
+
+        // Observe Option modifier release (flagsChanged with Option cleared).
+        // Dumb wiring until Step 9 state machine: caller decides whether to hide.
+        if eventType == .flagsChanged,
+           !event.flags.contains(.maskAlternate) {
+            DispatchQueue.main.async { [weak self] in
+                self?.onModifierReleased?()
+            }
         }
 
         return Unmanaged.passUnretained(event)
