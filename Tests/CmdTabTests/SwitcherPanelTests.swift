@@ -118,4 +118,61 @@ final class SwitcherPanelTests: XCTestCase {
         let set = SwitcherLayout.indicesToRedraw(old: 0, new: 7)
         XCTAssertEqual(set, IndexSet([0, 7]))
     }
+
+    // MARK: - effectiveTileSize (Step 8 shrink-to-fit)
+
+    func testEffectiveTileSize_fitsAtFullSize_noShrink() {
+        // A handful of tiles on a wide screen: no shrink, nominal size.
+        let size = SwitcherLayout.effectiveTileSize(itemCount: 5, availableWidth: 2000)
+        XCTAssertEqual(size, SwitcherLayout.tileSize)
+    }
+
+    func testEffectiveTileSize_shrinksWhenOverflowing() {
+        // Many tiles on a narrow screen must shrink below nominal.
+        let size = SwitcherLayout.effectiveTileSize(itemCount: 30, availableWidth: 1000)
+        XCTAssertLessThan(size, SwitcherLayout.tileSize)
+        XCTAssertGreaterThanOrEqual(size, SwitcherLayout.minTileSize)
+    }
+
+    func testEffectiveTileSize_neverBelowMinimum() {
+        // Absurd count on a small screen clamps at the floor, not below.
+        let size = SwitcherLayout.effectiveTileSize(itemCount: 200, availableWidth: 800)
+        XCTAssertEqual(size, SwitcherLayout.minTileSize)
+    }
+
+    func testEffectiveTileSize_shrunkTilesFitAvailableWidth() {
+        // When shrink is active (above the floor), all tiles must fit exactly.
+        let count = 20
+        let available: CGFloat = 1200
+        let tile = SwitcherLayout.effectiveTileSize(itemCount: count, availableWidth: available)
+        // Only meaningful when we didn't hit the floor.
+        if tile > SwitcherLayout.minTileSize {
+            let width = SwitcherLayout.panelSize(itemCount: count, effectiveTile: tile).width
+            XCTAssertLessThanOrEqual(width, available + 0.5,
+                "Shrunk tiles must fit within the available width")
+        }
+    }
+
+    func testEffectiveTileSize_zeroItems_returnsNominal() {
+        XCTAssertEqual(SwitcherLayout.effectiveTileSize(itemCount: 0, availableWidth: 500),
+                       SwitcherLayout.tileSize)
+    }
+
+    func testEffectiveIconSize_keepsProportion() {
+        // Icon keeps the same ratio to the tile as the nominal 60/76.
+        let iconAtNominal = SwitcherLayout.effectiveIconSize(for: SwitcherLayout.tileSize)
+        XCTAssertEqual(iconAtNominal, SwitcherLayout.iconSize, accuracy: 0.001)
+        let iconAtHalf = SwitcherLayout.effectiveIconSize(for: SwitcherLayout.tileSize / 2)
+        XCTAssertEqual(iconAtHalf, SwitcherLayout.iconSize / 2, accuracy: 0.001)
+    }
+
+    func testPanelSize_withEffectiveTile_matchesTileMath() {
+        let count = 6
+        let tile: CGFloat = 50
+        let size = SwitcherLayout.panelSize(itemCount: count, effectiveTile: tile)
+        let expectedWidth = SwitcherLayout.horizontalMargin * 2
+                          + CGFloat(count) * tile
+                          + CGFloat(count - 1) * SwitcherLayout.tileSpacing
+        XCTAssertEqual(size.width, expectedWidth)
+    }
 }

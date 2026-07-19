@@ -14,6 +14,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // §7.2: panel created once at startup, retained forever.
     private var switcherPanel: SwitcherPanel?
 
+    // Real window data source (§5) and pre-scaled icon cache (§8).
+    private var windowStore: WindowStore?
+    private var iconCache: IconCache?
+
     @MainActor
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Run as a menu-bar accessory: no Dock icon, no activation on launch.
@@ -22,6 +26,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // §7.2: create the panel once here; never destroy it.
         let panel = SwitcherPanel()
         self.switcherPanel = panel
+
+        // Real data source + icon cache, created once and retained (§5, §8).
+        self.windowStore = WindowStore()
+        self.iconCache = IconCache()
 
         #if DEBUG
         // N5 timing measurement: run enumerate() 10 times and log min/median/max.
@@ -71,11 +79,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // up so the code path is realistic, but use a synthetic t0 = now.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             guard let self, let panel = self.switcherPanel else { return }
+            let items = self.currentSwitcherItems()
+            guard !items.isEmpty else {
+                NSLog("[CmdTab] N1 self-check skipped: 0 windows")
+                return
+            }
             let syntheticT0 = CFAbsoluteTimeGetCurrent()
-            panel.show(items: dummySwitcherItems, selectedIndex: 1)
+            panel.show(items: items, selectedIndex: self.initialSelection(count: items.count))
             panel.displayIfNeeded()
             let n1 = (CFAbsoluteTimeGetCurrent() - syntheticT0) * 1000.0
-            NSLog("[CmdTab] N1: %.2fms (callback→display) [DEBUG self-check]", n1)
+            NSLog("[CmdTab] N1: %.2fms (callback→display, %d windows) [DEBUG self-check]",
+                  n1, items.count)
             if n1 > 50.0 {
                 NSLog("[CmdTab] N1 GATE FAIL: %.2fms exceeds 50ms budget", n1)
             } else {
@@ -107,17 +121,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tap.onTrigger = { [weak self] t0 in
             guard let self, let panel = self.switcherPanel else { return }
             if !panel.isVisible {
-                // Initial show: present with dummy data, index=1 (§6.2).
-                panel.show(items: dummySwitcherItems, selectedIndex: 1)
+                // Initial show: enumerate real windows now (§5) and map to items.
+                let items = self.currentSwitcherItems()
+                // §15 edge case: with no windows, never show the panel.
+                guard !items.isEmpty else { return }
+                panel.show(items: items, selectedIndex: self.initialSelection(count: items.count))
                 panel.displayIfNeeded()
                 let n1 = (CFAbsoluteTimeGetCurrent() - t0) * 1000.0
-                NSLog("[CmdTab] N1: %.2fms (callback→display)", n1)
+                NSLog("[CmdTab] N1: %.2fms (callback→display, %d windows)", n1, items.count)
             } else {
-                // Subsequent press: advance selection with wrap-around.
+                // Subsequent press: advance selection over the shown snapshot
+                // (do NOT re-enumerate mid-cycle).
                 let t2start = CFAbsoluteTimeGetCurrent()
-                let currentIndex = panel.currentSelectedIndex
                 let nextIndex = SwitcherLayout.advanceIndex(
-                    currentIndex, count: dummySwitcherItems.count)
+                    panel.currentSelectedIndex, count: panel.itemCount)
                 panel.updateSelection(to: nextIndex)
                 panel.displayIfNeeded()
                 let n2 = (CFAbsoluteTimeGetCurrent() - t2start) * 1000.0
@@ -133,6 +150,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         hotkeyTap = tap
         tap.enable()
+    }
+
+    /// Enumerate the current windows (§5) and map them to switcher items,
+    /// resolving each app icon through the pre-scaled cache (§8).
+    @MainActor
+    private func currentSwitcherItems() -> [SwitcherItem] {
+        guard let windowStore, let iconCache else { return [] }
+        return windowStore.enumerate().map { info in
+            SwitcherItem(
+                icon: iconCache.icon(for: info.pid, bundleID: info.bundleID),
+                title: info.title
+            )
+        }
+    }
+
+    /// Initial selection index (§6.2): the previous window (index 1) when there
+    /// are two or more, otherwise the only window (index 0).
+    private func initialSelection(count: Int) -> Int {
+        count >= 2 ? 1 : 0
     }
 
     // Prevent AppKit from quitting the process when all windows close.

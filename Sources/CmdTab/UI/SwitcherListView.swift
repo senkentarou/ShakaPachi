@@ -28,10 +28,12 @@ public struct SwitcherItem: Equatable {
 /// Shared layout constants used by both the tile row and the panel.
 /// All geometry functions are pure — unit-testable.
 public enum SwitcherLayout {
-    /// Square highlight tile per window (§7.4 amended).
+    /// Square highlight tile per window (§7.4 amended) — the nominal (maximum) size.
     public static let tileSize: CGFloat = 76
-    /// App icon drawn centered inside the tile.
+    /// App icon drawn centered inside the nominal tile.
     public static let iconSize: CGFloat = 60
+    /// Minimum tile edge when shrink-to-fit kicks in (Step 8).
+    public static let minTileSize: CGFloat = 40
     /// Gap between adjacent tiles.
     public static let tileSpacing: CGFloat = 8
     /// Left/right panel margin around the tile row.
@@ -45,7 +47,43 @@ public enum SwitcherLayout {
     /// Space below the title line.
     public static let bottomPadding: CGFloat = 14
 
-    /// Total panel size for a given window count.
+    // MARK: - Shrink-to-fit (Step 8)
+
+    /// Return the effective tile edge so that all `itemCount` tiles fit inside
+    /// `availableWidth`.  The result is clamped to [minTileSize, tileSize].
+    ///
+    /// The formula solves for `t` in:
+    ///   margin*2 + count*t + (count-1)*spacing ≤ availableWidth
+    ///   → t ≤ (availableWidth - margin*2 + spacing) / (count + spacing/t)
+    /// Simplified (spacing treated proportionally):
+    ///   t = (availableWidth - margin*2 + spacing) / count - spacing
+    ///   but clamped so it never goes below minTileSize.
+    ///
+    /// Below minTileSize the tiles are allowed to clip off-screen (acceptable,
+    /// rare edge case per spec).
+    public static func effectiveTileSize(itemCount: Int, availableWidth: CGFloat) -> CGFloat {
+        guard itemCount > 0 else { return tileSize }
+        let natural = panelSize(itemCount: itemCount).width
+        if natural <= availableWidth {
+            return tileSize   // fits at full size — no shrink needed
+        }
+        // Largest t such that: margin*2 + count*t + (count-1)*spacing ≤ availableWidth
+        //   t ≤ (availableWidth - margin*2 - (count-1)*spacing) / count
+        let usable = availableWidth - horizontalMargin * 2
+                     - CGFloat(itemCount - 1) * tileSpacing
+        let fitted = usable / CGFloat(itemCount)
+        return max(fitted, minTileSize)
+    }
+
+    /// Icon inset inside a tile of the given effective size (keeps same visual
+    /// proportion as the nominal 76pt tile / 60pt icon).
+    public static func effectiveIconSize(for effectiveTile: CGFloat) -> CGFloat {
+        let ratio = iconSize / tileSize   // 60/76 ≈ 0.789
+        return effectiveTile * ratio
+    }
+
+    /// Total panel size for a given window count, using nominal tile size.
+    /// Use `panelSize(itemCount:effectiveTile:)` when shrinking is active.
     public static func panelSize(itemCount: Int) -> NSSize {
         let count = max(itemCount, 1)
         let width = horizontalMargin * 2
@@ -55,13 +93,30 @@ public enum SwitcherLayout {
         return NSSize(width: width, height: height)
     }
 
-    /// Tile rect for the given index, in flipped (top-left origin) coordinates.
+    /// Total panel size using the given effective tile edge (used when tiles are
+    /// shrunk so all fit within the screen width).
+    public static func panelSize(itemCount: Int, effectiveTile: CGFloat) -> NSSize {
+        let count = max(itemCount, 1)
+        let width = horizontalMargin * 2
+                  + CGFloat(count) * effectiveTile
+                  + CGFloat(count - 1) * tileSpacing
+        let height = topPadding + effectiveTile + titleGap + titleHeight + bottomPadding
+        return NSSize(width: width, height: height)
+    }
+
+    /// Tile rect for the given index using the nominal tile size, in flipped
+    /// (top-left origin) coordinates.
     public static func tileRect(index: Int) -> NSRect {
+        tileRect(index: index, effectiveTile: tileSize)
+    }
+
+    /// Tile rect for the given index using a specified effective tile edge.
+    public static func tileRect(index: Int, effectiveTile: CGFloat) -> NSRect {
         NSRect(
-            x: horizontalMargin + CGFloat(index) * (tileSize + tileSpacing),
+            x: horizontalMargin + CGFloat(index) * (effectiveTile + tileSpacing),
             y: topPadding,
-            width: tileSize,
-            height: tileSize
+            width: effectiveTile,
+            height: effectiveTile
         )
     }
 
@@ -80,28 +135,6 @@ public enum SwitcherLayout {
     }
 }
 
-// MARK: - Dummy data
-
-/// Dummy windows used in Step 7 (replaced by real data in Step 8).
-/// Two Safari entries demonstrate the window-level model: same app icon
-/// repeated, distinguished by the title below the row.
-public let dummySwitcherItems: [SwitcherItem] = {
-    func sfImage(_ name: String) -> NSImage? {
-        NSImage(systemSymbolName: name, accessibilityDescription: nil)?
-            .withSymbolConfiguration(.init(pointSize: 48, weight: .regular))
-    }
-    return [
-        SwitcherItem(icon: sfImage("safari"),     title: "Safari — GitHub"),
-        SwitcherItem(icon: sfImage("safari"),     title: "Safari — Qiita"),
-        SwitcherItem(icon: sfImage("terminal"),   title: "ターミナル — ~/work/cmdtab"),
-        SwitcherItem(icon: sfImage("envelope"),   title: "メール — 受信トレイ (3)"),
-        SwitcherItem(icon: sfImage("music.note"), title: "ミュージック — 再生中"),
-        SwitcherItem(icon: sfImage("doc.text"),   title: "テキストエディット — 仕様書.txt"),
-        SwitcherItem(icon: sfImage("folder"),     title: "Finder — ダウンロード"),
-        SwitcherItem(icon: sfImage("gearshape"),  title: "システム設定 — 一般"),
-    ]
-}()
-
 // MARK: - SwitcherListView
 
 /// Horizontal icon-tile row with the selected window's title beneath it.
@@ -112,16 +145,30 @@ final class SwitcherListView: NSView {
 
     private var items: [SwitcherItem] = []
     private(set) var selectedIndex: Int = 0
+    // Effective tile edge, set by setItems; may be < tileSize when shrink-to-fit
+    // kicks in for wide lists.
+    private var effectiveTile: CGFloat = SwitcherLayout.tileSize
 
     // Top-left origin so tile math matches SwitcherLayout directly.
     override var isFlipped: Bool { true }
 
     // MARK: Public API
 
+    /// Number of items currently displayed (the snapshot taken at show time).
+    var count: Int { items.count }
+
     /// Replace the full item list and select the given index.
-    func setItems(_ items: [SwitcherItem], selectedIndex: Int) {
+    /// Pass the available panel width so the shrink-to-fit tile size can be
+    /// computed; when zero the nominal tile size is used.
+    func setItems(_ items: [SwitcherItem], selectedIndex: Int, availableWidth: CGFloat = 0) {
         self.items = items
         self.selectedIndex = clamp(selectedIndex, count: items.count)
+        if availableWidth > 0 {
+            effectiveTile = SwitcherLayout.effectiveTileSize(
+                itemCount: items.count, availableWidth: availableWidth)
+        } else {
+            effectiveTile = SwitcherLayout.tileSize
+        }
         needsDisplay = true
     }
 
@@ -134,7 +181,9 @@ final class SwitcherListView: NSView {
 
         selectedIndex = new
         for index in SwitcherLayout.indicesToRedraw(old: old, new: new) {
-            setNeedsDisplay(SwitcherLayout.tileRect(index: index).insetBy(dx: -2, dy: -2))
+            setNeedsDisplay(SwitcherLayout.tileRect(index: index,
+                                                    effectiveTile: effectiveTile)
+                            .insetBy(dx: -2, dy: -2))
         }
         setNeedsDisplay(titleRect)
     }
@@ -142,19 +191,21 @@ final class SwitcherListView: NSView {
     // MARK: Drawing
 
     override func draw(_ dirtyRect: NSRect) {
+        let tile = effectiveTile
+        let iconEdge = SwitcherLayout.effectiveIconSize(for: tile)
         for (index, item) in items.enumerated() {
-            let tile = SwitcherLayout.tileRect(index: index)
-            guard tile.insetBy(dx: -2, dy: -2).intersects(dirtyRect) else { continue }
+            let tileRect = SwitcherLayout.tileRect(index: index, effectiveTile: tile)
+            guard tileRect.insetBy(dx: -2, dy: -2).intersects(dirtyRect) else { continue }
 
             if index == selectedIndex {
                 // Neutral rounded highlight like the native App Switcher.
-                let highlight = NSBezierPath(roundedRect: tile, xRadius: 14, yRadius: 14)
+                let highlight = NSBezierPath(roundedRect: tileRect, xRadius: 14, yRadius: 14)
                 NSColor.labelColor.withAlphaComponent(0.16).setFill()
                 highlight.fill()
             }
 
-            let inset = (SwitcherLayout.tileSize - SwitcherLayout.iconSize) / 2
-            let iconRect = tile.insetBy(dx: inset, dy: inset)
+            let inset = (tile - iconEdge) / 2
+            let iconRect = tileRect.insetBy(dx: inset, dy: inset)
             item.icon?.draw(
                 in: iconRect,
                 from: .zero,
@@ -184,7 +235,7 @@ final class SwitcherListView: NSView {
     private var titleRect: NSRect {
         NSRect(
             x: 0,
-            y: SwitcherLayout.topPadding + SwitcherLayout.tileSize + SwitcherLayout.titleGap,
+            y: SwitcherLayout.topPadding + effectiveTile + SwitcherLayout.titleGap,
             width: bounds.width,
             height: SwitcherLayout.titleHeight
         )

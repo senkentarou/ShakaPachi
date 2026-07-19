@@ -97,6 +97,9 @@ final class SwitcherPanel {
         self.listView = lv
     }
 
+    /// Inset kept between the panel and each screen edge.
+    private static let screenEdgeInset: CGFloat = 20
+
     // MARK: - Public API
 
     var isVisible: Bool { panel.isVisible }
@@ -104,11 +107,22 @@ final class SwitcherPanel {
     /// The currently highlighted row index, forwarded from the list view.
     var currentSelectedIndex: Int { listView.selectedIndex }
 
+    /// Number of items in the currently shown snapshot.
+    var itemCount: Int { listView.count }
+
     /// Show the panel with the given items, placing the initial selection at
-    /// `selectedIndex`. Repositions to the screen containing the mouse cursor.
+    /// `selectedIndex`. Repositions to the screen containing the mouse cursor,
+    /// shrinking the tiles when the natural width would overflow that screen.
     func show(items: [SwitcherItem], selectedIndex: Int) {
-        listView.setItems(items, selectedIndex: selectedIndex)
-        repositionPanel(itemCount: items.count)
+        let screenFrame = targetScreenFrame()
+        let availableWidth = screenFrame.width - Self.screenEdgeInset * 2
+        listView.setItems(items, selectedIndex: selectedIndex, availableWidth: availableWidth)
+
+        let effectiveTile = SwitcherLayout.effectiveTileSize(
+            itemCount: items.count, availableWidth: availableWidth)
+        repositionPanel(itemCount: items.count,
+                        effectiveTile: effectiveTile,
+                        screenFrame: screenFrame)
         panel.orderFrontRegardless()
     }
 
@@ -130,20 +144,25 @@ final class SwitcherPanel {
 
     // MARK: - Layout (§7.4)
 
-    private func repositionPanel(itemCount: Int) {
-        let size = SwitcherLayout.panelSize(itemCount: itemCount)
-
-        // Find the screen containing the mouse cursor; fall back to main.
+    /// The visibleFrame of the screen containing the mouse cursor (§7.4),
+    /// falling back to the main screen and finally a sane default.
+    private func targetScreenFrame() -> NSRect {
         let mouseLocation = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { $0.frame.contains(mouseLocation) }
                      ?? NSScreen.main
                      ?? NSScreen.screens.first
+        return screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+    }
 
-        let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0,
-                                                          width: 1440, height: 900)
-        // Overflow strategy for very many windows (tile shrink / wrapping) is
-        // a Step 8 concern; for now the width is simply capped to the screen.
-        let width = min(size.width, screenFrame.width - 40)
+    private func repositionPanel(itemCount: Int,
+                                 effectiveTile: CGFloat,
+                                 screenFrame: NSRect) {
+        let size = SwitcherLayout.panelSize(itemCount: itemCount,
+                                            effectiveTile: effectiveTile)
+        // Tiles are shrunk to fit; if the count is so large they hit the 40pt
+        // floor, the panel is still capped to the screen and the overflow
+        // clips at the panel edge (acceptable, rare — §16 edge case).
+        let width = min(size.width, screenFrame.width - Self.screenEdgeInset * 2)
         let height = size.height
         let x = screenFrame.midX - width / 2
         let y = screenFrame.midY - height / 2
