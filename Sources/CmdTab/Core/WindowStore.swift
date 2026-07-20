@@ -340,6 +340,7 @@ final class WindowStore {
             bundleID: bundleID,
             appName: appName,
             title: title,
+            rawTitle: rawTitle,
             bounds: bounds
         )
     }
@@ -358,13 +359,15 @@ final class WindowStore {
             if count == 0 {
                 return info
             }
-            // Rebuild with the suffix.  We copy all fields except title.
+            // Rebuild with the suffix.  We copy all fields except title;
+            // rawTitle is preserved so AX matching still sees the un-suffixed name.
             return WindowInfo(
                 windowID: info.windowID,
                 pid: info.pid,
                 bundleID: info.bundleID,
                 appName: info.appName,
                 title: "\(base) (\(count + 1))",
+                rawTitle: info.rawTitle,
                 bounds: info.bounds
             )
         }

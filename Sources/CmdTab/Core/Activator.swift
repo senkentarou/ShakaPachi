@@ -60,9 +60,14 @@ final class Activator {
             candidates.append((title: title, bounds: bounds))
         }
 
+        // Match against the RAW window name (no "(2)" suffix, no app-name
+        // fallback) since AX titles carry neither. Fall back to the display
+        // title only when there is no raw name.
+        let matchTitle = window.rawTitle.isEmpty ? window.title : window.rawTitle
+
         // Step 5 (§9.2): identify the target window using the pure matcher.
         guard let matchedIndex = Activator.matchWindow(
-            title: window.title,
+            title: matchTitle,
             bounds: window.bounds,
             candidates: candidates
         ) else {
@@ -74,42 +79,38 @@ final class Activator {
 
         let targetWin = axWindows[matchedIndex]
 
-        // Determine which strategy was used (for log clarity).
-        let strategy: String
-        let titleNonEmpty = !window.title.isEmpty
-        if titleNonEmpty {
-            let titleMatches = candidates.filter { $0.title == window.title }
-            strategy = titleMatches.count == 1 ? "title" : "bounds"
-        } else {
-            strategy = "bounds"
-        }
-
         // Step 5 (§9.1): raise and make main.
         AXUIElementPerformAction(targetWin, kAXRaiseAction as CFString)
         AXUIElementSetAttributeValue(targetWin,
                                      kAXMainAttribute as CFString,
                                      kCFBooleanTrue)
 
-        NSLog("[CmdTab] Activate: raised window by %@ match (pid %d)",
-              strategy, pid)
+        NSLog("[CmdTab] Activate: raised window (pid %d)", pid)
     }
 
     // MARK: - Pure decision (§9.2, testable)
 
     /// Identify the best candidate index from a list of (title, bounds) pairs.
     ///
-    /// Matching priority (§9.2):
-    /// 1. Exactly one candidate whose title matches `title` (when title is non-empty).
-    /// 2. If title is empty, or 0/multiple title matches: pick the candidate whose
-    ///    bounds are within a 2-point tolerance on every dimension.
-    /// 3. If still ambiguous or no match: return nil → fallback to app-only.
+    /// Matching priority (§9.2, extended for real-world AX titles):
+    /// 1. Exactly one candidate whose title EXACTLY equals `title`.
+    /// 2. Exactly one candidate whose title is prefix-compatible with `title` —
+    ///    the AX title starts with the target, or vice versa. This handles apps
+    ///    (Chrome, Slack, …) whose AX title extends the CGWindowList name, e.g.
+    ///    target "注文履歴" vs AX "注文履歴 - Google Chrome - Profile".
+    /// 3. If a prefix match is still ambiguous, disambiguate those candidates by
+    ///    bounds within a 2pt tolerance.
+    /// 4. Otherwise fall back to a pure bounds match within 2pt.
+    /// 5. If still ambiguous or no match: return nil → fallback to app-only.
+    ///
+    /// Chrome windows are frequently maximized to identical bounds, so bounds
+    /// alone cannot disambiguate them — the prefix step is what resolves them.
     ///
     /// This function is deliberately pure (no AX / AppKit calls) so it can be
     /// exhaustively unit-tested without TCC permissions (§0 UI/logic separation).
     ///
     /// - Parameters:
-    ///   - title: The title from `WindowInfo` (may be empty; includes duplicate
-    ///     suffixes from WindowStore if applicable).
+    ///   - title: The raw window name to match (no "(2)" suffix; may be empty).
     ///   - bounds: The `CGRect` bounds from `WindowInfo` (CGWindowList coords,
     ///     top-left origin in global screen space).
     ///   - candidates: AX-read attributes marshalled to plain values.
@@ -121,31 +122,44 @@ final class Activator {
         candidates: [(title: String, bounds: CGRect)]
     ) -> Int? {
 
-        // Step 5a (§9.2): title match when title is non-empty.
-        if !title.isEmpty {
-            let titleMatches = candidates.indices.filter { candidates[$0].title == title }
-            if titleMatches.count == 1 {
-                return titleMatches[0]
-            }
-            // Fall through to bounds when 0 or multiple title matches.
-        }
-
-        // Step 5b (§9.2): bounds match within 2pt tolerance.
-        // AX kAXPosition reports the top-left corner in global screen coordinates,
-        // which matches CGWindowList bounds — both use the same coordinate origin.
         let tolerance: CGFloat = 2.0
-        let boundsMatches = candidates.indices.filter { i in
+        func boundsMatches(_ i: Int) -> Bool {
             let c = candidates[i].bounds
             return abs(c.origin.x - bounds.origin.x) <= tolerance &&
                    abs(c.origin.y - bounds.origin.y) <= tolerance &&
                    abs(c.width    - bounds.width)    <= tolerance &&
                    abs(c.height   - bounds.height)   <= tolerance
         }
-        if boundsMatches.count == 1 {
-            return boundsMatches[0]
+
+        if !title.isEmpty {
+            // Step 5a: exact title match.
+            let exact = candidates.indices.filter { candidates[$0].title == title }
+            if exact.count == 1 { return exact[0] }
+
+            // Step 5b: prefix-compatible match (ignoring empty AX titles).
+            let prefix = candidates.indices.filter { i in
+                let c = candidates[i].title
+                return !c.isEmpty && (c.hasPrefix(title) || title.hasPrefix(c))
+            }
+            if prefix.count == 1 { return prefix[0] }
+
+            // Step 5c: multiple prefix matches — disambiguate by bounds.
+            if prefix.count > 1 {
+                let narrowed = prefix.filter(boundsMatches)
+                if narrowed.count == 1 { return narrowed[0] }
+            }
+            // Fall through to pure bounds when title didn't resolve.
         }
 
-        // Step 5c (§9.2): ambiguous or no match — return nil for fallback.
+        // Step 5d: pure bounds match within 2pt tolerance.
+        // AX kAXPosition reports the top-left corner in global screen coordinates,
+        // which matches CGWindowList bounds — both use the same coordinate origin.
+        let boundsOnly = candidates.indices.filter(boundsMatches)
+        if boundsOnly.count == 1 {
+            return boundsOnly[0]
+        }
+
+        // Step 5e: ambiguous or no match — return nil for fallback.
         return nil
     }
 

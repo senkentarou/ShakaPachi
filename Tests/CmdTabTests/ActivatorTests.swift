@@ -30,6 +30,62 @@ final class ActivatorTests: XCTestCase {
         XCTAssertEqual(result, 1)
     }
 
+    /// Chrome-style: AX title extends the raw name with " - Google Chrome - …".
+    /// Identical bounds (both maximized) so only the prefix step can resolve it.
+    func testPrefixMatch_chromeExtendedTitle() {
+        let maximized = rect(0, 25, 1440, 875)
+        let candidates: [Candidate] = [
+            (title: "",                                          bounds: rect(121, 160, 140, 18)),
+            (title: "YouTube - Google Chrome - 太郎 (Masahiro)",  bounds: maximized),
+            (title: "注文履歴 - Google Chrome - 将大 (Masahiro)",  bounds: maximized),
+        ]
+        // Target "注文履歴" uniquely prefixes candidate 2 even though bounds tie.
+        XCTAssertEqual(
+            Activator.matchWindow(title: "注文履歴", bounds: maximized, candidates: candidates),
+            2)
+        // Target "YouTube" uniquely prefixes candidate 1.
+        XCTAssertEqual(
+            Activator.matchWindow(title: "YouTube", bounds: maximized, candidates: candidates),
+            1)
+    }
+
+    /// The reverse direction: AX title is a prefix of the (longer) target.
+    func testPrefixMatch_axTitleShorterThanTarget() {
+        let candidates: [Candidate] = [
+            (title: "Inbox",  bounds: rect(0, 0, 100, 100)),
+            (title: "Report", bounds: rect(0, 0, 100, 100)),
+        ]
+        // Target is longer than the AX title but shares the prefix.
+        XCTAssertEqual(
+            Activator.matchWindow(title: "Report — Draft", bounds: rect(9, 9, 9, 9),
+                                  candidates: candidates),
+            1)
+    }
+
+    /// Two same-app windows showing the same page (same prefix) AND identical
+    /// bounds cannot be disambiguated — must return nil (app-only fallback).
+    func testPrefixMatch_ambiguousSamePageSameBounds() {
+        let b = rect(0, 25, 1440, 875)
+        let candidates: [Candidate] = [
+            (title: "YouTube - Google Chrome - A", bounds: b),
+            (title: "YouTube - Google Chrome - B", bounds: b),
+        ]
+        XCTAssertNil(
+            Activator.matchWindow(title: "YouTube", bounds: b, candidates: candidates))
+    }
+
+    /// Exact match still wins even when another candidate is prefix-compatible.
+    func testExactWinsOverPrefix() {
+        let candidates: [Candidate] = [
+            (title: "Doc",        bounds: rect(0, 0, 100, 100)),
+            (title: "Doc - Extra", bounds: rect(0, 0, 100, 100)),
+        ]
+        XCTAssertEqual(
+            Activator.matchWindow(title: "Doc", bounds: rect(9, 9, 9, 9),
+                                  candidates: candidates),
+            0)
+    }
+
     /// Two candidates with identical titles → fall through to bounds.
     func testMultipleIdenticalTitlesFallsThroughToBoundsAndMatches() {
         let target = rect(100, 200, 800, 600)
