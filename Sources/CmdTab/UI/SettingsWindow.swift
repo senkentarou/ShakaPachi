@@ -157,7 +157,10 @@ final class SettingsStore: ObservableObject {
         sortMode         = s.sortMode
         excludedBundleIDs = s.excludedBundleIDs
         theme            = s.theme
-        launchAtLogin    = s.launchAtLogin
+        // The real login-item state lives in SMAppService, not the cached bool;
+        // read it so the toggle reflects reality (and heal a stale mirror).
+        launchAtLogin    = LoginItemManager.isEnabled
+        if s.launchAtLogin != launchAtLogin { s.launchAtLogin = launchAtLogin }
 
         // Reflect changes that originate elsewhere (e.g. from code) back into
         // the Published properties so the SwiftUI view stays consistent.
@@ -248,16 +251,23 @@ struct GeneralSettingsView: View {
             }
 
             Section {
-                // launchAtLogin is model-only until Step 13 (SMAppService).
-                // Show it disabled with a note so users can see it's coming.
+                // §11.4: launch-at-login via SMAppService. The system status is
+                // the source of truth; the Settings bool mirrors it for the UI.
                 Toggle("ログイン時に起動", isOn: Binding(
                     get: { store.launchAtLogin },
-                    set: { _ in /* Step 13: SMAppService.mainApp.register() */ }
+                    set: { newValue in
+                        do {
+                            try LoginItemManager.setEnabled(newValue)
+                            Settings.shared.launchAtLogin = LoginItemManager.isEnabled
+                        } catch {
+                            // Registration failed — revert the mirror to the real
+                            // status so the toggle reflects reality, and surface it.
+                            Settings.shared.launchAtLogin = LoginItemManager.isEnabled
+                            NSLog("[CmdTab] Login item change failed: %@",
+                                  error.localizedDescription)
+                        }
+                    }
                 ))
-                .disabled(true)
-                Text("ログイン時起動は次のアップデートで有効になります。")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
             } header: {
                 Text("システム")
             }
