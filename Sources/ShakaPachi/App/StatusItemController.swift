@@ -68,8 +68,9 @@ final class StatusItemController {
         } else {
             button.image = makeStatusIcon()
             button.toolTip = "ShakaPachi"
+            // Normal icon is template; badged icons set isTemplate = false in their builders.
+            button.image?.isTemplate = true
         }
-        button.image?.isTemplate = true
     }
 
     // MARK: - Private: button
@@ -105,34 +106,88 @@ final class StatusItemController {
         return image
     }
 
-    /// Draws a 16x16 warning-variant icon (exclamation mark in triangle).
+    // MARK: - Private: icon helpers
+
+    /// Draws the overlapping-windows ShakaPachi glyph into the current graphics context.
+    /// The glyph is anchored toward the top-left so the bottom-right corner is free for a badge.
+    /// - Parameter bounds: the canvas rect passed by the drawingHandler (origin is flipped-aware).
+    private func drawWindowGlyph(in bounds: NSRect) {
+        // Scale the glyph to roughly 11/16 of the canvas, leaving the bottom-right open.
+        let scale = bounds.width / 16.0
+
+        // Back window frame — top-left anchor
+        let backRect = NSRect(
+            x: bounds.minX,
+            y: bounds.minY + 5 * scale,
+            width: 10 * scale,
+            height: 10 * scale
+        )
+        let back = NSBezierPath(roundedRect: backRect, xRadius: 1.5 * scale, yRadius: 1.5 * scale)
+        back.lineWidth = 1.5 * scale
+        back.stroke()
+
+        // Front window frame — offset to simulate overlap, clipped to keep bottom-right open
+        let frontRect = NSRect(
+            x: bounds.minX + 4 * scale,
+            y: bounds.minY + 1 * scale,
+            width: 10 * scale,
+            height: 10 * scale
+        )
+        let front = NSBezierPath(roundedRect: frontRect, xRadius: 1.5 * scale, yRadius: 1.5 * scale)
+        // Punch the region the front frame covers to transparent (.clear compositing)
+        // so it occludes the back frame — matching makeStatusIcon's solid-front look —
+        // then stroke the front outline.
+        if let ctx = NSGraphicsContext.current {
+            let previous = ctx.compositingOperation
+            ctx.compositingOperation = .clear
+            front.fill()
+            ctx.compositingOperation = previous
+        }
+        front.lineWidth = 1.5 * scale
+        front.stroke()
+    }
+
+    /// Draws a 16×16 warning icon: the ShakaPachi glyph with an amber triangle-exclamation badge
+    /// in the bottom-right corner. Non-template so the amber badge color renders.
     private func makeWarningIcon() -> NSImage {
-        let size = NSSize(width: 16, height: 16)
-        let image = NSImage(size: size)
-        image.lockFocus()
+        let canvasSize = NSSize(width: 16, height: 16)
+        let image = NSImage(size: canvasSize, flipped: false) { bounds in
+            // Base glyph drawn with the appearance-adaptive label color so it follows light/dark.
+            NSColor.labelColor.setStroke()
+            self.drawWindowGlyph(in: bounds)
 
-        NSColor.black.setStroke()
-        NSColor.black.setFill()
+            // Warning badge: an amber triangle-exclamation in the bottom-right corner.
+            let cx = bounds.maxX - 5.0
+            let baseY = bounds.minY + 0.5
+            let halfWidth: CGFloat = 4.8
+            let triHeight: CGFloat = 8.5
+            let triangle = NSBezierPath()
+            triangle.move(to: NSPoint(x: cx, y: baseY + triHeight))     // apex (top)
+            triangle.line(to: NSPoint(x: cx - halfWidth, y: baseY))     // base-left
+            triangle.line(to: NSPoint(x: cx + halfWidth, y: baseY))     // base-right
+            triangle.close()
 
-        // Triangle outline
-        let tri = NSBezierPath()
-        tri.move(to: NSPoint(x: 8, y: 15))
-        tri.line(to: NSPoint(x: 1, y: 2))
-        tri.line(to: NSPoint(x: 15, y: 2))
-        tri.close()
-        tri.lineWidth = 1.5
-        tri.stroke()
+            // Halo: a wide labelColor stroke behind the fill separates the badge
+            // from the glyph lines (the amber fill covers the stroke's inner half).
+            NSColor.labelColor.setStroke()
+            triangle.lineWidth = 2.5
+            triangle.lineJoinStyle = .round
+            triangle.stroke()
 
-        // Exclamation body
-        let rect = NSRect(x: 7, y: 5, width: 2, height: 6)
-        NSBezierPath(rect: rect).fill()
+            // Amber fill.
+            NSColor(srgbRed: 1.0, green: 0.72, blue: 0.0, alpha: 1.0).setFill()
+            triangle.fill()
 
-        // Exclamation dot
-        let dot = NSRect(x: 7, y: 2.5, width: 2, height: 2)
-        NSBezierPath(ovalIn: dot).fill()
+            // Exclamation mark (dark, for contrast on amber).
+            NSColor.black.setFill()
+            let bodyRect = NSRect(x: cx - 0.8, y: baseY + 3.0, width: 1.6, height: 3.0)
+            NSBezierPath(rect: bodyRect).fill()
+            let dotRect = NSRect(x: cx - 0.8, y: baseY + 1.2, width: 1.6, height: 1.6)
+            NSBezierPath(ovalIn: dotRect).fill()
 
-        image.unlockFocus()
-        image.isTemplate = true
+            return true
+        }
+        image.isTemplate = false
         return image
     }
 
@@ -197,23 +252,48 @@ final class StatusItemController {
         statusItem.menu = menu
     }
 
-    /// Draws a 16x16 stopped-variant icon (square inside a circle outline).
+    /// Draws a 16×16 stopped icon: the ShakaPachi glyph with a red filled-circle-with-square badge
+    /// in the bottom-right corner. Non-template so the red badge color renders.
     private func makeStoppedIcon() -> NSImage {
-        let size = NSSize(width: 16, height: 16)
-        let image = NSImage(size: size)
-        image.lockFocus()
+        let canvasSize = NSSize(width: 16, height: 16)
+        let image = NSImage(size: canvasSize, flipped: false) { bounds in
+            // Base glyph drawn with the appearance-adaptive label color so it follows light/dark.
+            NSColor.labelColor.setStroke()
+            self.drawWindowGlyph(in: bounds)
 
-        NSColor.black.setStroke()
-        NSColor.black.setFill()
+            // Badge: red background disc in the bottom-right corner.
+            let badgeRadius: CGFloat = 4.5
+            let badgeCenter = NSPoint(x: bounds.maxX - badgeRadius + 0.5, y: bounds.minY + badgeRadius - 0.5)
+            let badgeRect = NSRect(
+                x: badgeCenter.x - badgeRadius,
+                y: badgeCenter.y - badgeRadius,
+                width: badgeRadius * 2,
+                height: badgeRadius * 2
+            )
 
-        let circle = NSBezierPath(ovalIn: NSRect(x: 1, y: 1, width: 14, height: 14))
-        circle.lineWidth = 1.5
-        circle.stroke()
+            // Halo: slightly larger disc in labelColor to separate badge from glyph lines.
+            NSColor.labelColor.setFill()
+            let haloPath = NSBezierPath(ovalIn: badgeRect.insetBy(dx: -1.0, dy: -1.0))
+            haloPath.fill()
 
-        NSBezierPath(rect: NSRect(x: 5.5, y: 5.5, width: 5, height: 5)).fill()
+            // Red fill disc.
+            NSColor.systemRed.setFill()
+            NSBezierPath(ovalIn: badgeRect).fill()
 
-        image.unlockFocus()
-        image.isTemplate = true
+            // Filled square stop-mark in the badge (white, for contrast on red).
+            NSColor.white.setFill()
+            let squareSide: CGFloat = 3.0
+            let squareRect = NSRect(
+                x: badgeCenter.x - squareSide / 2,
+                y: badgeCenter.y - squareSide / 2,
+                width: squareSide,
+                height: squareSide
+            )
+            NSBezierPath(rect: squareRect).fill()
+
+            return true
+        }
+        image.isTemplate = false
         return image
     }
 
