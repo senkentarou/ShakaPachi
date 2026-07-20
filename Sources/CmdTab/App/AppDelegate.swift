@@ -210,6 +210,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     NSLog("[CmdTab] Confirm window index %d (pid %d, title: %@)",
                           index, infos[index].pid, infos[index].title)
                     self.activator?.activate(infos[index])
+                    // §5.5: record this activation so the next enumerate() puts
+                    // this window at index 0 and the previously-active window
+                    // (the one we just came from) stays at index 1.  This makes
+                    // "press once, release" reliably return to the previous window.
+                    self.windowStore?.recordActivation(infos[index].windowID)
                 } else {
                     // Out-of-range: log and do nothing more than hide; app
                     // activate already ran inside Activator.activate for the
