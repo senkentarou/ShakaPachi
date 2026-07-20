@@ -17,8 +17,13 @@ build:
 	codesign --force --sign "$(CODESIGN_IDENTITY)" "$(BUNDLE_DIR)"
 
 # Build then launch the app.
+# WS_DEADMAN override: the DEBUG deadman defaults to 60s, which is too short for
+# interactive testing (it disables the tap mid-session). Pass a longer value so
+# the tap stays alive while testing; the safety net (and emergency stop) remain.
+# Release builds ignore this entirely (the deadman is #if DEBUG only).
+DEADMAN_SEC ?= 1800
 run: build
-	open "$(BUNDLE_DIR)"
+	open "$(BUNDLE_DIR)" --env CMDTAB_DEADMAN_SEC=$(DEADMAN_SEC)
 
 # Release build: compile with optimisations, assemble, and sign.
 release:
