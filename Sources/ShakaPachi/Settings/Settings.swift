@@ -115,6 +115,52 @@ public enum Theme: String, CaseIterable, Sendable {
     }
 }
 
+/// Accent color for the switcher panel highlight and background tint.
+public enum AccentColor: String, CaseIterable, Sendable {
+    case system
+    case blue
+    case graphite
+    case teal
+    case sand
+    case plum
+
+    /// Human-readable label for UI display.
+    public var displayName: String {
+        switch self {
+        case .system:   return "システム"
+        case .blue:     return "ブルー"
+        case .graphite: return "グラファイト"
+        case .teal:     return "ティール"
+        case .sand:     return "サンド"
+        case .plum:     return "プラム"
+        }
+    }
+
+    /// The NSColor for this accent. Muted / desaturated — this is a work app.
+    public var nsColor: NSColor {
+        switch self {
+        case .system:
+            // Follows the macOS accent color preference.
+            return NSColor.controlAccentColor
+        case .blue:
+            // Desaturated steel blue — readable on both light and dark panels.
+            return NSColor(srgbRed: 0.30, green: 0.50, blue: 0.75, alpha: 1.0)
+        case .graphite:
+            // Neutral grey with a slight warm cast.
+            return NSColor(srgbRed: 0.50, green: 0.52, blue: 0.55, alpha: 1.0)
+        case .teal:
+            // Muted teal, low saturation so it doesn't dominate.
+            return NSColor(srgbRed: 0.22, green: 0.55, blue: 0.55, alpha: 1.0)
+        case .sand:
+            // Warm sandy beige — professional and neutral.
+            return NSColor(srgbRed: 0.72, green: 0.62, blue: 0.45, alpha: 1.0)
+        case .plum:
+            // Muted plum — subtle and sophisticated.
+            return NSColor(srgbRed: 0.50, green: 0.35, blue: 0.58, alpha: 1.0)
+        }
+    }
+}
+
 // MARK: - @propertyWrapper
 
 /// A property wrapper that reads/writes a String-raw-valued enum to UserDefaults.
@@ -131,7 +177,15 @@ struct DefaultsEnum<T: RawRepresentable> where T.RawValue == String {
                   let value = T(rawValue: raw) else { return defaultValue }
             return value
         }
-        set {
+        // nonmutating: the setter writes to `defaults` (a reference type), never
+        // to this struct's own storage, so it needs no exclusive (mutating) access
+        // to the wrapper. This matters because .settingsDidChange is delivered
+        // synchronously and an observer (SettingsStore.refresh) reads the SAME
+        // property while this setter is still on the stack; a mutating set would
+        // overlap a write with that read and trip Swift's exclusive-access check
+        // (SIGABRT). Writing to defaults is logically non-mutating, so this is
+        // also the semantically correct annotation.
+        nonmutating set {
             defaults.set(newValue.rawValue, forKey: key)
             NotificationCenter.default.post(name: .settingsDidChange, object: nil)
         }
@@ -154,7 +208,9 @@ struct DefaultsInt {
                 ? defaults.integer(forKey: key)
                 : defaultValue
         }
-        set {
+        // nonmutating: writes to `defaults`, not self — avoids exclusive-access
+        // reentrancy under synchronous .settingsDidChange delivery (see DefaultsEnum).
+        nonmutating set {
             defaults.set(newValue, forKey: key)
             NotificationCenter.default.post(name: .settingsDidChange, object: nil)
         }
@@ -174,7 +230,9 @@ struct DefaultsBool {
                 ? defaults.bool(forKey: key)
                 : defaultValue
         }
-        set {
+        // nonmutating: writes to `defaults`, not self — avoids exclusive-access
+        // reentrancy under synchronous .settingsDidChange delivery (see DefaultsEnum).
+        nonmutating set {
             defaults.set(newValue, forKey: key)
             NotificationCenter.default.post(name: .settingsDidChange, object: nil)
         }
@@ -192,7 +250,9 @@ struct DefaultsStringArray {
         get {
             (defaults.array(forKey: key) as? [String]) ?? defaultValue
         }
-        set {
+        // nonmutating: writes to `defaults`, not self — avoids exclusive-access
+        // reentrancy under synchronous .settingsDidChange delivery (see DefaultsEnum).
+        nonmutating set {
             defaults.set(newValue, forKey: key)
             NotificationCenter.default.post(name: .settingsDidChange, object: nil)
         }
@@ -228,8 +288,9 @@ final class Settings {
         _showDelayMs     = DefaultsInt (key: "showDelayMs",     defaultValue: 0,        defaults: defaults)
         _panelWidth      = DefaultsInt (key: "panelWidth",      defaultValue: 480,      defaults: defaults)
         _currentSpaceOnly   = DefaultsBool(key: "currentSpaceOnly",   defaultValue: true,  defaults: defaults)
-        _launchAtLogin      = DefaultsBool(key: "launchAtLogin",      defaultValue: false, defaults: defaults)
+        _launchAtLogin      = DefaultsBool(key: "launchAtLogin",      defaultValue: true,  defaults: defaults)
         _excludedBundleIDs  = DefaultsStringArray(key: "excludedBundleIDs", defaultValue: [], defaults: defaults)
+        _accentColor        = DefaultsEnum(key: "accentColor",        defaultValue: .system, defaults: defaults)
     }
 
     // MARK: Backing store
@@ -324,6 +385,15 @@ final class Settings {
     var launchAtLogin: Bool {
         get { _launchAtLogin.wrappedValue }
         set { _launchAtLogin.wrappedValue = newValue }
+    }
+
+    // -- Accent color --
+
+    /// Accent color applied to the switcher panel highlight and background tint.
+    private var _accentColor: DefaultsEnum<AccentColor>
+    var accentColor: AccentColor {
+        get { _accentColor.wrappedValue }
+        set { _accentColor.wrappedValue = newValue }
     }
 
     // -- Panel width (advisory in v1 — see note below) --

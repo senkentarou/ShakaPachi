@@ -149,6 +149,10 @@ final class SwitcherListView: NSView {
     // kicks in for wide lists.
     private var effectiveTile: CGFloat = SwitcherLayout.tileSize
 
+    // Pushed by SwitcherPanel before each show so draw() stays pure — it reads
+    // a stored value rather than calling into Settings during the draw pass.
+    var accentColor: NSColor = .controlAccentColor
+
     // Top-left origin so tile math matches SwitcherLayout directly.
     override var isFlipped: Bool { true }
 
@@ -198,9 +202,11 @@ final class SwitcherListView: NSView {
             guard tileRect.insetBy(dx: -2, dy: -2).intersects(dirtyRect) else { continue }
 
             if index == selectedIndex {
-                // Neutral rounded highlight like the native App Switcher.
+                // Accent-tinted rounded highlight (α≈0.30) — clearly shows the
+                // chosen accent colour while staying tasteful. Color is pushed by
+                // the panel before each show so this path stays pure/fast.
                 let highlight = NSBezierPath(roundedRect: tileRect, xRadius: 14, yRadius: 14)
-                NSColor.labelColor.withAlphaComponent(0.16).setFill()
+                accentColor.withAlphaComponent(0.30).setFill()
                 highlight.fill()
             }
 

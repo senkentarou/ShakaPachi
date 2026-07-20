@@ -68,9 +68,9 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(settings.theme, .system)
     }
 
-    func testDefault_launchAtLogin_isFalse() {
+    func testDefault_launchAtLogin_isTrue() {
         let (_, settings) = makeSuite()
-        XCTAssertFalse(settings.launchAtLogin)
+        XCTAssertTrue(settings.launchAtLogin)
     }
 
     func testDefault_panelWidth_is480() {

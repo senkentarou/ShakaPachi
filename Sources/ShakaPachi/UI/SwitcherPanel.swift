@@ -20,6 +20,10 @@ final class SwitcherPanel {
     private let effectView: NSVisualEffectView
     private let listView: SwitcherListView
     private let sheenLayer = CAGradientLayer()
+    // Accent background tint: a CALayer behind the tiles at α≈0.08.
+    // Inserted below sheenLayer so it sits behind all tile content.
+    // Set once per show(); never participates in the selection-move partial redraw.
+    private let tintLayer = CALayer()
 
     /// Liquid-glass corner radius (user request: pronounced rounding).
     private static let cornerRadius: CGFloat = 24
@@ -62,6 +66,15 @@ final class SwitcherPanel {
         // Glass rim: 1px light border reads as the edge of a liquid pane.
         ev.layer?.borderWidth = 1
         ev.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
+
+        // Accent background tint: inserted first so it sits BELOW the sheen and
+        // the listView. backgroundColor is set per-show from Settings.accentColor.
+        let tint = tintLayer
+        tint.cornerRadius = Self.cornerRadius
+        tint.masksToBounds = true
+        tint.frame = ev.bounds
+        // backgroundColor is left nil here; show() sets it before orderFront.
+        ev.layer?.addSublayer(tint)
 
         // Top sheen gradient for the liquid-glass feel.
         let sheen = sheenLayer
@@ -113,7 +126,14 @@ final class SwitcherPanel {
     /// Show the panel with the given items, placing the initial selection at
     /// `selectedIndex`. Repositions to the screen containing the mouse cursor,
     /// shrinking the tiles when the natural width would overflow that screen.
+    @MainActor
     func show(items: [SwitcherItem], selectedIndex: Int) {
+        // Read accent color once per show — runs once per trigger, not on the
+        // hot selection-move path, so calling into Settings here is fine.
+        let accent = Settings.shared.accentColor.nsColor
+        tintLayer.backgroundColor = accent.withAlphaComponent(0.14).cgColor
+        listView.accentColor = accent
+
         let screenFrame = targetScreenFrame()
         let availableWidth = screenFrame.width - Self.screenEdgeInset * 2
         listView.setItems(items, selectedIndex: selectedIndex, availableWidth: availableWidth)
@@ -170,10 +190,11 @@ final class SwitcherPanel {
         let newFrame = NSRect(x: x, y: y, width: width, height: height)
         panel.setFrame(newFrame, display: false)
 
-        // Resize the effect view and its sheen without implicit animations.
+        // Resize the effect view and its layers without implicit animations.
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         effectView.frame = NSRect(origin: .zero, size: newFrame.size)
+        tintLayer.frame = effectView.bounds
         sheenLayer.frame = effectView.bounds
         CATransaction.commit()
     }

@@ -22,11 +22,12 @@ icon:
 	swift tools/make-icon.swift Resources
 
 # Build then launch the app.
-# WS_DEADMAN override: the DEBUG deadman defaults to 60s, which is too short for
-# interactive testing (it disables the tap mid-session). Pass a longer value so
-# the tap stays alive while testing; the safety net (and emergency stop) remain.
-# Release builds ignore this entirely (the deadman is #if DEBUG only).
-DEADMAN_SEC ?= 1800
+# SHAKAPACHI_DEADMAN_SEC: the DEBUG deadman auto-disables the event tap after N
+# seconds as a dev safety net. The app is stable now and the auto-disable was
+# interrupting normal use, so `make run` sets it to 0 (disabled). The emergency
+# stop hotkey (Ctrl+Option+Cmd+Esc) remains as the safety net, and Release builds
+# never include the deadman (#if DEBUG only). Override with `make run DEADMAN_SEC=60`.
+DEADMAN_SEC ?= 0
 run: build
 	open "$(BUNDLE_DIR)" --env SHAKAPACHI_DEADMAN_SEC=$(DEADMAN_SEC)
 

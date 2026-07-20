@@ -41,6 +41,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // Settings change observer token (NotificationCenter).
     private var settingsObserver: (any NSObjectProtocol)?
 
+    // Key for the first-run login-item flag: written once after the initial
+    // SMAppService registration so a subsequent user toggle to OFF is not
+    // overridden on relaunch.
+    private static let didInitializeLoginItemKey = "didInitializeLoginItem"
+
     @MainActor
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Run as a menu-bar accessory: no Dock icon, no activation on launch.
@@ -129,6 +134,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             NSLog("[ShakaPachi] All permissions granted — normal startup.")
             startTapIfPossible()
+        }
+
+        // First-run login-at-launch registration: register with SMAppService once
+        // so the default is ON. The flag prevents re-enabling after the user
+        // turns it OFF manually. A failure is logged but never crashes the app.
+        let loginItemKey = AppDelegate.didInitializeLoginItemKey
+        if !UserDefaults.standard.bool(forKey: loginItemKey) {
+            do {
+                try LoginItemManager.setEnabled(true)
+                NSLog("[ShakaPachi] First-run: login item registered.")
+            } catch {
+                NSLog("[ShakaPachi] First-run: login item registration failed: %@",
+                      error.localizedDescription)
+            }
+            // Mark as initialized regardless of success so we don't retry every
+            // launch (a failure likely means sandbox/location restrictions that
+            // won't resolve on retry).
+            UserDefaults.standard.set(true, forKey: loginItemKey)
+            Settings.shared.launchAtLogin = LoginItemManager.isEnabled
         }
 
         #if DEBUG
@@ -287,6 +311,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     // (the one we just came from) stays at index 1.  This makes
                     // "press once, release" reliably return to the previous window.
                     self.windowStore?.recordActivation(infos[index].windowID)
+                    // Count confirmed switches only (not cancel or out-of-range).
+                    StatsStore.shared.recordSwitch()
+                    // When the Settings/onboarding window is open, ShakaPachi is a
+                    // .regular foreground app and would otherwise stay in front of
+                    // the window we just raised, so the selected window would not
+                    // actually come forward. Yield active status so the target wins.
+                    // In normal use ShakaPachi is .accessory and never active, so
+                    // isActive is false and this is a no-op.
+                    if NSApp.isActive {
+                        NSApp.deactivate()
+                    }
                 } else {
                     // Out-of-range: log and do nothing more than hide; app
                     // activate already ran inside Activator.activate for the

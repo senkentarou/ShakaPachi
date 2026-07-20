@@ -17,6 +17,9 @@ final class StatusItemController {
     private var tapEnabled = false
     private var tapStopReason: String?
 
+    // Whether the Settings window is open — drives the blue "info" icon state.
+    private var settingsOpen = false
+
     /// Called when the user toggles 「ウィンドウ切替を有効化」.
     /// Receives the desired new state.
     var onToggleTap: ((Bool) -> Void)?
@@ -35,16 +38,49 @@ final class StatusItemController {
         setupButton()
         setupMenu()
         updatePermissionWarning()
+
+        // Show a blue "info" icon while the Settings window is open.
+        NotificationCenter.default.addObserver(
+            forName: .settingsWindowStateChanged, object: nil, queue: .main
+        ) { [weak self] note in
+            MainActor.assumeIsolated {
+                self?.settingsOpen = (note.userInfo?["open"] as? Bool) ?? false
+                self?.refreshIcon()
+            }
+        }
     }
 
     // MARK: - Public
 
-    /// Refresh the permission badge on the status icon and menu item.
+    /// Refresh the permission badge on the status icon and menu item, reorder items, and
+    /// enable/disable the toggle based on whether permissions are granted.
     func updatePermissionWarning() {
         let allGranted = permissionManager.allPermissionsGranted()
-        permissionStatusItem?.title = allGranted
-            ? "権限の状態…"
-            : "⚠ 権限の状態…"
+
+        // Fix #3: Gray out the toggle when permissions are missing so the user
+        // cannot click something that has no effect. Re-enable when granted.
+        toggleItem?.isEnabled = allGranted
+
+        // The 「権限の状態…」 item is shown ONLY when a permission is missing,
+        // pinned to the very top of the menu. When everything is granted it is
+        // removed entirely (it is not useful in the normal state). Guard on
+        // whether it is currently in the menu so repeated calls never duplicate
+        // it or leave a stray separator.
+        if let permItem = permissionStatusItem {
+            let inMenu = menu.index(of: permItem) >= 0
+            if !allGranted && !inMenu {
+                menu.insertItem(permItem, at: 0)
+                menu.insertItem(.separator(), at: 1)
+            } else if allGranted && inMenu {
+                let idx = menu.index(of: permItem)
+                if idx + 1 < menu.numberOfItems,
+                   menu.item(at: idx + 1)?.isSeparatorItem == true {
+                    menu.removeItem(at: idx + 1)
+                }
+                menu.removeItem(permItem)
+            }
+        }
+
         refreshIcon()
     }
 
@@ -56,7 +92,7 @@ final class StatusItemController {
         refreshIcon()
     }
 
-    // Icon precedence: permission problem > tap stopped > normal.
+    // Icon precedence: permission problem > tap stopped > settings open > normal.
     private func refreshIcon() {
         guard let button = statusItem.button else { return }
         if !permissionManager.allPermissionsGranted() {
@@ -65,6 +101,9 @@ final class StatusItemController {
         } else if !tapEnabled {
             button.image = makeStoppedIcon()
             button.toolTip = "ShakaPachi — 停止中" + (tapStopReason.map { " (\($0))" } ?? "")
+        } else if settingsOpen {
+            button.image = makeInfoIcon()
+            button.toolTip = "ShakaPachi — 設定を開いています"
         } else {
             button.image = makeStatusIcon()
             button.toolTip = "ShakaPachi"
@@ -81,110 +120,64 @@ final class StatusItemController {
         button.image?.isTemplate = true
     }
 
-    /// Draws a simple 16x16 template image representing two overlapping window frames.
+    /// Draws the 16×16 normal-state menu-bar icon: the ShakaPachi glyph as a
+    /// template (white / adaptive). Warning and stopped states draw the SAME
+    /// glyph tinted amber / red — state is shown by the glyph's colour, not by a
+    /// separate badge.
     private func makeStatusIcon() -> NSImage {
-        let size = NSSize(width: 16, height: 16)
-        let image = NSImage(size: size)
-        image.lockFocus()
-
-        NSColor.black.setStroke()
-
-        // Back window frame
-        let back = NSBezierPath(roundedRect: NSRect(x: 0, y: 0, width: 11, height: 11), xRadius: 2, yRadius: 2)
-        back.lineWidth = 1.5
-        back.stroke()
-
-        // Front window frame (offset to simulate overlap)
-        let front = NSBezierPath(roundedRect: NSRect(x: 5, y: 5, width: 11, height: 11), xRadius: 2, yRadius: 2)
-        front.lineWidth = 1.5
-        NSColor.white.setFill()
-        front.fill()
-        front.stroke()
-
-        image.unlockFocus()
+        let size = NSSize(width: 18, height: 18)
+        let image = NSImage(size: size, flipped: false) { bounds in
+            // Template: only alpha matters, so .black renders adaptively (white
+            // on a dark menu bar). The front window is a solid "白掛け" fill.
+            self.drawGlyph(in: bounds, color: .black)
+            return true
+        }
         image.isTemplate = true
         return image
     }
 
     // MARK: - Private: icon helpers
 
-    /// Draws the overlapping-windows ShakaPachi glyph into the current graphics context.
-    /// The glyph is anchored toward the top-left so the bottom-right corner is free for a badge.
-    /// - Parameter bounds: the canvas rect passed by the drawingHandler (origin is flipped-aware).
-    private func drawWindowGlyph(in bounds: NSRect) {
-        // Scale the glyph to roughly 11/16 of the canvas, leaving the bottom-right open.
-        let scale = bounds.width / 16.0
+    /// Draws the ShakaPachi glyph — two overlapping windows — in a single `color`:
+    /// the back window as an outline and the front window as a SOLID fill (the
+    /// "白掛け" front), so the whole glyph reads as one state colour
+    /// (white = normal, amber = warning, red = stopped). Geometry mirrors the app
+    /// icon (OnboardingWindow.makeAppIconTile): back lower-left, front upper-right.
+    private func drawGlyph(in bounds: NSRect, color: NSColor) {
+        let s = bounds.width / 16.0
+        // Fill most of the canvas (menu-bar icons have no surrounding tile,
+        // unlike the app icon, so the glyph itself must be large): ~1.25px margins
+        // in the 16-unit design space, rendered into an 18px image.
+        let w = 9.5 * s
+        let r = 1.65 * s
+        let line = 1.3 * s
 
-        // Back window frame — top-left anchor
-        let backRect = NSRect(
-            x: bounds.minX,
-            y: bounds.minY + 5 * scale,
-            width: 10 * scale,
-            height: 10 * scale
-        )
-        let back = NSBezierPath(roundedRect: backRect, xRadius: 1.5 * scale, yRadius: 1.5 * scale)
-        back.lineWidth = 1.5 * scale
+        color.setStroke()
+        color.setFill()
+
+        // Back window frame (outline) — lower-left.
+        let backRect = NSRect(x: bounds.minX + 1.25 * s, y: bounds.minY + 1.25 * s, width: w, height: w)
+        let back = NSBezierPath(roundedRect: backRect, xRadius: r, yRadius: r)
+        back.lineWidth = line
         back.stroke()
 
-        // Front window frame — offset to simulate overlap, clipped to keep bottom-right open
-        let frontRect = NSRect(
-            x: bounds.minX + 4 * scale,
-            y: bounds.minY + 1 * scale,
-            width: 10 * scale,
-            height: 10 * scale
-        )
-        let front = NSBezierPath(roundedRect: frontRect, xRadius: 1.5 * scale, yRadius: 1.5 * scale)
-        // Punch the region the front frame covers to transparent (.clear compositing)
-        // so it occludes the back frame — matching makeStatusIcon's solid-front look —
-        // then stroke the front outline.
-        if let ctx = NSGraphicsContext.current {
-            let previous = ctx.compositingOperation
-            ctx.compositingOperation = .clear
-            front.fill()
-            ctx.compositingOperation = previous
-        }
-        front.lineWidth = 1.5 * scale
+        // Front window — upper-right, solid fill occluding the back beneath it.
+        let frontRect = NSRect(x: bounds.minX + 5.25 * s, y: bounds.minY + 5.25 * s, width: w, height: w)
+        let front = NSBezierPath(roundedRect: frontRect, xRadius: r, yRadius: r)
+        front.fill()
+        front.lineWidth = line
         front.stroke()
     }
 
-    /// Draws a 16×16 warning icon: the ShakaPachi glyph with an amber triangle-exclamation badge
-    /// in the bottom-right corner. Non-template so the amber badge color renders.
+    /// Draws the 16×16 warning-state icon: the ShakaPachi glyph tinted amber.
+    /// State is shown by the glyph colour (no separate badge). Non-template so
+    /// the amber renders in colour rather than adapting to the menu bar.
     private func makeWarningIcon() -> NSImage {
-        let canvasSize = NSSize(width: 16, height: 16)
-        let image = NSImage(size: canvasSize, flipped: false) { bounds in
-            // Base glyph drawn with the appearance-adaptive label color so it follows light/dark.
-            NSColor.labelColor.setStroke()
-            self.drawWindowGlyph(in: bounds)
-
-            // Warning badge: an amber triangle-exclamation in the bottom-right corner.
-            let cx = bounds.maxX - 5.0
-            let baseY = bounds.minY + 0.5
-            let halfWidth: CGFloat = 4.8
-            let triHeight: CGFloat = 8.5
-            let triangle = NSBezierPath()
-            triangle.move(to: NSPoint(x: cx, y: baseY + triHeight))     // apex (top)
-            triangle.line(to: NSPoint(x: cx - halfWidth, y: baseY))     // base-left
-            triangle.line(to: NSPoint(x: cx + halfWidth, y: baseY))     // base-right
-            triangle.close()
-
-            // Halo: a wide labelColor stroke behind the fill separates the badge
-            // from the glyph lines (the amber fill covers the stroke's inner half).
-            NSColor.labelColor.setStroke()
-            triangle.lineWidth = 2.5
-            triangle.lineJoinStyle = .round
-            triangle.stroke()
-
-            // Amber fill.
-            NSColor(srgbRed: 1.0, green: 0.72, blue: 0.0, alpha: 1.0).setFill()
-            triangle.fill()
-
-            // Exclamation mark (dark, for contrast on amber).
-            NSColor.black.setFill()
-            let bodyRect = NSRect(x: cx - 0.8, y: baseY + 3.0, width: 1.6, height: 3.0)
-            NSBezierPath(rect: bodyRect).fill()
-            let dotRect = NSRect(x: cx - 0.8, y: baseY + 1.2, width: 1.6, height: 1.6)
-            NSBezierPath(ovalIn: dotRect).fill()
-
+        let size = NSSize(width: 18, height: 18)
+        let image = NSImage(size: size, flipped: false) { bounds in
+            // Soft amber — paler than the raw product colour so it reads as a
+            // gentle warning on the menu bar rather than a harsh block of colour.
+            self.drawGlyph(in: bounds, color: NSColor(srgbRed: 0.95, green: 0.81, blue: 0.45, alpha: 1.0))
             return true
         }
         image.isTemplate = false
@@ -194,6 +187,11 @@ final class StatusItemController {
     // MARK: - Private: menu
 
     private func setupMenu() {
+        // autoenablesItems = false so that explicit isEnabled assignments on menu items
+        // are honored without being overridden by AppKit's automatic validation pass.
+        // Required for Fix #3 (gray out toggle when permissions missing).
+        menu.autoenablesItems = false
+
         // Tap enable/disable toggle (§10) — also the recovery path after an
         // emergency stop or deadman fire without relaunching the app.
         let toggle = NSMenuItem(
@@ -217,26 +215,16 @@ final class StatusItemController {
         settingsItem.target = self
         menu.addItem(settingsItem)
 
-        // Permission status item — shows ⚠ when missing
+        // Permission status item — created but NOT added here. It is shown ONLY
+        // when a permission is missing, pinned to the top of the menu by
+        // updatePermissionWarning(); in the normal (granted) state it is absent.
         let permItem = NSMenuItem(
-            title: "権限の状態…",
+            title: "⚠ 権限の状態…",
             action: #selector(showPermissions),
             keyEquivalent: ""
         )
         permItem.target = self
-        menu.addItem(permItem)
         permissionStatusItem = permItem
-
-        menu.addItem(.separator())
-
-        // "About ShakaPachi" item
-        let aboutItem = NSMenuItem(
-            title: "ShakaPachi について",
-            action: #selector(showAbout),
-            keyEquivalent: ""
-        )
-        aboutItem.target = self
-        menu.addItem(aboutItem)
 
         menu.addItem(.separator())
 
@@ -252,45 +240,28 @@ final class StatusItemController {
         statusItem.menu = menu
     }
 
-    /// Draws a 16×16 stopped icon: the ShakaPachi glyph with a red filled-circle-with-square badge
-    /// in the bottom-right corner. Non-template so the red badge color renders.
+    /// Draws the 16×16 stopped-state icon: the ShakaPachi glyph tinted red.
+    /// State is shown by the glyph colour (no separate badge). Non-template.
     private func makeStoppedIcon() -> NSImage {
-        let canvasSize = NSSize(width: 16, height: 16)
-        let image = NSImage(size: canvasSize, flipped: false) { bounds in
-            // Base glyph drawn with the appearance-adaptive label color so it follows light/dark.
-            NSColor.labelColor.setStroke()
-            self.drawWindowGlyph(in: bounds)
+        let size = NSSize(width: 18, height: 18)
+        let image = NSImage(size: size, flipped: false) { bounds in
+            // Soft coral — a muted, lighter red so the stopped state is clear
+            // without being a harsh saturated red.
+            self.drawGlyph(in: bounds, color: NSColor(srgbRed: 0.92, green: 0.53, blue: 0.51, alpha: 1.0))
+            return true
+        }
+        image.isTemplate = false
+        return image
+    }
 
-            // Badge: red background disc in the bottom-right corner.
-            let badgeRadius: CGFloat = 4.5
-            let badgeCenter = NSPoint(x: bounds.maxX - badgeRadius + 0.5, y: bounds.minY + badgeRadius - 0.5)
-            let badgeRect = NSRect(
-                x: badgeCenter.x - badgeRadius,
-                y: badgeCenter.y - badgeRadius,
-                width: badgeRadius * 2,
-                height: badgeRadius * 2
-            )
-
-            // Halo: slightly larger disc in labelColor to separate badge from glyph lines.
-            NSColor.labelColor.setFill()
-            let haloPath = NSBezierPath(ovalIn: badgeRect.insetBy(dx: -1.0, dy: -1.0))
-            haloPath.fill()
-
-            // Red fill disc.
-            NSColor.systemRed.setFill()
-            NSBezierPath(ovalIn: badgeRect).fill()
-
-            // Filled square stop-mark in the badge (white, for contrast on red).
-            NSColor.white.setFill()
-            let squareSide: CGFloat = 3.0
-            let squareRect = NSRect(
-                x: badgeCenter.x - squareSide / 2,
-                y: badgeCenter.y - squareSide / 2,
-                width: squareSide,
-                height: squareSide
-            )
-            NSBezierPath(rect: squareRect).fill()
-
+    /// Draws the 18×18 settings-open icon: the ShakaPachi glyph tinted blue,
+    /// like an "info" indicator. Non-template so the blue renders in colour.
+    private func makeInfoIcon() -> NSImage {
+        let size = NSSize(width: 18, height: 18)
+        let image = NSImage(size: size, flipped: false) { bounds in
+            // Soft blue — a paler "info" blue (lighter than systemBlue) for the
+            // settings-open state, in keeping with the muted warning/stopped tints.
+            self.drawGlyph(in: bounds, color: NSColor(srgbRed: 0.52, green: 0.68, blue: 0.92, alpha: 1.0))
             return true
         }
         image.isTemplate = false
@@ -305,10 +276,6 @@ final class StatusItemController {
 
     @objc private func openSettings() {
         onOpenSettings?()
-    }
-
-    @objc private func showAbout() {
-        NSApp.orderFrontStandardAboutPanel(nil)
     }
 
     @objc private func showPermissions() {

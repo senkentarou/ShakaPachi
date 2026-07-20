@@ -9,6 +9,13 @@
 import AppKit
 import SwiftUI
 
+extension Notification.Name {
+    /// Posted when the Settings window opens (`open: true`) or closes
+    /// (`open: false`) so the menu-bar icon can show its blue "info" state.
+    static let settingsWindowStateChanged =
+        Notification.Name("com.masahirosenda.shakapachi.settingsWindowStateChanged")
+}
+
 @MainActor
 final class SettingsWindow: NSObject, NSWindowDelegate {
 
@@ -27,6 +34,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     // MARK: - Public
 
     func show() {
+        NotificationCenter.default.post(
+            name: .settingsWindowStateChanged, object: nil, userInfo: ["open": true])
         if let win = window {
             win.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -39,7 +48,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
         let win = makeWindow()
         win.delegate = self
-        win.contentView = makeContentView()
+        win.contentViewController = makeSettingsRootController()
+        win.setContentSize(NSSize(width: 520, height: 420))
         win.center()
         win.makeKeyAndOrderFront(nil)
         self.window = win
@@ -50,6 +60,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     // MARK: - NSWindowDelegate
 
     func windowWillClose(_ notification: Notification) {
+        NotificationCenter.default.post(
+            name: .settingsWindowStateChanged, object: nil, userInfo: ["open": false])
         // §11.3: revert to .accessory only when the onboarding window is also
         // NOT open. If both were open, reverting here would hide the onboarding
         // window from the screen because it would lose its .regular policy too.
@@ -76,53 +88,54 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         return win
     }
 
-    private func makeContentView() -> NSView {
-        let tabView = NSTabView()
-        tabView.tabViewType = .topTabsBezelBorder
-        tabView.translatesAutoresizingMaskIntoConstraints = false
-
-        // Tab 1: 一般
-        let generalTab = NSTabViewItem(identifier: "general")
-        generalTab.label = "一般"
-        let generalHosting = NSHostingView(rootView: GeneralSettingsView())
-        generalTab.view = generalHosting
-        tabView.addTabViewItem(generalTab)
-
-        // Tab 2: 外観
-        let appearanceTab = NSTabViewItem(identifier: "appearance")
-        appearanceTab.label = "外観"
-        let appearanceHosting = NSHostingView(rootView: AppearanceSettingsView())
-        appearanceTab.view = appearanceHosting
-        tabView.addTabViewItem(appearanceTab)
-
-        // Tab 3: 除外
-        let exclusionTab = NSTabViewItem(identifier: "exclusion")
-        exclusionTab.label = "除外"
-        let exclusionHosting = NSHostingView(rootView: ExclusionSettingsView())
-        exclusionTab.view = exclusionHosting
-        tabView.addTabViewItem(exclusionTab)
-
-        // Tab 4: 権限
-        let permissionsTab = NSTabViewItem(identifier: "permissions")
-        permissionsTab.label = "権限"
-        let permissionsHosting = NSHostingView(rootView: PermissionsSettingsView())
-        permissionsTab.view = permissionsHosting
-        tabView.addTabViewItem(permissionsTab)
-
-        let container = NSView()
-        container.addSubview(tabView)
+    /// Wraps the tab controller with a small top inset so the segmented tab
+    /// control isn't flush against the title bar (user request).
+    private func makeSettingsRootController() -> NSViewController {
+        let tvc = makeTabViewController()
+        let root = NSViewController()
+        root.view = NSView()
+        root.addChild(tvc)
+        tvc.view.translatesAutoresizingMaskIntoConstraints = false
+        root.view.addSubview(tvc.view)
         NSLayoutConstraint.activate([
-            tabView.topAnchor.constraint(equalTo: container.topAnchor),
-            tabView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            tabView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            tabView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            tvc.view.topAnchor.constraint(equalTo: root.view.topAnchor, constant: 12),
+            tvc.view.leadingAnchor.constraint(equalTo: root.view.leadingAnchor),
+            tvc.view.trailingAnchor.constraint(equalTo: root.view.trailingAnchor),
+            tvc.view.bottomAnchor.constraint(equalTo: root.view.bottomAnchor),
         ])
-        return container
+        return root
+    }
+
+    private func makeTabViewController() -> NSTabViewController {
+        let tvc = NSTabViewController()
+        // Modern centered segmented control at the top (like System Settings),
+        // instead of NSTabView's dated `.topTabsBezelBorder` which drew a bezel
+        // box and looked cramped/broken flush against the title bar regardless of
+        // inset. This style has no bezel and manages its own spacing.
+        tvc.tabStyle = .segmentedControlOnTop
+
+        // Give every tab the same min frame so switching tabs never resizes the
+        // window (NSTabViewController otherwise fits each tab's own content).
+        func addTab<V: View>(_ label: String, _ view: V) {
+            let sized = view.frame(minWidth: 520, maxWidth: .infinity,
+                                   minHeight: 360, maxHeight: .infinity)
+            let item = NSTabViewItem(viewController: NSHostingController(rootView: sized))
+            item.label = label
+            tvc.addTabViewItem(item)
+        }
+
+        addTab("一般", GeneralSettingsView())
+        addTab("外観", AppearanceSettingsView())
+        addTab("権限", PermissionsSettingsView())
+        addTab("統計", StatsSettingsView())
+        addTab("クレジット", AboutSettingsView())
+        return tvc
     }
 }
 
 // MARK: - OnboardingWindow open-state check
 // OnboardingWindow exposes isWindowOpen via its own property (see OnboardingWindow.swift).
+
 
 // MARK: - SwiftUI Settings Views
 
@@ -145,6 +158,7 @@ final class SettingsStore: ObservableObject {
     @Published var excludedBundleIDs: [String]
     @Published var theme: Theme
     @Published var launchAtLogin: Bool
+    @Published var accentColor: AccentColor
 
     private var observer: (any NSObjectProtocol)?
 
@@ -157,6 +171,7 @@ final class SettingsStore: ObservableObject {
         sortMode         = s.sortMode
         excludedBundleIDs = s.excludedBundleIDs
         theme            = s.theme
+        accentColor      = s.accentColor
         // The real login-item state lives in SMAppService, not the cached bool;
         // read it so the toggle reflects reality (and heal a stale mirror).
         launchAtLogin    = LoginItemManager.isEnabled
@@ -183,6 +198,7 @@ final class SettingsStore: ObservableObject {
         if sortMode         != s.sortMode         { sortMode         = s.sortMode         }
         if excludedBundleIDs != s.excludedBundleIDs { excludedBundleIDs = s.excludedBundleIDs }
         if theme            != s.theme            { theme            = s.theme            }
+        if accentColor      != s.accentColor      { accentColor      = s.accentColor      }
         if launchAtLogin    != s.launchAtLogin    { launchAtLogin    = s.launchAtLogin    }
     }
 }
@@ -196,22 +212,18 @@ struct GeneralSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Picker("トリガー修飾キー", selection: Binding(
+                // Modifier-only picker: the trigger key is fixed to Tab.
+                // On set, both modifier and key are written so any previously-
+                // stored .grave value is normalized to .tab on first save.
+                Picker("トリガー", selection: Binding(
                     get: { store.triggerModifier },
-                    set: { Settings.shared.triggerModifier = $0 }
-                )) {
-                    ForEach(TriggerModifier.allCases, id: \.self) { mod in
-                        Text(mod.displayName).tag(mod)
+                    set: { modifier in
+                        Settings.shared.triggerModifier = modifier
+                        Settings.shared.triggerKey      = .tab
                     }
-                }
-                .pickerStyle(.menu)
-
-                Picker("トリガーキー", selection: Binding(
-                    get: { store.triggerKey },
-                    set: { Settings.shared.triggerKey = $0 }
                 )) {
-                    ForEach(TriggerKey.allCases, id: \.self) { key in
-                        Text(key.displayName).tag(key)
+                    ForEach(TriggerModifier.allCases, id: \.self) { modifier in
+                        Text("\(modifier.displayName) + Tab").tag(modifier)
                     }
                 }
                 .pickerStyle(.menu)
@@ -220,32 +232,18 @@ struct GeneralSettingsView: View {
             }
 
             Section {
-                Toggle("現在のスペースのみ", isOn: Binding(
-                    get: { store.currentSpaceOnly },
-                    set: { Settings.shared.currentSpaceOnly = $0 }
-                ))
-
+                // .zOrder is intentionally excluded from the picker; the enum
+                // case is kept for internal WindowStore use but is not exposed
+                // as a user-selectable option.
                 Picker("並び順", selection: Binding(
                     get: { store.sortMode },
                     set: { Settings.shared.sortMode = $0 }
                 )) {
-                    ForEach(SortMode.allCases, id: \.self) { mode in
+                    ForEach([SortMode.mru, .byApp], id: \.self) { mode in
                         Text(mode.displayName).tag(mode)
                     }
                 }
                 .pickerStyle(.menu)
-
-                HStack {
-                    Text("表示遅延 (ms)")
-                    Spacer()
-                    TextField("", value: Binding(
-                        get: { store.showDelayMs },
-                        set: { Settings.shared.showDelayMs = $0 }
-                    ), format: .number)
-                    .frame(width: 70)
-                    .textFieldStyle(.roundedBorder)
-                    .multilineTextAlignment(.trailing)
-                }
             } header: {
                 Text("動作")
             }
@@ -273,7 +271,15 @@ struct GeneralSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .padding()
+        .padding(.top, 12)
+        .padding([.leading, .trailing, .bottom])
+        .onAppear {
+            // .zOrder is no longer listed in the picker; normalize it to .mru
+            // so the picker never shows an unlisted selection.
+            if Settings.shared.sortMode == .zOrder {
+                Settings.shared.sortMode = .mru
+            }
+        }
     }
 }
 
@@ -295,111 +301,23 @@ struct AppearanceSettingsView: View {
                     }
                 }
                 .pickerStyle(.menu)
-            } header: {
-                Text("外観")
-            }
 
-            // maxRows and panelWidth are omitted from the UI because the
-            // horizontal auto-sizing tile layout (Step 7) derives its dimensions
-            // from the tile count automatically. These settings are advisory in
-            // v1. A note is shown so users understand the omission.
-            Section {
-                Text("パネルの幅と最大行数は水平タイルレイアウトでは自動調整されます。")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            } header: {
-                Text("レイアウト (v1: 自動調整)")
-            }
-        }
-        .formStyle(.grouped)
-        .padding()
-    }
-}
-
-// ─── 除外 tab ─────────────────────────────────────────────────────────────────
-
-struct ExclusionSettingsView: View {
-
-    @ObservedObject private var store = SettingsStore.shared
-    @State private var newBundleID: String = ""
-    @State private var selectedBundleID: String? = nil
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("除外アプリ")
-                .font(.headline)
-                .padding(.top, 16)
-                .padding(.horizontal)
-
-            Text("リストに追加されたアプリのウィンドウは切替対象から除外されます。")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .padding(.horizontal)
-
-            List(selection: $selectedBundleID) {
-                ForEach(store.excludedBundleIDs, id: \.self) { bundleID in
-                    Text(bundleID)
-                        .font(.system(.body, design: .monospaced))
-                        .tag(bundleID)
-                }
-            }
-            .frame(minHeight: 160)
-            .border(Color(NSColor.separatorColor))
-            .padding(.horizontal)
-
-            HStack(spacing: 8) {
-                // Quick picker: running apps
-                Picker("実行中のアプリ", selection: $newBundleID) {
-                    Text("選択…").tag("")
-                    ForEach(runningAppBundleIDs(), id: \.self) { bid in
-                        Text(bid).tag(bid)
+                Picker("アクセントカラー", selection: Binding(
+                    get: { store.accentColor },
+                    set: { Settings.shared.accentColor = $0 }
+                )) {
+                    ForEach(AccentColor.allCases, id: \.self) { c in
+                        Text(c.displayName).tag(c)
                     }
                 }
                 .pickerStyle(.menu)
-                .frame(maxWidth: 220)
-
-                TextField("または Bundle ID を入力", text: $newBundleID)
-                    .textFieldStyle(.roundedBorder)
-
-                Button("追加") {
-                    let trimmed = newBundleID.trimmingCharacters(in: .whitespaces)
-                    guard !trimmed.isEmpty,
-                          !store.excludedBundleIDs.contains(trimmed) else { return }
-                    var ids = Settings.shared.excludedBundleIDs
-                    ids.append(trimmed)
-                    Settings.shared.excludedBundleIDs = ids
-                    newBundleID = ""
-                }
-                .disabled(newBundleID.trimmingCharacters(in: .whitespaces).isEmpty)
+            } header: {
+                Text("外観")
             }
-            .padding(.horizontal)
-
-            HStack {
-                Button("削除") {
-                    guard let sel = selectedBundleID else { return }
-                    var ids = Settings.shared.excludedBundleIDs
-                    ids.removeAll { $0 == sel }
-                    Settings.shared.excludedBundleIDs = ids
-                    selectedBundleID = nil
-                }
-                .disabled(selectedBundleID == nil)
-
-                Spacer()
-            }
-            .padding(.horizontal)
-            .padding(.bottom, 16)
         }
-    }
-
-    /// Returns bundle IDs of currently running regular-activationPolicy apps,
-    /// excluding ShakaPachi itself and those already in the exclusion list.
-    private func runningAppBundleIDs() -> [String] {
-        let excluded = Set(store.excludedBundleIDs)
-        let selfID = Bundle.main.bundleIdentifier ?? ""
-        return NSWorkspace.shared.runningApplications
-            .compactMap { $0.bundleIdentifier }
-            .filter { $0 != selfID && !excluded.contains($0) }
-            .sorted()
+        .formStyle(.grouped)
+        .padding(.top, 12)
+        .padding([.leading, .trailing, .bottom])
     }
 }
 
@@ -412,75 +330,79 @@ struct PermissionsSettingsView: View {
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        Form {
-            Section {
-                HStack {
-                    Image(systemName: accessibilityGranted
-                          ? "checkmark.circle.fill" : "circle.dashed")
-                        .foregroundColor(accessibilityGranted ? .green : .secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("アクセシビリティ")
-                            .font(.body)
-                        Text("切替キーの捕捉とウィンドウの前面化に使います。")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    if accessibilityGranted {
-                        Text("許可済み").foregroundColor(.secondary).font(.caption)
-                    } else {
-                        Button("設定を開く") {
-                            if let url = URL(string:
-                                "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                                NSWorkspace.shared.open(url)
-                            }
+        VStack(alignment: .leading, spacing: 0) {
+            Form {
+                Section {
+                    HStack {
+                        Image(systemName: accessibilityGranted
+                              ? "checkmark.circle.fill" : "circle.dashed")
+                            .foregroundColor(accessibilityGranted ? .green : .secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("アクセシビリティ")
+                                .font(.body)
+                            Text("切替キーの捕捉とウィンドウの前面化に使います。")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
-                        .buttonStyle(.bordered)
-                    }
-                }
-
-                HStack {
-                    Image(systemName: screenRecordingGranted
-                          ? "checkmark.circle.fill" : "circle.dashed")
-                        .foregroundColor(screenRecordingGranted ? .green : .secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("画面収録")
-                            .font(.body)
-                        Text("ウィンドウ名の取得だけに使います。画面の撮影・保存はしません。")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    if screenRecordingGranted {
-                        Text("許可済み").foregroundColor(.secondary).font(.caption)
-                    } else {
-                        Button("設定を開く") {
-                            if let url = URL(string:
-                                "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
-                                NSWorkspace.shared.open(url)
+                        Spacer()
+                        if accessibilityGranted {
+                            Text("許可済み").foregroundColor(.secondary).font(.caption)
+                        } else {
+                            Button("設定を開く") {
+                                if let url = URL(string:
+                                    "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                                    NSWorkspace.shared.open(url)
+                                }
                             }
+                            .buttonStyle(.bordered)
                         }
-                        .buttonStyle(.bordered)
                     }
-                }
-            } header: {
-                Text("権限の状態")
-            }
 
-            Section {
-                Button("オンボーディング画面を開く") {
-                    // Post a notification that AppDelegate can observe to open
-                    // the onboarding window. Using NotificationCenter avoids a
-                    // direct dependency from this SwiftUI view to AppDelegate.
-                    NotificationCenter.default.post(
-                        name: .showOnboardingWindow, object: nil)
+                    HStack {
+                        Image(systemName: screenRecordingGranted
+                              ? "checkmark.circle.fill" : "circle.dashed")
+                            .foregroundColor(screenRecordingGranted ? .green : .secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("画面収録")
+                                .font(.body)
+                            Text("ウィンドウ名の取得だけに使います。画面の撮影・保存はしません。")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        if screenRecordingGranted {
+                            Text("許可済み").foregroundColor(.secondary).font(.caption)
+                        } else {
+                            Button("設定を開く") {
+                                if let url = URL(string:
+                                    "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+                                    NSWorkspace.shared.open(url)
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                } header: {
+                    Text("権限の状態")
                 }
-            } header: {
-                Text("サポート")
             }
+            .formStyle(.grouped)
+            .padding(.top, 12)
+            .padding([.leading, .trailing, .bottom])
+
+            // Plain onboarding button below the form, no section/card wrapper.
+            // A wrapper section containing only a button provides no semantic
+            // value — the button alone is sufficient.
+            Button("オンボーディング画面を開く") {
+                // Post a notification that AppDelegate can observe to open
+                // the onboarding window. Using NotificationCenter avoids a
+                // direct dependency from this SwiftUI view to AppDelegate.
+                NotificationCenter.default.post(
+                    name: .showOnboardingWindow, object: nil)
+            }
+            .padding(.horizontal)
+            .padding(.bottom, 16)
         }
-        .formStyle(.grouped)
-        .padding()
         .onAppear { refreshPermissions() }
         .onReceive(timer) { _ in refreshPermissions() }
     }
@@ -490,6 +412,89 @@ struct PermissionsSettingsView: View {
         screenRecordingGranted = CGPreflightScreenCaptureAccess()
     }
 }
+
+// ─── 統計 tab ─────────────────────────────────────────────────────────────────
+
+struct StatsSettingsView: View {
+
+    // Snapshot taken at appear time — counts don't change while Settings is open.
+    @State private var todayCount: Int = 0
+    @State private var totalCount: Int = 0
+
+    // Locale-aware thousands separator (e.g. "1,234").
+    private let countFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        return f
+    }()
+
+    var body: some View {
+        Form {
+            Section {
+                HStack {
+                    Text("今日")
+                    Spacer()
+                    Text(formatted(todayCount))
+                        .foregroundColor(.secondary)
+                }
+                HStack {
+                    Text("累計")
+                    Spacer()
+                    Text(formatted(totalCount))
+                        .foregroundColor(.secondary)
+                }
+            } header: {
+                Text("切替回数")
+            }
+        }
+        .formStyle(.grouped)
+        .padding(.top, 12)
+        .padding([.leading, .trailing, .bottom])
+        .onAppear {
+            todayCount = StatsStore.shared.todayCount
+            totalCount = StatsStore.shared.totalCount
+        }
+    }
+
+    private func formatted(_ n: Int) -> String {
+        (countFormatter.string(from: NSNumber(value: n)) ?? "\(n)") + " 回"
+    }
+}
+
+// ─── について tab ──────────────────────────────────────────────────────────────
+
+struct AboutSettingsView: View {
+
+    private var version: String {
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "—"
+    }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Spacer()
+
+            // App icon (the bundled AppIcon), shown via SwiftUI Image for clean
+            // scaling — falls back to the generic app icon if none is bundled.
+            Image(nsImage: NSApp.applicationIconImage
+                  ?? NSImage(named: NSImage.applicationIconName)
+                  ?? NSImage())
+                .resizable()
+                .frame(width: 72, height: 72)
+
+            Text("ShakaPachi")
+                .font(.title)
+                .fontWeight(.bold)
+
+            Text("バージョン \(version)")
+                .foregroundColor(.secondary)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .padding()
+    }
+}
+
 
 // MARK: - Notification for onboarding open
 
