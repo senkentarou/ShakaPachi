@@ -39,6 +39,21 @@ final class HotkeyTap {
     /// t0 is the tap-entry timestamp so callers can measure N1 on the first trigger.
     var onSwitcherInput: ((SwitcherInput, CFAbsoluteTime) -> Bool)?
 
+    // MARK: - Configurable trigger (§12 Settings live-wire)
+    //
+    // AppDelegate updates these plain stored values from Settings.shared whenever
+    // the user changes triggerModifier or triggerKey. Reading them inside the
+    // tap callback is safe and fast — no AppKit/Settings calls in the hot path
+    // (§4.3 callback absolute rules).
+
+    /// The CGEventFlags mask for the configured trigger modifier.
+    /// Updated by AppDelegate when Settings.triggerModifier changes.
+    var triggerModifierMask: UInt64 = TriggerModifier.option.eventFlagMask
+
+    /// The CGKeyCode for the configured trigger key.
+    /// Updated by AppDelegate when Settings.triggerKey changes.
+    var triggerKeyCode: UInt16 = TriggerKey.tab.keyCode
+
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private(set) var isEnabled = false
@@ -78,7 +93,8 @@ final class HotkeyTap {
 
         isEnabled = true
         armDeadman()
-        NSLog("[CmdTab] Event tap enabled (trigger: Option+Tab, log-only)")
+        NSLog("[CmdTab] Event tap enabled (triggerModifierMask=0x%llx, triggerKeyCode=%u)",
+              triggerModifierMask, triggerKeyCode)
         onStateChange?(.active)
         return true
     }
@@ -180,11 +196,18 @@ final class HotkeyTap {
             break
         }
 
-        // Step 9: translate the abstract KeyEvent into a SwitcherInput and
-        // forward it to the state machine via onSwitcherInput.
+        // Step 9 / Step 12: translate the abstract KeyEvent into a SwitcherInput
+        // and forward it to the state machine via onSwitcherInput.
         // §4.3: no blocking work here — all panel/UI work is deferred to the
         // main queue inside onSwitcherInput's implementation in AppDelegate.
-        let hasOption = event.flags.contains(.maskAlternate)
+        //
+        // The trigger modifier and key are read from stored plain values
+        // (triggerModifierMask, triggerKeyCode) which AppDelegate keeps in sync
+        // with Settings. We never call into Settings/AppKit inside this callback.
+        let configuredMask = triggerModifierMask
+        let configuredKeyCode = triggerKeyCode
+        let rawFlags = event.flags.rawValue
+        let hasTriggerModifier = (rawFlags & configuredMask) != 0
         let hasShift  = event.flags.contains(.maskShift)
 
         // Build the switcher-relevant input, if any.
@@ -192,7 +215,7 @@ final class HotkeyTap {
         switch eventType {
         case .keyDown:
             switch keyCode {
-            case KeyCode.tab where hasOption:
+            case configuredKeyCode where hasTriggerModifier:
                 switcherInput = .trigger(shift: hasShift)
             case KeyCode.rightArrow, KeyCode.downArrow:
                 switcherInput = .arrowForward
@@ -206,14 +229,15 @@ final class HotkeyTap {
                 switcherInput = .otherKey
             }
         case .keyUp:
-            // Consume Tab keyUp so an orphan keyUp doesn't reach the front app.
-            if keyCode == KeyCode.tab, hasOption {
+            // Consume the trigger key's keyUp so an orphan keyUp doesn't reach
+            // the front app. Use the CONFIGURED key code, not a hardcoded value.
+            if keyCode == configuredKeyCode, hasTriggerModifier {
                 return nil
             }
             switcherInput = nil
         case .flagsChanged:
-            // Detect Option modifier transitions.
-            if hasOption {
+            // Detect configured modifier transitions using the configured mask.
+            if hasTriggerModifier {
                 switcherInput = .modifierDown
             } else {
                 switcherInput = .modifierUp
@@ -258,6 +282,7 @@ final class HotkeyTap {
                 self?.onModifierReleased?()
             }
         }
+        // Pass non-trigger events through when the handler isn't wired yet.
         return Unmanaged.passUnretained(event)
     }
 }

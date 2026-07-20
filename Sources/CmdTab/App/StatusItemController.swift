@@ -21,6 +21,9 @@ final class StatusItemController {
     /// Receives the desired new state.
     var onToggleTap: ((Bool) -> Void)?
 
+    /// Called when the user chooses 「設定…」 from the menu.
+    var onOpenSettings: (() -> Void)?
+
     // Retained while open: NSWindow.delegate is weak, so a local variable
     // would deallocate the controller and leave the activation policy stuck
     // at .regular when the window closes.
@@ -149,16 +152,15 @@ final class StatusItemController {
 
         menu.addItem(.separator())
 
-        // "About CmdTab" item
-        let aboutItem = NSMenuItem(
-            title: "CmdTab について",
-            action: #selector(showAbout),
-            keyEquivalent: ""
+        // §10 / §11.3: Settings… with Cmd+, shortcut
+        let settingsItem = NSMenuItem(
+            title: "設定…",
+            action: #selector(openSettings),
+            keyEquivalent: ","
         )
-        aboutItem.target = self
-        menu.addItem(aboutItem)
-
-        menu.addItem(.separator())
+        settingsItem.keyEquivalentModifierMask = .command
+        settingsItem.target = self
+        menu.addItem(settingsItem)
 
         // Permission status item — shows ⚠ when missing
         let permItem = NSMenuItem(
@@ -169,6 +171,17 @@ final class StatusItemController {
         permItem.target = self
         menu.addItem(permItem)
         permissionStatusItem = permItem
+
+        menu.addItem(.separator())
+
+        // "About CmdTab" item
+        let aboutItem = NSMenuItem(
+            title: "CmdTab について",
+            action: #selector(showAbout),
+            keyEquivalent: ""
+        )
+        aboutItem.target = self
+        menu.addItem(aboutItem)
 
         menu.addItem(.separator())
 
@@ -208,6 +221,10 @@ final class StatusItemController {
 
     @objc private func toggleTap() {
         onToggleTap?(!tapEnabled)
+    }
+
+    @objc private func openSettings() {
+        onOpenSettings?()
     }
 
     @objc private func showAbout() {

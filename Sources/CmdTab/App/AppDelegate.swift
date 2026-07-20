@@ -34,6 +34,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // Derived from lastWindowInfos at show time; kept for the panel API.
     private var lastSwitcherItems: [SwitcherItem] = []
 
+    // §Step12: Settings window controller — retained here because NSWindow.delegate
+    // is weak; a local would dealloc and leave activation policy stuck at .regular.
+    private var settingsWindow: SettingsWindow?
+
+    // Settings change observer token (NotificationCenter).
+    private var settingsObserver: (any NSObjectProtocol)?
+
     @MainActor
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Run as a menu-bar accessory: no Dock icon, no activation on launch.
@@ -47,8 +54,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let panel = SwitcherPanel()
         self.switcherPanel = panel
 
+        // Apply the saved theme immediately at launch.
+        applyTheme(Settings.shared.theme)
+
         // Real data source + icon cache, created once and retained (§5, §8).
-        self.windowStore = WindowStore()
+        let settings = Settings.shared
+        self.windowStore = WindowStore(excludedBundleIDs: Set(settings.excludedBundleIDs))
         self.iconCache = IconCache()
 
         #if DEBUG
@@ -72,6 +83,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 tap.enable()
             } else {
                 tap.disable(reason: "メニューから無効化")
+            }
+        }
+
+        // §12 Settings menu item: open the settings window with Cmd+,
+        sc.onOpenSettings = { [weak self] in
+            self?.openSettings()
+        }
+
+        // §12 Live settings: observe all settings changes and apply immediately.
+        settingsObserver = NotificationCenter.default.addObserver(
+            forName: .settingsDidChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.applySettingsChanges()
+            }
+        }
+
+        // Observer for the onboarding window trigger from the permissions tab.
+        NotificationCenter.default.addObserver(
+            forName: .showOnboardingWindow, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.showOnboarding()
             }
         }
 
@@ -128,6 +162,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard hotkeyTap == nil,
               permissionManager?.allPermissionsGranted() == true else { return }
         let tap = HotkeyTap()
+
+        // Initialize the tap with the current settings values.
+        let settings = Settings.shared
+        tap.triggerModifierMask = settings.triggerModifier.eventFlagMask
+        tap.triggerKeyCode      = settings.triggerKey.keyCode
+
         tap.onStateChange = { [weak self] state in
             switch state {
             case .active:
@@ -157,6 +197,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Supply the current item count only when showing the panel
             // (MODIFIER_HELD + trigger transition). For all other inputs
             // the machine ignores itemCount, so 0 is a safe sentinel.
+            // Read showDelayMs at trigger time so showPanel can use it.
+            let showDelay: Int
             let itemCount: Int
             if case .trigger = input, !panel.isVisible {
                 // "Show" transition: enumerate once and snapshot BOTH the full
@@ -164,7 +206,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // is the source of truth for confirmSelection and sameAppResolver
                 // throughout this switcher session, so they see a stable list
                 // even if windows open/close between show and confirm (§15).
-                let infos = self.windowStore?.enumerate() ?? []
+                // Read Settings values (fast stored properties — §4.3 safe).
+                showDelay = Settings.shared.showDelayMs
+                let infos = self.windowStore?.enumerate(
+                    currentSpaceOnly: Settings.shared.currentSpaceOnly,
+                    sortMode: Settings.shared.sortMode
+                ) ?? []
                 let icons = self.iconCache
                 self.lastWindowInfos = infos
                 self.lastSwitcherItems = infos.map { info in
@@ -175,6 +222,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 itemCount = infos.count
             } else {
+                showDelay = 0  // Not a show transition; delay not used.
                 itemCount = panel.itemCount
             }
 
@@ -190,10 +238,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // but be defensive here too.
                 let items = self.lastSwitcherItems
                 guard !items.isEmpty else { break }
-                panel.show(items: items, selectedIndex: initialIndex)
-                panel.displayIfNeeded()
-                let n1 = (CFAbsoluteTimeGetCurrent() - t0) * 1000.0
-                NSLog("[CmdTab] N1: %.2fms (callback→display, %d windows)", n1, items.count)
+                // §11.2 showDelayMs: delay the actual show by the configured
+                // number of milliseconds. Default 0 means no delay, so there
+                // is no behavior change for users who haven't set this. The N1
+                // measurement still reflects wall time from the tap entry (t0),
+                // so a non-zero delay is visible in the log.
+                let delayMs = showDelay
+                if delayMs <= 0 {
+                    panel.show(items: items, selectedIndex: initialIndex)
+                    panel.displayIfNeeded()
+                    let n1 = (CFAbsoluteTimeGetCurrent() - t0) * 1000.0
+                    NSLog("[CmdTab] N1: %.2fms (callback→display, %d windows)", n1, items.count)
+                } else {
+                    let capturedItems = items
+                    let capturedIndex = initialIndex
+                    let capturedT0 = t0
+                    DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(delayMs)) { [weak self] in
+                        guard let self, let panel = self.switcherPanel else { return }
+                        panel.show(items: capturedItems, selectedIndex: capturedIndex)
+                        panel.displayIfNeeded()
+                        let n1 = (CFAbsoluteTimeGetCurrent() - capturedT0) * 1000.0
+                        NSLog("[CmdTab] N1: %.2fms (callback→display incl %dms delay, %d windows)",
+                              n1, delayMs, capturedItems.count)
+                    }
+                }
 
             case .moveSelection(let newIndex):
                 let t2start = CFAbsoluteTimeGetCurrent()
@@ -240,7 +308,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     private func currentSwitcherItems() -> [SwitcherItem] {
         guard let windowStore, let iconCache else { return [] }
-        return windowStore.enumerate().map { info in
+        let settings = Settings.shared
+        return windowStore.enumerate(
+            currentSpaceOnly: settings.currentSpaceOnly,
+            sortMode: settings.sortMode
+        ).map { info in
             SwitcherItem(
                 icon: iconCache.icon(for: info.pid, bundleID: info.bundleID),
                 title: info.title
@@ -277,6 +349,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         return nil
     }
+
+    // MARK: - §12 Settings live-wire
+
+    /// Apply all settings that take effect immediately when they change.
+    /// Called via NotificationCenter whenever any Settings value is set.
+    @MainActor
+    private func applySettingsChanges() {
+        let settings = Settings.shared
+
+        // -- triggerModifier / triggerKey → HotkeyTap --
+        // Update the stored plain values; the tap reads them inside the callback
+        // without calling into Settings/AppKit (§4.3 safe).
+        if let tap = hotkeyTap {
+            tap.triggerModifierMask = settings.triggerModifier.eventFlagMask
+            tap.triggerKeyCode      = settings.triggerKey.keyCode
+        }
+
+        // -- excludedBundleIDs → WindowStore (live update, MRU preserved) --
+        windowStore?.excludedBundleIDs = Set(settings.excludedBundleIDs)
+
+        // -- theme → NSApp.appearance --
+        applyTheme(settings.theme)
+
+        // currentSpaceOnly and sortMode are read at enumerate() call time (no
+        // stored state to update here). showDelayMs is read at show time.
+    }
+
+    /// Apply the given theme to NSApp.appearance so the entire UI (including
+    /// the switcher panel and settings window) reacts immediately.
+    @MainActor
+    private func applyTheme(_ theme: Theme) {
+        NSApp.appearance = theme.nsAppearance
+    }
+
+    // MARK: - §12 Settings window
+
+    /// Open the settings window (§11.3). Creates it if it doesn't exist yet.
+    @MainActor
+    func openSettings() {
+        if settingsWindow == nil {
+            settingsWindow = SettingsWindow(onboardingWindow: onboardingWindow)
+        }
+        settingsWindow?.show()
+    }
+
+    /// Show the onboarding/permissions window. Called from the permissions tab
+    /// in SettingsWindow and from the permission status menu item.
+    @MainActor
+    private func showOnboarding() {
+        guard let pm = permissionManager else { return }
+        if onboardingWindow == nil {
+            let ow = OnboardingWindow(permissionManager: pm) { [weak self] in
+                self?.statusItemController?.updatePermissionWarning()
+                self?.startTapIfPossible()
+            }
+            onboardingWindow = ow
+        }
+        onboardingWindow?.show()
+    }
+
+    // MARK: - Prevent spurious quit
 
     // Prevent AppKit from quitting the process when all windows close.
     // As a menu-bar accessory the app has no main window, so this callback

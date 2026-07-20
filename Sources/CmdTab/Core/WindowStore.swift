@@ -19,8 +19,9 @@ import Foundation
 final class WindowStore {
 
     // Bundle IDs to exclude from enumeration results.
-    // Populated from Settings in a later step; empty by default.
-    let excludedBundleIDs: Set<String>
+    // Live-updatable: AppDelegate updates this from Settings on every change.
+    // MRU state is preserved across updates (mruOrder is NOT cleared).
+    var excludedBundleIDs: Set<String>
 
     // Per-instance pid → bundleID cache.  Avoids repeated NSRunningApplication
     // lookups across consecutive enumerate() calls.
@@ -40,15 +41,14 @@ final class WindowStore {
     // MARK: - Public interface
 
     /// Enumerate on-screen windows and return filtered, title-resolved results
-    /// sorted by MRU order (§5.5).
+    /// sorted according to the given `sortMode`.
     ///
-    /// Windows whose IDs appear in `mruOrder` come first in that sequence;
-    /// windows not yet in the order are appended at the end in raw z-order.
-    ///
-    /// - Parameter currentSpaceOnly: When `true` (default) only windows on the
-    ///   current Space are included (.optionOnScreenOnly). Pass `false` to use
-    ///   .optionAll and include every space.
-    func enumerate(currentSpaceOnly: Bool = true) -> [WindowInfo] {
+    /// - Parameters:
+    ///   - currentSpaceOnly: When `true` (default) only windows on the current
+    ///     Space are included (.optionOnScreenOnly). Pass `false` to use
+    ///     .optionAll and include every space.
+    ///   - sortMode: How the result list is ordered. Defaults to `.mru`.
+    func enumerate(currentSpaceOnly: Bool = true, sortMode: SortMode = .mru) -> [WindowInfo] {
         let option: CGWindowListOption = currentSpaceOnly
             ? .optionOnScreenOnly
             : CGWindowListOption(rawValue:
@@ -65,13 +65,32 @@ final class WindowStore {
             excludedBundleIDs: excludedBundleIDs,
             bundleIDResolver: { [weak self] pid in self?.resolvedBundleID(for: pid) }
         )
-        // §5.5: sort by mruOrder; unknowns appended in z-order at the end.
-        let sortedIDs = WindowStore.sortedByMRU(
-            windowIDs: filtered.map { $0.windowID },
-            mruOrder: mruOrder
-        )
-        let byID = Dictionary(uniqueKeysWithValues: filtered.map { ($0.windowID, $0) })
-        return sortedIDs.compactMap { byID[$0] }
+
+        switch sortMode {
+        case .mru:
+            // §5.5: sort by mruOrder; unknowns appended in z-order at the end.
+            let sortedIDs = WindowStore.sortedByMRU(
+                windowIDs: filtered.map { $0.windowID },
+                mruOrder: mruOrder
+            )
+            let byID = Dictionary(uniqueKeysWithValues: filtered.map { ($0.windowID, $0) })
+            return sortedIDs.compactMap { byID[$0] }
+        case .zOrder:
+            // Raw CGWindowList order — no MRU sort applied.
+            return filtered
+        case .byApp:
+            // Group windows by app (stable sort by bundleID/appName),
+            // keeping MRU order within each group.
+            let sortedByMRU = {
+                let sortedIDs = WindowStore.sortedByMRU(
+                    windowIDs: filtered.map { $0.windowID },
+                    mruOrder: mruOrder
+                )
+                let byID = Dictionary(uniqueKeysWithValues: filtered.map { ($0.windowID, $0) })
+                return sortedIDs.compactMap { byID[$0] }
+            }()
+            return WindowStore.sortedByApp(windows: sortedByMRU)
+        }
     }
 
     /// Record that `windowID` was just activated (switcher confirmed).
@@ -141,6 +160,37 @@ final class WindowStore {
         let id = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier
         bundleIDCache[pid] = id
         return id
+    }
+
+    // MARK: - Pure sort helpers (unit-testable without AppKit/CGWindowList)
+
+    /// Return windows grouped by app (stable sort by bundleID then appName),
+    /// preserving the relative order of windows within each group.
+    ///
+    /// The group order is determined by the first window encountered for each
+    /// app in the input sequence (which is MRU-sorted when called from enumerate).
+    /// This means the app that was most recently used appears first.
+    ///
+    /// - Parameter windows: The input window list (pre-sorted by MRU or z-order).
+    /// - Returns: The same windows reordered so all windows of each app are
+    ///   contiguous, with inter-app order matching the first appearance of each app.
+    nonisolated static func sortedByApp(windows: [WindowInfo]) -> [WindowInfo] {
+        // Build the ordered list of unique app keys (bundleID if available, else appName).
+        var appOrder: [String] = []
+        var seenApps: Set<String> = []
+        var grouped: [String: [WindowInfo]] = [:]
+
+        for window in windows {
+            let key = window.bundleID ?? window.appName
+            if !seenApps.contains(key) {
+                seenApps.insert(key)
+                appOrder.append(key)
+            }
+            grouped[key, default: []].append(window)
+        }
+
+        // Flatten in app-first-appearance order.
+        return appOrder.flatMap { grouped[$0] ?? [] }
     }
 
     // MARK: - Pure MRU helpers (unit-testable without AppKit/CGWindowList)

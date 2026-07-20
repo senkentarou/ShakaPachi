@@ -28,6 +28,10 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
 
     // MARK: - Public
 
+    /// Returns true when the onboarding window is currently displayed.
+    /// SettingsWindow uses this to decide whether to revert the activation policy.
+    var isWindowOpen: Bool { window != nil }
+
     func show() {
         if window != nil {
             window?.makeKeyAndOrderFront(nil)
