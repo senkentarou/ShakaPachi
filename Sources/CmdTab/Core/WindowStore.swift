@@ -49,22 +49,34 @@ final class WindowStore {
     ///     .optionAll and include every space.
     ///   - sortMode: How the result list is ordered. Defaults to `.mru`.
     func enumerate(currentSpaceOnly: Bool = true, sortMode: SortMode = .mru) -> [WindowInfo] {
+        // currentSpaceOnly == true is the default and hot path: query only the
+        // current Space via .optionOnScreenOnly — zero private-API cost.
+        // currentSpaceOnly == false: use .optionAll to capture all Spaces, then
+        // refine with SpacesEnumerator (private SkyLight) if available. Falls back
+        // to the raw .optionAll result if the private call is unavailable (§scope-2).
         let option: CGWindowListOption = currentSpaceOnly
             ? .optionOnScreenOnly
-            : CGWindowListOption(rawValue:
-                CGWindowListOption.optionAll.rawValue |
-                CGWindowListOption.optionOnScreenOnly.rawValue)
+            : .optionAll
         // Single CGWindowListCopyWindowInfo call as per §5.1.
         guard let rawList = CGWindowListCopyWindowInfo(option, kCGNullWindowID)
                 as? [[String: Any]] else {
             return []
         }
-        let filtered = WindowStore.filterAndBuild(
+        var filtered = WindowStore.filterAndBuild(
             rawList: rawList,
             selfPID: getpid(),
             excludedBundleIDs: excludedBundleIDs,
             bundleIDResolver: { [weak self] pid in self?.resolvedBundleID(for: pid) }
         )
+
+        // When enumerating all Spaces, apply the SkyLight-based Space filter to
+        // remove off-Space compositing artefacts that .optionAll includes.
+        // This is the upgrade over the previous ".optionAll | .optionOnScreenOnly"
+        // approach which gave no Space attribution and missed many other-Space windows.
+        // If SpacesEnumerator returns nil (private APIs unavailable), keep filtered as-is.
+        if !currentSpaceOnly, let allowedIDs = SpacesEnumerator.allSpaceWindowIDs() {
+            filtered = SpacesEnumerator.filterToAllowedIDs(filtered, allowedIDs: allowedIDs)
+        }
 
         switch sortMode {
         case .mru:
