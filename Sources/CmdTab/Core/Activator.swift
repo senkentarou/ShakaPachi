@@ -19,6 +19,21 @@
 import AppKit
 import ApplicationServices
 
+// Private ApplicationServices symbol that maps an AXUIElement directly to its
+// CGWindowID — the definitive AX↔CGWindow correlation the public API omits
+// (§9.2). This is the same private API AltTab/Hammerspoon/yabai rely on. It is
+// an Apple framework symbol (not a third-party dependency, so §0's "Apple
+// frameworks only" still holds) but is undocumented and could change across
+// macOS releases, so title/bounds matching remains as a fallback. Using it does
+// not cost App Store eligibility: this app already cannot be sandboxed (it needs
+// an unsandboxed session-level CGEventTap to intercept Cmd+Tab), so the App
+// Store was never viable regardless.
+@_silgen_name("_AXUIElementGetWindow")
+private func _AXUIElementGetWindow(
+    _ element: AXUIElement,
+    _ identifier: UnsafeMutablePointer<CGWindowID>
+) -> AXError
+
 @MainActor
 final class Activator {
 
@@ -52,32 +67,46 @@ final class Activator {
             return
         }
 
-        // Marshal AX attributes into plain values for the pure decision.
-        var candidates: [(title: String, bounds: CGRect)] = []
+        // Primary path: match the exact window by CGWindowID via the private
+        // _AXUIElementGetWindow. This is definitive and immune to the title
+        // heuristics' failure modes (Chrome truncates/badges its window name and
+        // maximizes every window to identical bounds).
+        var targetWin: AXUIElement?
+        var matchStrategy = "windowID"
         for axWin in axWindows {
-            let title = axTitle(of: axWin)
-            let bounds = axBounds(of: axWin)
-            candidates.append((title: title, bounds: bounds))
+            var axWinID: CGWindowID = 0
+            if _AXUIElementGetWindow(axWin, &axWinID) == .success,
+               axWinID == window.windowID {
+                targetWin = axWin
+                break
+            }
         }
 
-        // Match against the RAW window name (no "(2)" suffix, no app-name
-        // fallback) since AX titles carry neither. Fall back to the display
-        // title only when there is no raw name.
-        let matchTitle = window.rawTitle.isEmpty ? window.title : window.rawTitle
+        // Fallback path: if the private API produced no match, fall back to the
+        // pure title/bounds matcher (§9.2). Match against the RAW window name
+        // (no "(2)" suffix, no app-name fallback) since AX titles carry neither.
+        if targetWin == nil {
+            var candidates: [(title: String, bounds: CGRect)] = []
+            for axWin in axWindows {
+                candidates.append((title: axTitle(of: axWin), bounds: axBounds(of: axWin)))
+            }
+            let matchTitle = window.rawTitle.isEmpty ? window.title : window.rawTitle
+            if let matchedIndex = Activator.matchWindow(
+                title: matchTitle,
+                bounds: window.bounds,
+                candidates: candidates
+            ) {
+                targetWin = axWindows[matchedIndex]
+                matchStrategy = "title/bounds"
+            }
+        }
 
-        // Step 5 (§9.2): identify the target window using the pure matcher.
-        guard let matchedIndex = Activator.matchWindow(
-            title: matchTitle,
-            bounds: window.bounds,
-            candidates: candidates
-        ) else {
+        guard let targetWin else {
             // Step 5c fallback (§9.2): app activation already done in step 1.
             NSLog("[CmdTab] Activate: fallback – app activate only " +
                   "(ambiguous or no match, pid %d)", pid)
             return
         }
-
-        let targetWin = axWindows[matchedIndex]
 
         // Step 5 (§9.1): raise and make main.
         AXUIElementPerformAction(targetWin, kAXRaiseAction as CFString)
@@ -85,7 +114,7 @@ final class Activator {
                                      kAXMainAttribute as CFString,
                                      kCFBooleanTrue)
 
-        NSLog("[CmdTab] Activate: raised window (pid %d)", pid)
+        NSLog("[CmdTab] Activate: raised window by %@ (pid %d)", matchStrategy, pid)
     }
 
     // MARK: - Pure decision (§9.2, testable)

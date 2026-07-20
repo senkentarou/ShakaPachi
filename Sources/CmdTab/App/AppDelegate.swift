@@ -92,20 +92,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // §12 Live settings: observe all settings changes and apply immediately.
+        // The observer closure is @Sendable, so it captures a Sendable weak box
+        // rather than `self` (a non-Sendable @MainActor NSObject) directly. The
+        // .main queue guarantees the body runs on the main thread.
+        let selfBox = WeakDelegateBox(self)
         settingsObserver = NotificationCenter.default.addObserver(
             forName: .settingsDidChange, object: nil, queue: .main
-        ) { [weak self] _ in
+        ) { _ in
             MainActor.assumeIsolated {
-                self?.applySettingsChanges()
+                selfBox.value?.applySettingsChanges()
             }
         }
 
         // Observer for the onboarding window trigger from the permissions tab.
         NotificationCenter.default.addObserver(
             forName: .showOnboardingWindow, object: nil, queue: .main
-        ) { [weak self] _ in
+        ) { _ in
             MainActor.assumeIsolated {
-                self?.showOnboarding()
+                selfBox.value?.showOnboarding()
             }
         }
 
@@ -423,6 +427,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // §4.6: tear the tap down so modifier keys are not left in a stuck
         // state after the process exits.
         hotkeyTap?.disable(reason: "アプリ終了")
+    }
+
+    /// Sendable weak wrapper so @Sendable NotificationCenter closures can hold a
+    /// reference to the (non-Sendable, @MainActor) delegate without a capture
+    /// warning. Access is always re-isolated to the main actor before use.
+    private final class WeakDelegateBox: @unchecked Sendable {
+        weak var value: AppDelegate?
+        init(_ value: AppDelegate?) { self.value = value }
     }
 
     #if DEBUG
