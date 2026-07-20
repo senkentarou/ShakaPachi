@@ -3,7 +3,7 @@
 // No AX / AppKit / TCC permissions required — all inputs are plain values.
 
 import XCTest
-@testable import CmdTab
+@testable import ShakaPachi
 
 final class ActivatorTests: XCTestCase {
 

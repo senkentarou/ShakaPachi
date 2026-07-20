@@ -80,7 +80,7 @@ final class HotkeyTap {
                 callback: hotkeyTapCallback,
                 userInfo: Unmanaged.passUnretained(self).toOpaque()
             ) else {
-                NSLog("[CmdTab] Failed to create event tap — accessibility permission missing?")
+                NSLog("[ShakaPachi] Failed to create event tap — accessibility permission missing?")
                 return false
             }
             eventTap = tap
@@ -93,7 +93,7 @@ final class HotkeyTap {
 
         isEnabled = true
         armDeadman()
-        NSLog("[CmdTab] Event tap enabled (triggerModifierMask=0x%llx, triggerKeyCode=%u)",
+        NSLog("[ShakaPachi] Event tap enabled (triggerModifierMask=0x%llx, triggerKeyCode=%u)",
               triggerModifierMask, triggerKeyCode)
         onStateChange?(.active)
         return true
@@ -106,7 +106,7 @@ final class HotkeyTap {
         }
         isEnabled = false
         disarmDeadman()
-        NSLog("[CmdTab] Event tap disabled (%@)", reason)
+        NSLog("[ShakaPachi] Event tap disabled (%@)", reason)
         onStateChange?(.stopped(reason: reason))
     }
 
@@ -124,7 +124,7 @@ final class HotkeyTap {
         }
         dm.arm()
         deadman = dm
-        NSLog("[CmdTab] Deadman switch armed (%.0fs)", DeadmanSwitch.configuredTimeout())
+        NSLog("[ShakaPachi] Deadman switch armed (%.0fs)", DeadmanSwitch.configuredTimeout())
         #endif
     }
 
@@ -169,7 +169,7 @@ final class HotkeyTap {
             }
             isEnabled = false
             DispatchQueue.main.async { [weak self] in
-                NSLog("[CmdTab] EMERGENCY STOP (Ctrl+Option+Cmd+Esc) — tap disabled")
+                NSLog("[ShakaPachi] EMERGENCY STOP (Ctrl+Option+Cmd+Esc) — tap disabled")
                 self?.disarmDeadman()
                 self?.onStateChange?(.stopped(reason: "緊急停止"))
             }
@@ -184,7 +184,7 @@ final class HotkeyTap {
             if isEnabled, let tap = eventTap {
                 CGEvent.tapEnable(tap: tap, enable: true)
                 DispatchQueue.main.async {
-                    NSLog("[CmdTab] Tap auto-recovered from tapDisabled event — frequent occurrences indicate a performance problem")
+                    NSLog("[ShakaPachi] Tap auto-recovered from tapDisabled event — frequent occurrences indicate a performance problem")
                 }
             }
             return nil

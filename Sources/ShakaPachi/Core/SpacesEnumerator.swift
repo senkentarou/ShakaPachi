@@ -74,7 +74,7 @@ enum SpacesEnumerator {
         // Step 1: collect all managed Space IDs.
         guard let managedSpaceIDs = collectManagedSpaceIDs(cid: cid),
               !managedSpaceIDs.isEmpty else {
-            NSLog("[CmdTab] SpacesEnumerator: fallback – CGSCopyManagedDisplaySpaces " +
+            NSLog("[ShakaPachi] SpacesEnumerator: fallback – CGSCopyManagedDisplaySpaces " +
                   "returned no Spaces")
             return nil
         }
@@ -82,7 +82,7 @@ enum SpacesEnumerator {
         // Step 2: enumerate ALL window IDs via the public API.
         guard let allWindowIDs = collectAllWindowIDs(),
               !allWindowIDs.isEmpty else {
-            NSLog("[CmdTab] SpacesEnumerator: fallback – CGWindowListCopyWindowInfo " +
+            NSLog("[ShakaPachi] SpacesEnumerator: fallback – CGWindowListCopyWindowInfo " +
                   "returned no windows")
             return nil
         }
@@ -92,7 +92,7 @@ enum SpacesEnumerator {
             cid: cid,
             windowIDs: allWindowIDs
         ) else {
-            NSLog("[CmdTab] SpacesEnumerator: fallback – CGSCopySpacesForWindows failed")
+            NSLog("[ShakaPachi] SpacesEnumerator: fallback – CGSCopySpacesForWindows failed")
             return nil
         }
 
@@ -107,7 +107,7 @@ enum SpacesEnumerator {
         }
 
         if result.isEmpty {
-            NSLog("[CmdTab] SpacesEnumerator: fallback – intersection of all-windows " +
+            NSLog("[ShakaPachi] SpacesEnumerator: fallback – intersection of all-windows " +
                   "and managed-Spaces yielded no windows")
             return nil
         }
@@ -140,7 +140,7 @@ enum SpacesEnumerator {
 
         // The return value is a CFArray of CFDictionary (one per display).
         guard CFGetTypeID(displaySpacesCF) == CFArrayGetTypeID() else {
-            NSLog("[CmdTab] SpacesEnumerator: CGSCopyManagedDisplaySpaces returned " +
+            NSLog("[ShakaPachi] SpacesEnumerator: CGSCopyManagedDisplaySpaces returned " +
                   "unexpected CF type %lu", CFGetTypeID(displaySpacesCF))
             return nil
         }
@@ -201,7 +201,7 @@ enum SpacesEnumerator {
         }
 
         guard CFGetTypeID(resultCF) == CFDictionaryGetTypeID() else {
-            NSLog("[CmdTab] SpacesEnumerator: CGSCopySpacesForWindows returned " +
+            NSLog("[ShakaPachi] SpacesEnumerator: CGSCopySpacesForWindows returned " +
                   "unexpected CF type %lu", CFGetTypeID(resultCF))
             return nil
         }

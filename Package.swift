@@ -2,19 +2,19 @@
 import PackageDescription
 
 let package = Package(
-    name: "CmdTab",
+    name: "ShakaPachi",
     platforms: [
         .macOS(.v13)
     ],
     targets: [
         .executableTarget(
-            name: "CmdTab",
-            path: "Sources/CmdTab"
+            name: "ShakaPachi",
+            path: "Sources/ShakaPachi"
         ),
         .testTarget(
-            name: "CmdTabTests",
-            dependencies: ["CmdTab"],
-            path: "Tests/CmdTabTests"
+            name: "ShakaPachiTests",
+            dependencies: ["ShakaPachi"],
+            path: "Tests/ShakaPachiTests"
         )
     ]
 )

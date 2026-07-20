@@ -70,7 +70,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        win.title = "CmdTab 設定"
+        win.title = "ShakaPachi 設定"
         win.isReleasedWhenClosed = false
         win.minSize = NSSize(width: 400, height: 300)
         return win
@@ -263,7 +263,7 @@ struct GeneralSettingsView: View {
                             // Registration failed — revert the mirror to the real
                             // status so the toggle reflects reality, and surface it.
                             Settings.shared.launchAtLogin = LoginItemManager.isEnabled
-                            NSLog("[CmdTab] Login item change failed: %@",
+                            NSLog("[ShakaPachi] Login item change failed: %@",
                                   error.localizedDescription)
                         }
                     }
@@ -392,7 +392,7 @@ struct ExclusionSettingsView: View {
     }
 
     /// Returns bundle IDs of currently running regular-activationPolicy apps,
-    /// excluding CmdTab itself and those already in the exclusion list.
+    /// excluding ShakaPachi itself and those already in the exclusion list.
     private func runningAppBundleIDs() -> [String] {
         let excluded = Set(store.excludedBundleIDs)
         let selfID = Bundle.main.bundleIdentifier ?? ""
@@ -495,5 +495,5 @@ struct PermissionsSettingsView: View {
 
 extension Notification.Name {
     /// Posted by the permissions tab when the user wants to see the onboarding window.
-    static let showOnboardingWindow = Notification.Name("com.masahirosenda.cmdtab.showOnboardingWindow")
+    static let showOnboardingWindow = Notification.Name("com.masahirosenda.shakapachi.showOnboardingWindow")
 }

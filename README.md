@@ -1,8 +1,8 @@
-# CmdTab
+# ShakaPachi
 
 A fast, thumbnail-free window switcher for macOS.
 
-macOS's built-in Cmd+Tab switches between *applications*. CmdTab replaces it
+macOS's built-in Cmd+Tab switches between *applications*. ShakaPachi replaces it
 with *window*-level switching: hold the trigger modifier, cycle through a plain
 text list of app icons and window titles, release to activate. No thumbnails,
 no previews — response speed comes first.
@@ -27,7 +27,7 @@ no previews — response speed comes first.
 make run
 ```
 
-Builds the SPM executable, assembles `CmdTab.app`, codesigns it, and launches it.
+Builds the SPM executable, assembles `ShakaPachi.app`, codesigns it, and launches it.
 
 ## License
 

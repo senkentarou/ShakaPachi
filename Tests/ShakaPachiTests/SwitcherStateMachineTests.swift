@@ -3,7 +3,7 @@
 // No AppKit or CoreGraphics required — the machine is pure logic.
 
 import XCTest
-@testable import CmdTab
+@testable import ShakaPachi
 
 final class SwitcherStateMachineTests: XCTestCase {
 

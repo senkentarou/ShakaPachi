@@ -3,7 +3,7 @@
 // No AppKit, no TCC, no CGWindowList — all tests are deterministic.
 
 import XCTest
-@testable import CmdTab
+@testable import ShakaPachi
 
 final class WindowStoreMRUTests: XCTestCase {
 

@@ -10,7 +10,7 @@
 // and can be exhaustively tested without any system resources.
 
 import XCTest
-@testable import CmdTab
+@testable import ShakaPachi
 
 final class SpacesEnumeratorTests: XCTestCase {
 

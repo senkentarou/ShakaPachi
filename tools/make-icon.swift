@@ -9,7 +9,7 @@ import AppKit
 import Foundation
 
 let outDir = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "Resources"
-let iconsetDir = NSTemporaryDirectory() + "CmdTab.iconset"
+let iconsetDir = NSTemporaryDirectory() + "ShakaPachi.iconset"
 
 try? FileManager.default.removeItem(atPath: iconsetDir)
 try! FileManager.default.createDirectory(

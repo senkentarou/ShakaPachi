@@ -1,6 +1,6 @@
 import AppKit
 
-/// Manages the menu bar status item for CmdTab.
+/// Manages the menu bar status item for ShakaPachi.
 // Created and accessed exclusively from applicationDidFinishLaunching (@MainActor).
 @MainActor
 final class StatusItemController {
@@ -61,13 +61,13 @@ final class StatusItemController {
         guard let button = statusItem.button else { return }
         if !permissionManager.allPermissionsGranted() {
             button.image = makeWarningIcon()
-            button.toolTip = "CmdTab — 権限が不足しています"
+            button.toolTip = "ShakaPachi — 権限が不足しています"
         } else if !tapEnabled {
             button.image = makeStoppedIcon()
-            button.toolTip = "CmdTab — 停止中" + (tapStopReason.map { " (\($0))" } ?? "")
+            button.toolTip = "ShakaPachi — 停止中" + (tapStopReason.map { " (\($0))" } ?? "")
         } else {
             button.image = makeStatusIcon()
-            button.toolTip = "CmdTab"
+            button.toolTip = "ShakaPachi"
         }
         button.image?.isTemplate = true
     }
@@ -174,9 +174,9 @@ final class StatusItemController {
 
         menu.addItem(.separator())
 
-        // "About CmdTab" item
+        // "About ShakaPachi" item
         let aboutItem = NSMenuItem(
-            title: "CmdTab について",
+            title: "ShakaPachi について",
             action: #selector(showAbout),
             keyEquivalent: ""
         )

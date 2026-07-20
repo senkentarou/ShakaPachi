@@ -1,5 +1,5 @@
 // Settings.swift
-// Type-safe UserDefaults wrapper for all CmdTab preferences (§11.1, §11.2).
+// Type-safe UserDefaults wrapper for all ShakaPachi preferences (§11.1, §11.2).
 //
 // Design notes:
 // - All keys stored as raw String/Int values so UserDefaults can persist them.
@@ -17,7 +17,7 @@ import CoreGraphics
 
 extension Notification.Name {
     /// Posted on the main queue whenever any Settings value is set.
-    static let settingsDidChange = Notification.Name("com.masahirosenda.cmdtab.settingsDidChange")
+    static let settingsDidChange = Notification.Name("com.masahirosenda.shakapachi.settingsDidChange")
 }
 
 // MARK: - Enums
@@ -201,7 +201,7 @@ struct DefaultsStringArray {
 
 // MARK: - Settings
 
-/// All CmdTab user preferences.
+/// All ShakaPachi user preferences.
 ///
 /// Use `Settings.shared` in production code.
 /// Inject a custom `UserDefaults(suiteName:)` in unit tests so they don't

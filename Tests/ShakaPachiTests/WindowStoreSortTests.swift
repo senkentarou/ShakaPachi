@@ -4,7 +4,7 @@
 
 import XCTest
 import CoreGraphics
-@testable import CmdTab
+@testable import ShakaPachi
 
 final class WindowStoreSortTests: XCTestCase {
 

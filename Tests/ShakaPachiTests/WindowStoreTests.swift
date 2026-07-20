@@ -4,7 +4,7 @@
 // WindowStore.filterAndBuild() entry point.
 
 import XCTest
-@testable import CmdTab
+@testable import ShakaPachi
 
 final class WindowStoreTests: XCTestCase {
 

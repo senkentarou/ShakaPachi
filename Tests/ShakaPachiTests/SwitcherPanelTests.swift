@@ -4,7 +4,7 @@
 // stateless computations on plain values.
 
 import XCTest
-@testable import CmdTab
+@testable import ShakaPachi
 
 final class SwitcherPanelTests: XCTestCase {
 

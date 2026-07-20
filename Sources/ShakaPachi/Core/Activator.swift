@@ -62,7 +62,7 @@ final class Activator {
         guard attrResult == .success,
               let axWindows = rawValue as? [AXUIElement],
               !axWindows.isEmpty else {
-            NSLog("[CmdTab] Activate: fallback – app activate only " +
+            NSLog("[ShakaPachi] Activate: fallback – app activate only " +
                   "(failed to read kAXWindowsAttribute, pid %d)", pid)
             return
         }
@@ -103,7 +103,7 @@ final class Activator {
 
         guard let targetWin else {
             // Step 5c fallback (§9.2): app activation already done in step 1.
-            NSLog("[CmdTab] Activate: fallback – app activate only " +
+            NSLog("[ShakaPachi] Activate: fallback – app activate only " +
                   "(ambiguous or no match, pid %d)", pid)
             return
         }
@@ -114,7 +114,7 @@ final class Activator {
                                      kAXMainAttribute as CFString,
                                      kCFBooleanTrue)
 
-        NSLog("[CmdTab] Activate: raised window by %@ (pid %d)", matchStrategy, pid)
+        NSLog("[ShakaPachi] Activate: raised window by %@ (pid %d)", matchStrategy, pid)
     }
 
     // MARK: - Pure decision (§9.2, testable)

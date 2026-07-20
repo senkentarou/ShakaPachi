@@ -6,7 +6,7 @@
 // other and from UserDefaults.standard.
 
 import XCTest
-@testable import CmdTab
+@testable import ShakaPachi
 
 @MainActor
 final class SettingsTests: XCTestCase {
@@ -16,7 +16,7 @@ final class SettingsTests: XCTestCase {
     /// Returns a fresh, empty UserDefaults suite and a Settings instance backed by it.
     /// The suite is removed after the test via addTeardownBlock so test state is isolated.
     private func makeSuite(name: String = #function) -> (UserDefaults, Settings) {
-        let suiteName = "com.cmdtab.tests.\(name).\(UUID().uuidString)"
+        let suiteName = "com.shakapachi.tests.\(name).\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         let settings = Settings(defaults: defaults)
         addTeardownBlock {

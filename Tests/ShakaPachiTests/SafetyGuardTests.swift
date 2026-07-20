@@ -2,7 +2,7 @@
 // Verifies §4 safety mechanisms via pure logic — no AppKit or display needed.
 
 import XCTest
-@testable import CmdTab
+@testable import ShakaPachi
 
 final class SafetyGuardTests: XCTestCase {
 
@@ -190,7 +190,7 @@ final class SafetyGuardTests: XCTestCase {
     }
 
     func testDeadman_configuredTimeout_readsEnvVar() {
-        // Verify configuredTimeout() parses CMDTAB_DEADMAN_SEC.
+        // Verify configuredTimeout() parses SHAKAPACHI_DEADMAN_SEC.
         // We can't set env vars at runtime in tests, but we can verify
         // the default is 60 when the variable is not set.
         // (The env var may or may not be set in CI; just check the type.)

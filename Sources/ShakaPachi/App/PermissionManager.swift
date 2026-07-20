@@ -1,5 +1,5 @@
 // PermissionManager.swift
-// Checks and requests the two permissions CmdTab requires:
+// Checks and requests the two permissions ShakaPachi requires:
 //   - Accessibility  (AXIsProcessTrusted / AXIsProcessTrustedWithOptions)
 //   - Screen Recording (CGPreflightScreenCaptureAccess / CGRequestScreenCaptureAccess)
 
@@ -15,7 +15,7 @@ public enum PermissionStatus: Equatable, Sendable {
 
 // MARK: - PermissionManager
 
-/// Checks and requests macOS permissions required by CmdTab.
+/// Checks and requests macOS permissions required by ShakaPachi.
 /// All methods run on the main thread (@MainActor).
 @MainActor
 public final class PermissionManager {

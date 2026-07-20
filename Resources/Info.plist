@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.senkentarou.cmdtab</string>
+    <string>com.senkentarou.shakapachi</string>
     <key>CFBundleName</key>
-    <string>CmdTab</string>
+    <string>ShakaPachi</string>
     <key>CFBundleExecutable</key>
-    <string>CmdTab</string>
+    <string>ShakaPachi</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>

@@ -180,16 +180,16 @@ public struct SystemClock: Clock {
 
 /// Deadman switch that fires a handler after N seconds of inactivity.
 ///
-/// The switch is configured via the `CMDTAB_DEADMAN_SEC` environment variable
+/// The switch is configured via the `SHAKAPACHI_DEADMAN_SEC` environment variable
 /// (default 60 seconds; set to "0" to disable).
 ///
 /// The handler is a closure; the actual tap-disable call is injected at
 /// Step 5 so this type remains AppKit-free and unit-testable.
 public final class DeadmanSwitch: @unchecked Sendable {
 
-    /// Seconds until the deadman fires. Reads CMDTAB_DEADMAN_SEC; defaults to 60.
+    /// Seconds until the deadman fires. Reads SHAKAPACHI_DEADMAN_SEC; defaults to 60.
     public static func configuredTimeout() -> TimeInterval {
-        if let raw = ProcessInfo.processInfo.environment["CMDTAB_DEADMAN_SEC"],
+        if let raw = ProcessInfo.processInfo.environment["SHAKAPACHI_DEADMAN_SEC"],
            let secs = TimeInterval(raw) {
             return secs
         }
@@ -200,7 +200,7 @@ public final class DeadmanSwitch: @unchecked Sendable {
     private let clock: any Clock
     private let handler: @Sendable () -> Void
     private var timer: DispatchSourceTimer?
-    private let queue = DispatchQueue(label: "com.senkentarou.cmdtab.deadman")
+    private let queue = DispatchQueue(label: "com.senkentarou.shakapachi.deadman")
 
     /// - Parameters:
     ///   - timeout: Seconds until the handler fires. Pass 0 to disable.

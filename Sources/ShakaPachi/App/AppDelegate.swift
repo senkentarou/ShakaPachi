@@ -122,12 +122,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             self.onboardingWindow = ow
             ow.show()
-            NSLog("[CmdTab] Permissions missing — showing onboarding. " +
+            NSLog("[ShakaPachi] Permissions missing — showing onboarding. " +
                   "Accessibility: %@  ScreenRecording: %@",
                   pm.accessibilityStatus() == .granted ? "granted" : "denied",
                   pm.screenRecordingStatus() == .granted ? "granted" : "denied")
         } else {
-            NSLog("[CmdTab] All permissions granted — normal startup.")
+            NSLog("[ShakaPachi] All permissions granted — normal startup.")
             startTapIfPossible()
         }
 
@@ -139,19 +139,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self, let panel = self.switcherPanel else { return }
             let items = self.currentSwitcherItems()
             guard !items.isEmpty else {
-                NSLog("[CmdTab] N1 self-check skipped: 0 windows")
+                NSLog("[ShakaPachi] N1 self-check skipped: 0 windows")
                 return
             }
             let syntheticT0 = CFAbsoluteTimeGetCurrent()
             panel.show(items: items, selectedIndex: self.initialSelection(count: items.count))
             panel.displayIfNeeded()
             let n1 = (CFAbsoluteTimeGetCurrent() - syntheticT0) * 1000.0
-            NSLog("[CmdTab] N1: %.2fms (callback→display, %d windows) [DEBUG self-check]",
+            NSLog("[ShakaPachi] N1: %.2fms (callback→display, %d windows) [DEBUG self-check]",
                   n1, items.count)
             if n1 > 50.0 {
-                NSLog("[CmdTab] N1 GATE FAIL: %.2fms exceeds 50ms budget", n1)
+                NSLog("[ShakaPachi] N1 GATE FAIL: %.2fms exceeds 50ms budget", n1)
             } else {
-                NSLog("[CmdTab] N1 GATE PASS: %.2fms within 50ms budget", n1)
+                NSLog("[ShakaPachi] N1 GATE PASS: %.2fms within 50ms budget", n1)
             }
             // Hide after 0.5s so the developer can see the panel.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
@@ -252,7 +252,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     panel.show(items: items, selectedIndex: initialIndex)
                     panel.displayIfNeeded()
                     let n1 = (CFAbsoluteTimeGetCurrent() - t0) * 1000.0
-                    NSLog("[CmdTab] N1: %.2fms (callback→display, %d windows)", n1, items.count)
+                    NSLog("[ShakaPachi] N1: %.2fms (callback→display, %d windows)", n1, items.count)
                 } else {
                     let capturedItems = items
                     let capturedIndex = initialIndex
@@ -262,7 +262,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         panel.show(items: capturedItems, selectedIndex: capturedIndex)
                         panel.displayIfNeeded()
                         let n1 = (CFAbsoluteTimeGetCurrent() - capturedT0) * 1000.0
-                        NSLog("[CmdTab] N1: %.2fms (callback→display incl %dms delay, %d windows)",
+                        NSLog("[ShakaPachi] N1: %.2fms (callback→display incl %dms delay, %d windows)",
                               n1, delayMs, capturedItems.count)
                     }
                 }
@@ -272,14 +272,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 panel.updateSelection(to: newIndex)
                 panel.displayIfNeeded()
                 let n2 = (CFAbsoluteTimeGetCurrent() - t2start) * 1000.0
-                NSLog("[CmdTab] N2 redraw: %.2fms", n2)
+                NSLog("[ShakaPachi] N2 redraw: %.2fms", n2)
 
             case .confirmSelection(let index):
                 // §15 edge case: guard against out-of-range index (window may
                 // have closed during the switcher session between show and confirm).
                 let infos = self.lastWindowInfos
                 if infos.indices.contains(index) {
-                    NSLog("[CmdTab] Confirm window index %d (pid %d, title: %@)",
+                    NSLog("[ShakaPachi] Confirm window index %d (pid %d, title: %@)",
                           index, infos[index].pid, infos[index].title)
                     self.activator?.activate(infos[index])
                     // §5.5: record this activation so the next enumerate() puts
@@ -291,7 +291,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     // Out-of-range: log and do nothing more than hide; app
                     // activate already ran inside Activator.activate for the
                     // in-range case, so there is nothing safe to raise here.
-                    NSLog("[CmdTab] Confirm index %d out of range (count %d) — hide only",
+                    NSLog("[ShakaPachi] Confirm index %d out of range (count %d) — hide only",
                           index, infos.count)
                 }
                 panel.hide()
@@ -452,7 +452,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let elapsed = Date().timeIntervalSince(start) * 1000.0
             durations.append(elapsed)
             windowCount = windows.count
-            NSLog("[CmdTab] N5 run %d: %.2fms  windows=%d", i, elapsed, windows.count)
+            NSLog("[ShakaPachi] N5 run %d: %.2fms  windows=%d", i, elapsed, windows.count)
         }
         let sorted = durations.sorted()
         let minMs = sorted.first ?? 0
@@ -464,12 +464,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return sorted[mid]
         }()
-        NSLog("[CmdTab] N5 summary: min=%.2fms median=%.2fms max=%.2fms windows=%d",
+        NSLog("[ShakaPachi] N5 summary: min=%.2fms median=%.2fms max=%.2fms windows=%d",
               minMs, medianMs, maxMs, windowCount)
         if medianMs > 5.0 {
-            NSLog("[CmdTab] N5 GATE FAIL: median %.2fms exceeds 5ms budget", medianMs)
+            NSLog("[ShakaPachi] N5 GATE FAIL: median %.2fms exceeds 5ms budget", medianMs)
         } else {
-            NSLog("[CmdTab] N5 GATE PASS: median %.2fms within 5ms budget", medianMs)
+            NSLog("[ShakaPachi] N5 GATE PASS: median %.2fms within 5ms budget", medianMs)
         }
     }
     #endif

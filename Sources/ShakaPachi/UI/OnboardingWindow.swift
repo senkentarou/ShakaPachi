@@ -100,7 +100,7 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        win.title = "CmdTab"
+        win.title = "ShakaPachi"
         win.isReleasedWhenClosed = false
         return win
     }
@@ -165,7 +165,7 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
             iconView.heightAnchor.constraint(equalToConstant: 64),
         ])
 
-        let title = NSTextField(labelWithString: "CmdTab")
+        let title = NSTextField(labelWithString: "ShakaPachi")
         title.font = .boldSystemFont(ofSize: 26)
 
         let subtitle = NSTextField(labelWithString: "ウィンドウを切り替えるには 2 つの権限が必要です。")
@@ -186,7 +186,7 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
 
     private func makeFooter() -> NSView {
         let helper = NSTextField(wrappingLabelWithString:
-            "「設定を開く」を押して CmdTab をオンにしてください。この画面は自動で更新されます。画面収録は再起動後に反映されます。")
+            "「設定を開く」を押して ShakaPachi をオンにしてください。この画面は自動で更新されます。画面収録は再起動後に反映されます。")
         helper.font = .systemFont(ofSize: 11)
         helper.textColor = .secondaryLabelColor
         helper.preferredMaxLayoutWidth = 240
