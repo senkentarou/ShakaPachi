@@ -21,14 +21,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowStore: WindowStore?
     private var iconCache: IconCache?
 
-    // Snapshot of windows from the most recent "show" transition.
-    // Used by sameAppResolver and confirmSelection without re-enumerating.
+    // §Step10: Activator created once at launch in applicationDidFinishLaunching
+    // and retained for the lifetime of the app. Optional only to avoid calling
+    // the @MainActor init from a non-isolated stored-property context (Swift 6).
+    private var activator: Activator?
+
+    // Canonical snapshot of WindowInfo taken at panel-show time (source of truth).
+    // Deliverable 2: replace the icon-only lastSwitcherItems snapshot with the
+    // full WindowInfo snapshot so confirmSelection can call Activator.activate(_:)
+    // with the exact window, and nextSameAppIndex uses the SAME list (no re-enum).
+    private var lastWindowInfos: [WindowInfo] = []
+    // Derived from lastWindowInfos at show time; kept for the panel API.
     private var lastSwitcherItems: [SwitcherItem] = []
 
     @MainActor
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Run as a menu-bar accessory: no Dock icon, no activation on launch.
         NSApp.setActivationPolicy(.accessory)
+
+        // §Step10: create Activator on main actor (must be done here, not at
+        // stored-property init time, because of @MainActor isolation).
+        self.activator = Activator()
 
         // §7.2: create the panel once here; never destroy it.
         let panel = SwitcherPanel()
@@ -146,10 +159,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // the machine ignores itemCount, so 0 is a safe sentinel.
             let itemCount: Int
             if case .trigger = input, !panel.isVisible {
-                // This is the "show" transition — enumerate now.
-                let items = self.currentSwitcherItems()
-                self.lastSwitcherItems = items
-                itemCount = items.count
+                // "Show" transition: enumerate once and snapshot BOTH the full
+                // WindowInfo list and the derived SwitcherItems.  The snapshot
+                // is the source of truth for confirmSelection and sameAppResolver
+                // throughout this switcher session, so they see a stable list
+                // even if windows open/close between show and confirm (§15).
+                let infos = self.windowStore?.enumerate() ?? []
+                let icons = self.iconCache
+                self.lastWindowInfos = infos
+                self.lastSwitcherItems = infos.map { info in
+                    SwitcherItem(
+                        icon: icons?.icon(for: info.pid, bundleID: info.bundleID),
+                        title: info.title
+                    )
+                }
+                itemCount = infos.count
             } else {
                 itemCount = panel.itemCount
             }
@@ -179,7 +203,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NSLog("[CmdTab] N2 redraw: %.2fms", n2)
 
             case .confirmSelection(let index):
-                NSLog("[CmdTab] Confirm window index %d (AX raise pending Step 10)", index)
+                // §15 edge case: guard against out-of-range index (window may
+                // have closed during the switcher session between show and confirm).
+                let infos = self.lastWindowInfos
+                if infos.indices.contains(index) {
+                    NSLog("[CmdTab] Confirm window index %d (pid %d, title: %@)",
+                          index, infos[index].pid, infos[index].title)
+                    self.activator?.activate(infos[index])
+                } else {
+                    // Out-of-range: log and do nothing more than hide; app
+                    // activate already ran inside Activator.activate for the
+                    // in-range case, so there is nothing safe to raise here.
+                    NSLog("[CmdTab] Confirm index %d out of range (count %d) — hide only",
+                          index, infos.count)
+                }
                 panel.hide()
 
             case .cancel:
@@ -215,14 +252,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Return the next index that belongs to the same app as `currentIndex`
     /// in the last-shown snapshot, or nil if there is no other window of
     /// the same app. Used by the state machine's sameAppResolver closure.
+    ///
+    /// Uses `lastWindowInfos` (the snapshot taken at show time) rather than
+    /// re-enumerating WindowStore. This fixes the fragile bug where the live
+    /// window list can shift between the show transition and the grave-key press,
+    /// causing index mismatches on the snapshot the panel is still displaying.
     @MainActor
     private func nextSameAppIndex(from currentIndex: Int) -> Int? {
-        let items = lastSwitcherItems
-        guard items.indices.contains(currentIndex) else { return nil }
-        // SwitcherItem carries only icon + title; use WindowStore for pid lookup.
-        // The resolver is best-effort: if we can't identify the app, return nil.
-        guard let windowStore else { return nil }
-        let windows = windowStore.enumerate()
+        let windows = lastWindowInfos
         guard windows.indices.contains(currentIndex) else { return nil }
         let currentPID = windows[currentIndex].pid
         // Search forward (wrapping) for the next window with the same PID.
