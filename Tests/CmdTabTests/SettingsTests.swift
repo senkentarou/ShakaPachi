@@ -27,10 +27,10 @@ final class SettingsTests: XCTestCase {
 
     // MARK: - Default values (§11.2)
 
-    func testDefault_triggerModifier_isOption() {
+    func testDefault_triggerModifier_isCommand() {
         let (_, settings) = makeSuite()
-        XCTAssertEqual(settings.triggerModifier, .option,
-            "Default triggerModifier must be .option per §4.7 dev rule")
+        XCTAssertEqual(settings.triggerModifier, .command,
+            "Default triggerModifier is .command — the shipping default (§13-2)")
     }
 
     func testDefault_triggerKey_isTab() {

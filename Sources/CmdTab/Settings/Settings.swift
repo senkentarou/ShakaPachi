@@ -220,7 +220,7 @@ final class Settings {
     ///   in production; pass a test suite in unit tests.
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        _triggerModifier = DefaultsEnum(key: "triggerModifier", defaultValue: .option,  defaults: defaults)
+        _triggerModifier = DefaultsEnum(key: "triggerModifier", defaultValue: .command, defaults: defaults)
         _triggerKey      = DefaultsEnum(key: "triggerKey",      defaultValue: .tab,     defaults: defaults)
         _sortMode        = DefaultsEnum(key: "sortMode",        defaultValue: .mru,     defaults: defaults)
         _theme           = DefaultsEnum(key: "theme",           defaultValue: .system,  defaults: defaults)
@@ -241,7 +241,10 @@ final class Settings {
     // -- Input --
 
     /// The modifier key that must be held to trigger the switcher.
-    /// Default: .option (§4.7: keep Option during dev; switch to .command once stable).
+    /// Default: .command — the shipping default (§13-2 chose Cmd+Tab as the
+    /// primary trigger, and Step 5b verified the standard App Switcher can be
+    /// suppressed). During early development this was .option (§4.7); it is
+    /// switched now that the app is stable. Users can change it in Settings.
     private var _triggerModifier: DefaultsEnum<TriggerModifier>
     var triggerModifier: TriggerModifier {
         get { _triggerModifier.wrappedValue }
