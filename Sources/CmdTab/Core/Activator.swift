@@ -185,11 +185,20 @@ final class Activator {
         var point = CGPoint.zero
         var size = CGSize.zero
 
-        // AXValueGetValue extracts the typed value from the AXValue wrapper.
-        // The cast to AXValue is safe: AXUIElementCopyAttributeValue returns
-        // CFTypeRef, and position/size attributes always carry AXValue instances.
-        let posAX = posValue as! AXValue   // swiftlint:disable:this force_cast
-        let sizeAX = sizeValue as! AXValue // swiftlint:disable:this force_cast
+        // Verify the CF type before casting: a misbehaving app could return a
+        // non-AXValue for these attributes, and Step 10's whole point is that no
+        // window can crash or hang the switcher. `as?` won't help — the compiler
+        // treats any downcast to the CF type AXValue as always-succeeding — so we
+        // check the runtime type id explicitly, then the force cast is genuinely
+        // safe. On a bad value we fall back to .zero, which just makes this
+        // candidate fail the bounds match (title match / app-only fallback still
+        // apply).
+        guard CFGetTypeID(posValue) == AXValueGetTypeID(),
+              CFGetTypeID(sizeValue) == AXValueGetTypeID() else {
+            return .zero
+        }
+        let posAX = posValue as! AXValue
+        let sizeAX = sizeValue as! AXValue
         AXValueGetValue(posAX, .cgPoint, &point)
         AXValueGetValue(sizeAX, .cgSize, &size)
 
