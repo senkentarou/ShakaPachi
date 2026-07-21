@@ -1,6 +1,6 @@
 // ContributionHeatmap.swift
 // GitHub-style contribution heatmap using fixed pixel sizes.
-// Half-year range (26 columns x 7 rows), left-aligned at a compact fixed width.
+// Half-year range (26 columns x 7 rows), centered at a compact fixed width.
 
 import SwiftUI
 
@@ -27,13 +27,14 @@ struct ContributionHeatmap: View {
     var body: some View {
         let gridData = buildGrid()
         HStack {
+            Spacer(minLength: 0)
             VStack(alignment: .leading, spacing: 8) {
                 monthLabelsRow(gridData: gridData)
                 gridBody(gridData: gridData)
                 legendRow()
             }
             .frame(width: gridWidth, alignment: .leading)
-            Spacer(minLength: 0)   // left-align the compact heatmap within the section
+            Spacer(minLength: 0)   // symmetric spacers center the compact heatmap within the section
         }
     }
 
