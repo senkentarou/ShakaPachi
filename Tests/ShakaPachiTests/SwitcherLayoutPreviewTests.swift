@@ -119,4 +119,85 @@ final class SwitcherLayoutPreviewTests: XCTestCase {
             size.height, expected,
             "One-argument panelSize must not include preview height")
     }
+
+    // MARK: - tileRowOffsetX
+
+    func testTileRowOffsetX_zeroWhenBoundsMatchesNaturalWidth() {
+        // When the panel width equals the natural tile-row width (previewEnabled:false),
+        // offset must be 0 — backward-compatible: left-aligned == centered for exact fit.
+        let tile = SwitcherLayout.tileSize
+        let count = 5
+        let naturalWidth = SwitcherLayout.panelSize(
+            itemCount: count, effectiveTile: tile, previewEnabled: false
+        ).width
+        let offset = SwitcherLayout.tileRowOffsetX(
+            itemCount: count,
+            effectiveTile: tile,
+            boundsWidth: naturalWidth
+        )
+        XCTAssertEqual(
+            offset, 0, accuracy: 0.001,
+            "Offset must be 0 when boundsWidth equals the natural tile-row width")
+    }
+
+    func testTileRowOffsetX_centersRowInPreviewPanel() {
+        // When the preview pane widens the panel (1 tile is narrower than the preview),
+        // the row center must align with the panel center.
+        let tile = SwitcherLayout.tileSize
+        let count = 1
+        let panelWidth = SwitcherLayout.panelSize(
+            itemCount: count, effectiveTile: tile, previewEnabled: true
+        ).width
+        let offset = SwitcherLayout.tileRowOffsetX(
+            itemCount: count,
+            effectiveTile: tile,
+            boundsWidth: panelWidth
+        )
+        XCTAssertGreaterThan(offset, 0, "Offset must be positive when preview widens panel")
+        // Derive the natural row width and verify the row center lines up with panelWidth/2.
+        let rowWidth =
+            SwitcherLayout.horizontalMargin * 2
+            + CGFloat(count) * tile
+            + CGFloat(count - 1) * SwitcherLayout.tileSpacing
+        let rowCenter = offset + rowWidth / 2
+        XCTAssertEqual(
+            rowCenter, panelWidth / 2, accuracy: 0.001,
+            "Tile-row center must align with panel center (matches centered preview pane)")
+    }
+
+    func testTileRowOffsetX_neverNegativeWhenRowWiderThanBounds() {
+        // When boundsWidth is smaller than the row width, offset must be 0 (not negative).
+        let tile = SwitcherLayout.tileSize
+        let count = 20
+        let tinyBounds: CGFloat = 100  // much smaller than the 20-tile row
+        let offset = SwitcherLayout.tileRowOffsetX(
+            itemCount: count,
+            effectiveTile: tile,
+            boundsWidth: tinyBounds
+        )
+        XCTAssertEqual(
+            offset, 0, accuracy: 0.001,
+            "Offset must be 0 (not negative) when row is wider than bounds")
+    }
+
+    func testTileRect_offsetXOverload_shiftsXPreservesYWidthHeight() {
+        // The 3-arg overload must shift x by exactly offsetX and leave y/width/height identical.
+        let tile = SwitcherLayout.tileSize
+        let index = 2
+        let offsetX: CGFloat = 37.5
+        let base = SwitcherLayout.tileRect(index: index, effectiveTile: tile)
+        let shifted = SwitcherLayout.tileRect(index: index, effectiveTile: tile, offsetX: offsetX)
+        XCTAssertEqual(
+            shifted.origin.x, base.origin.x + offsetX, accuracy: 0.001,
+            "x must be shifted by exactly offsetX")
+        XCTAssertEqual(
+            shifted.origin.y, base.origin.y, accuracy: 0.001,
+            "y must be unchanged")
+        XCTAssertEqual(
+            shifted.width, base.width, accuracy: 0.001,
+            "width must be unchanged")
+        XCTAssertEqual(
+            shifted.height, base.height, accuracy: 0.001,
+            "height must be unchanged")
+    }
 }
