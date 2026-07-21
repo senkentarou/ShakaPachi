@@ -47,7 +47,7 @@ func renderIcon(size: CGFloat) -> Data {
 
     let frontRect = NSRect(x: size * 0.42, y: size * 0.42, width: w, height: w)
     let front = NSBezierPath(roundedRect: frontRect, xRadius: r, yRadius: r)
-    bottom.setFill()
+    NSColor.white.setFill()
     front.fill()
     NSColor.white.setStroke()
     front.lineWidth = line
