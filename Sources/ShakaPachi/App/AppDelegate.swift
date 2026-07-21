@@ -465,7 +465,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         // §4.6: tear the tap down so modifier keys are not left in a stuck
         // state after the process exits.
-        hotkeyTap?.disable(reason: "アプリ終了")
+        hotkeyTap?.disable(reason: "app terminating")
     }
 
     /// Sendable weak wrapper so @Sendable NotificationCenter closures can hold a

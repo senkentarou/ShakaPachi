@@ -29,6 +29,12 @@ make run
 
 Builds the SPM executable, assembles `ShakaPachi.app`, codesigns it, and launches it.
 
+## Architecture
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for a full system overview, component map, and sequence/state diagrams.
+
 ## License
 
-GPL-3.0. See [LICENSE](LICENSE).
+Proprietary — All rights reserved. See [LICENSE](LICENSE).
+
+The source is currently private; no OSS license has been chosen yet.

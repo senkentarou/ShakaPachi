@@ -279,7 +279,7 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
 // MARK: - Permission card
 
 /// One rounded card per permission: status icon, name + benefit copy, and a
-/// single action button that becomes a disabled "許可済み" once granted.
+/// single action button that becomes a disabled "Granted" (「許可済み」) once granted.
 @MainActor
 private final class PermissionCardView: NSView {
 

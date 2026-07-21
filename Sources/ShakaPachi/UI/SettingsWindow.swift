@@ -1,7 +1,7 @@
 // SettingsWindow.swift
 // Settings window (§11.3): NSWindow + NSTabView with four tabs.
 // SwiftUI is embedded via NSHostingView for the control-heavy tabs (§11.3
-// explicitly permits this: "設定画面には速度要件がないため SwiftUI を埋め込んでもよい").
+// explicitly permits this: "the settings screen has no speed requirements so embedding SwiftUI is fine").
 //
 // Activation policy: switches to .regular on show and back to .accessory on
 // close — but ONLY if the onboarding window is not also open (§11.3 note).
@@ -222,7 +222,7 @@ final class SettingsStore: ObservableObject {
     }
 }
 
-// ─── 一般 tab ─────────────────────────────────────────────────────────────────
+// ─── General tab ──────────────────────────────────────────────────────────────
 
 struct GeneralSettingsView: View {
 
@@ -302,7 +302,7 @@ struct GeneralSettingsView: View {
     }
 }
 
-// ─── 外観 tab ─────────────────────────────────────────────────────────────────
+// ─── Appearance tab ───────────────────────────────────────────────────────────
 
 struct AppearanceSettingsView: View {
 
@@ -346,7 +346,7 @@ struct AppearanceSettingsView: View {
     }
 }
 
-// ─── 状態 tab ─────────────────────────────────────────────────────────────────
+// ─── Status tab ───────────────────────────────────────────────────────────────
 
 struct StatusSettingsView: View {
 
@@ -457,7 +457,7 @@ struct StatusSettingsView: View {
     }
 }
 
-// ─── 統計 tab ─────────────────────────────────────────────────────────────────
+// ─── Stats tab ────────────────────────────────────────────────────────────────
 
 struct StatsSettingsView: View {
 
@@ -481,7 +481,7 @@ struct StatsSettingsView: View {
     var body: some View {
         VStack(spacing: 0) {
             Form {
-                // ── 記録 ──
+                // ── Recording ──
                 Section {
                     Toggle("統計を記録", isOn: $statsEnabled)
                         .onChange(of: statsEnabled) { newValue in
@@ -491,7 +491,7 @@ struct StatsSettingsView: View {
                     Text("記録")
                 }
 
-                // ── 切替回数 ──
+                // ── Switch count ──
                 Section {
                     HStack {
                         Text("今日")
@@ -509,7 +509,7 @@ struct StatsSettingsView: View {
                     Text("切替回数")
                 }
 
-                // ── アクティビティ (streak strip + heatmap) ──
+                // ── Activity (streak strip + heatmap) ──
                 Section {
                     // Streak count above the heatmap.
                     Text(String(format: NSLocalizedString("%lld 日連続", comment: "Consecutive-day streak"), currentStreak))
@@ -531,7 +531,7 @@ struct StatsSettingsView: View {
             .padding([.leading, .trailing])
 
             // Reset button outside the Form — standalone, left-aligned (matches
-            // the permissions tab's "オンボーディング画面を開く" footer button).
+            // the permissions tab's "Open onboarding" (「オンボーディング画面を開く」) footer button).
             HStack {
                 Button("統計をリセット") {
                     showResetConfirm = true
@@ -576,7 +576,7 @@ struct StatsSettingsView: View {
     }
 }
 
-// ─── について tab ──────────────────────────────────────────────────────────────
+// ─── About tab ────────────────────────────────────────────────────────────────
 
 struct AboutSettingsView: View {
 

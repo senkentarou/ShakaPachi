@@ -126,7 +126,7 @@ final class Activator {
     /// 2. Exactly one candidate whose title is prefix-compatible with `title` —
     ///    the AX title starts with the target, or vice versa. This handles apps
     ///    (Chrome, Slack, …) whose AX title extends the CGWindowList name, e.g.
-    ///    target "注文履歴" vs AX "注文履歴 - Google Chrome - Profile".
+    ///    target "注文履歴" (order history) vs AX "注文履歴 - Google Chrome - Profile".
     /// 3. If a prefix match is still ambiguous, disambiguate those candidates by
     ///    bounds within a 2pt tolerance.
     /// 4. Otherwise fall back to a pure bounds match within 2pt.
