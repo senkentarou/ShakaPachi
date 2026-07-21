@@ -39,7 +39,7 @@ final class ActivatorTests: XCTestCase {
             (title: "YouTube - Google Chrome - 太郎 (Masahiro)",  bounds: maximized),
             (title: "注文履歴 - Google Chrome - 将大 (Masahiro)",  bounds: maximized),
         ]
-        // Target "注文履歴" uniquely prefixes candidate 2 even though bounds tie.
+        // Target "注文履歴" (order history) uniquely prefixes candidate 2 even though bounds tie.
         XCTAssertEqual(
             Activator.matchWindow(title: "注文履歴", bounds: maximized, candidates: candidates),
             2)

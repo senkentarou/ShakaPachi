@@ -1,7 +1,7 @@
 // TrayIconRenderer.swift
 // Shared rendering + copy for the four menu-bar icon states ("cards").
 // Used by StatusItemController (the live menu-bar icon) and the Settings
-// 「状態」 tab (preview + explanation), so the glyph geometry and the state
+// "Status" (「状態」) tab (preview + explanation), so the glyph geometry and the state
 // colours are defined in exactly one place.
 
 import AppKit
@@ -11,10 +11,10 @@ import AppKit
 /// (see StatusItemController.refreshIcon); the case order here is the
 /// explanation order shown to the user (normal → blue → yellow → red).
 enum TrayIconState: CaseIterable {
-    case normal      // ノーマルカード
-    case settings    // ブルーカード
-    case permission  // イエローカード
-    case restricted  // レッドカード
+    case normal      // normal card
+    case settings    // blue card
+    case permission  // yellow card
+    case restricted  // red card
 
     /// User-facing card name.
     var cardName: String {
@@ -41,7 +41,7 @@ enum TrayIconState: CaseIterable {
     }
 
     /// Colour applied to the *filled* front window. Only the fill is tinted;
-    /// the outline stays neutral (要件: 塗りつぶし部分のみ色を変える). Normal uses the
+    /// the outline stays neutral (requirement: tint only the filled area, not the outline). Normal uses the
     /// adaptive label colour so the glyph matches the menu bar as before.
     var fillColor: NSColor {
         switch self {
@@ -78,7 +78,7 @@ enum TrayIconRenderer {
         return image
     }
 
-    /// Larger preview used in the Settings 「状態」 tab. Always non-template and
+    /// Larger preview used in the Settings "Status" (「状態」) tab. Always non-template and
     /// concrete. Coloured states fill the front window with the state colour and
     /// outline in the adaptive label colour. Normal has no state colour, so its
     /// front window is filled with a solid appearance-adaptive foreground (white

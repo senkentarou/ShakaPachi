@@ -21,14 +21,14 @@ final class StatusItemController {
     // Whether the Settings window is open — drives the blue "info" icon state.
     private var settingsOpen = false
 
-    /// Called when the user toggles 「ウィンドウ切替を有効化」.
+    /// Called when the user toggles "Enable window switching" (「ウィンドウ切替を有効化」).
     /// Receives the desired new state.
     var onToggleTap: ((Bool) -> Void)?
 
-    /// Called when the user chooses 「設定…」 from the menu.
+    /// Called when the user chooses "Settings…" (「設定…」) from the menu.
     var onOpenSettings: (() -> Void)?
 
-    /// Called when the user chooses 「設定を閉じる」 while the Settings window is open.
+    /// Called when the user chooses "Close settings" (「設定を閉じる」) while the Settings window is open.
     var onCloseSettings: (() -> Void)?
 
     // Retained while open: NSWindow.delegate is weak, so a local variable
@@ -66,7 +66,7 @@ final class StatusItemController {
         // cannot click something that has no effect. Re-enable when granted.
         toggleItem?.isEnabled = allGranted
 
-        // The 「権限の状態…」 item is shown ONLY when a permission is missing,
+        // The "Permission status…" (「権限の状態…」) item is shown ONLY when a permission is missing,
         // pinned to the very top of the menu. When everything is granted it is
         // removed entirely (it is not useful in the normal state). Guard on
         // whether it is currently in the menu so repeated calls never duplicate
@@ -184,7 +184,7 @@ final class StatusItemController {
     }
 
     /// Reflect the Settings-window open state on the settings menu item: while
-    /// open it reads 「設定を閉じる」 with a check, and selecting it closes the window.
+    /// open it reads "Close settings" (「設定を閉じる」) with a check, and selecting it closes the window.
     private func refreshSettingsMenuItem() {
         settingsMenuItem?.title = settingsOpen
             ? NSLocalizedString("設定を閉じる", comment: "Menu item: close settings")

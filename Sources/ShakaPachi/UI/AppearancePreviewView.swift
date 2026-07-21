@@ -1,5 +1,5 @@
 // AppearancePreviewView.swift
-// A live preview of the switcher panel colors shown in the 外観 settings tab.
+// A live preview of the switcher panel colors shown in the Appearance (外観) settings tab.
 //
 // Design: the preview must faithfully reproduce the real panel's colors so the
 // user sees exactly what they'll get. Color logic lives in a pure, testable
