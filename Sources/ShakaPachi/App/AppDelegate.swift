@@ -137,13 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Check permissions and show onboarding if any are missing.
         if !pm.allPermissionsGranted() {
-            let ow = OnboardingWindow(permissionManager: pm) { [weak self] in
-                self?.statusItemController?.updatePermissionWarning()
-                // Start the tap the moment both permissions turn granted.
-                self?.startTapIfPossible()
-            }
-            self.onboardingWindow = ow
-            ow.show()
+            showOnboarding()
             NSLog("[ShakaPachi] Permissions missing — showing onboarding. " +
                   "Accessibility: %@  ScreenRecording: %@",
                   pm.accessibilityStatus() == .granted ? "granted" : "denied",
@@ -458,7 +452,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     func openSettings() {
         if settingsWindow == nil {
-            settingsWindow = SettingsWindow(onboardingWindow: onboardingWindow)
+            settingsWindow = SettingsWindow()
         }
         settingsWindow?.show()
     }

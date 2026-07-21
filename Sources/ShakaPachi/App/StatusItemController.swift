@@ -31,11 +31,6 @@ final class StatusItemController {
     /// Called when the user chooses "Close settings" (「設定を閉じる」) while the Settings window is open.
     var onCloseSettings: (() -> Void)?
 
-    // Retained while open: NSWindow.delegate is weak, so a local variable
-    // would deallocate the controller and leave the activation policy stuck
-    // at .regular when the window closes.
-    private var onboardingWindow: OnboardingWindow?
-
     init(permissionManager: PermissionManager) {
         self.permissionManager = permissionManager
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -229,13 +224,10 @@ final class StatusItemController {
     }
 
     @objc private func showPermissions() {
-        // Show the onboarding window regardless of current status so
-        // the user can check or re-request permissions at any time.
-        let ow = OnboardingWindow(permissionManager: permissionManager) { [weak self] in
-            self?.updatePermissionWarning()
-        }
-        onboardingWindow = ow
-        ow.show()
+        // Delegate to AppDelegate via notification so the single construction
+        // point (AppDelegate.showOnboarding) is used. This also ensures that
+        // startTapIfPossible is called when permissions are granted via this path.
+        NotificationCenter.default.post(name: .showOnboardingWindow, object: nil)
     }
 
     @objc private func quitApp() {

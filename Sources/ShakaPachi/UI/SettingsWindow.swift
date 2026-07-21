@@ -21,13 +21,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     private var window: NSWindow?
 
-    // Weak reference to OnboardingWindow so we can check whether it is open
-    // before reverting the activation policy. OnboardingWindow manages its own
-    // show/close cycle; we only inspect its open state.
-    private weak var onboardingWindow: OnboardingWindow?
-
-    init(onboardingWindow: OnboardingWindow?) {
-        self.onboardingWindow = onboardingWindow
+    override init() {
         super.init()
     }
 
@@ -37,13 +31,12 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         NotificationCenter.default.post(
             name: .settingsWindowStateChanged, object: nil, userInfo: ["open": true])
         if let win = window {
-            raiseToFront(win)
+            win.raiseToFront()
             return
         }
 
         // §11.3: bring app to front so the window is visible.
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        WindowPresentationCoordinator.shared.windowDidOpen()
 
         let win = makeWindow()
         win.delegate = self
@@ -57,14 +50,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         win.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         self.window = win
 
-        raiseToFront(win)
-    }
-
-    /// Bring the settings window to the absolute front on the active Space.
-    private func raiseToFront(_ win: NSWindow) {
-        NSApp.activate(ignoringOtherApps: true)
-        win.makeKeyAndOrderFront(nil)
-        win.orderFrontRegardless()
+        win.raiseToFront()
     }
 
     /// Close the Settings window programmatically (e.g. from the tray menu).
@@ -79,14 +65,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         NotificationCenter.default.post(
             name: .settingsWindowStateChanged, object: nil, userInfo: ["open": false])
-        // §11.3: revert to .accessory only when the onboarding window is also
-        // NOT open. If both were open, reverting here would hide the onboarding
-        // window from the screen because it would lose its .regular policy too.
-        // OnboardingWindow handles its own revert in its windowWillClose.
-        let onboardingIsOpen = onboardingWindow?.isWindowOpen ?? false
-        if !onboardingIsOpen {
-            NSApp.setActivationPolicy(.accessory)
-        }
+        // §11.3: revert to .accessory only when no other presentation-managed
+        // window is open. WindowPresentationCoordinator tracks the count so
+        // this window and OnboardingWindow share a single revert decision.
+        WindowPresentationCoordinator.shared.windowDidClose()
         window = nil
     }
 
@@ -151,10 +133,6 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         return tvc
     }
 }
-
-// MARK: - OnboardingWindow open-state check
-// OnboardingWindow exposes isWindowOpen via its own property (see OnboardingWindow.swift).
-
 
 // MARK: - SwiftUI Settings Views
 
@@ -433,10 +411,7 @@ struct StatusSettingsView: View {
                             Text("許可済み").foregroundColor(.secondary).font(.caption)
                         } else {
                             Button("設定を開く") {
-                                if let url = URL(string:
-                                    "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                                    NSWorkspace.shared.open(url)
-                                }
+                                NSWorkspace.shared.open(PermissionManager.accessibilityURL)
                             }
                             .buttonStyle(.bordered)
                         }
@@ -458,10 +433,7 @@ struct StatusSettingsView: View {
                             Text("許可済み").foregroundColor(.secondary).font(.caption)
                         } else {
                             Button("設定を開く") {
-                                if let url = URL(string:
-                                    "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
-                                    NSWorkspace.shared.open(url)
-                                }
+                                NSWorkspace.shared.open(PermissionManager.screenRecordingURL)
                             }
                             .buttonStyle(.bordered)
                         }
@@ -492,8 +464,9 @@ struct StatusSettingsView: View {
     }
 
     private func refreshPermissions() {
-        accessibilityGranted   = AXIsProcessTrusted()
-        screenRecordingGranted = CGPreflightScreenCaptureAccess()
+        let pm = PermissionManager()
+        accessibilityGranted   = pm.accessibilityStatus() == .granted
+        screenRecordingGranted = pm.screenRecordingStatus() == .granted
     }
 }
 
