@@ -171,7 +171,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             let syntheticT0 = CFAbsoluteTimeGetCurrent()
-            panel.show(items: items, selectedIndex: self.initialSelection(count: items.count))
+            let debugPreviewEnabled = Settings.shared.showWindowPreview
+                && (self.permissionManager?.screenRecordingStatus() == .granted)
+            panel.show(items: items,
+                       selectedIndex: self.initialSelection(count: items.count),
+                       previewEnabled: debugPreviewEnabled)
             panel.displayIfNeeded()
             let n1 = (CFAbsoluteTimeGetCurrent() - syntheticT0) * 1000.0
             NSLog("[ShakaPachi] N1: %.2fms (callback→display, %d windows) [DEBUG self-check]",
@@ -249,7 +253,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.lastSwitcherItems = infos.map { info in
                     SwitcherItem(
                         icon: icons?.icon(for: info.pid, bundleID: info.bundleID),
-                        title: info.title
+                        title: info.title,
+                        windowID: info.windowID
                     )
                 }
                 itemCount = infos.count
@@ -270,6 +275,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // but be defensive here too.
                 let items = self.lastSwitcherItems
                 guard !items.isEmpty else { break }
+                // Gate the preview on the user's setting AND screen-recording
+                // permission. Both are fast stored-property / system-call reads.
+                let previewEnabled = Settings.shared.showWindowPreview
+                    && (self.permissionManager?.screenRecordingStatus() == .granted)
                 // §11.2 showDelayMs: delay the actual show by the configured
                 // number of milliseconds. Default 0 means no delay, so there
                 // is no behavior change for users who haven't set this. The N1
@@ -277,7 +286,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // so a non-zero delay is visible in the log.
                 let delayMs = showDelay
                 if delayMs <= 0 {
-                    panel.show(items: items, selectedIndex: initialIndex)
+                    panel.show(items: items, selectedIndex: initialIndex,
+                               previewEnabled: previewEnabled)
                     panel.displayIfNeeded()
                     let n1 = (CFAbsoluteTimeGetCurrent() - t0) * 1000.0
                     NSLog("[ShakaPachi] N1: %.2fms (callback→display, %d windows)", n1, items.count)
@@ -285,9 +295,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     let capturedItems = items
                     let capturedIndex = initialIndex
                     let capturedT0 = t0
+                    let capturedPreview = previewEnabled
                     DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(delayMs)) { [weak self] in
                         guard let self, let panel = self.switcherPanel else { return }
-                        panel.show(items: capturedItems, selectedIndex: capturedIndex)
+                        panel.show(items: capturedItems, selectedIndex: capturedIndex,
+                                   previewEnabled: capturedPreview)
                         panel.displayIfNeeded()
                         let n1 = (CFAbsoluteTimeGetCurrent() - capturedT0) * 1000.0
                         NSLog("[ShakaPachi] N1: %.2fms (callback→display incl %dms delay, %d windows)",
@@ -358,7 +370,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ).map { info in
             SwitcherItem(
                 icon: iconCache.icon(for: info.pid, bundleID: info.bundleID),
-                title: info.title
+                title: info.title,
+                windowID: info.windowID
             )
         }
     }

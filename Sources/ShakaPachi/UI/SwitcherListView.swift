@@ -8,6 +8,7 @@
 // invalidating two tile rects plus the title strip.
 
 import AppKit
+import CoreGraphics
 
 // MARK: - SwitcherItem
 
@@ -16,10 +17,14 @@ import AppKit
 public struct SwitcherItem: Equatable {
     public let icon: NSImage?
     public let title: String
+    /// CGWindowID for the window preview cache lookup.
+    /// 0 is a safe sentinel for items that have no associated window (e.g. tests).
+    public let windowID: CGWindowID
 
-    public init(icon: NSImage?, title: String) {
+    public init(icon: NSImage?, title: String, windowID: CGWindowID = 0) {
         self.icon = icon
         self.title = title
+        self.windowID = windowID
     }
 }
 
@@ -46,6 +51,15 @@ public enum SwitcherLayout {
     public static let titleHeight: CGFloat = 20
     /// Space below the title line.
     public static let bottomPadding: CGFloat = 14
+
+    // MARK: - Window preview constants
+
+    /// Width of the optional live-preview pane (16:10 ratio with previewHeight).
+    public static let previewWidth: CGFloat = 320
+    /// Height of the optional live-preview pane.
+    public static let previewHeight: CGFloat = 200
+    /// Gap between the title line and the top of the preview pane.
+    public static let previewTopGap: CGFloat = 10
 
     // MARK: - Shrink-to-fit (Step 8)
 
@@ -96,12 +110,48 @@ public enum SwitcherLayout {
     /// Total panel size using the given effective tile edge (used when tiles are
     /// shrunk so all fit within the screen width).
     public static func panelSize(itemCount: Int, effectiveTile: CGFloat) -> NSSize {
+        panelSize(itemCount: itemCount, effectiveTile: effectiveTile, previewEnabled: false)
+    }
+
+    /// Total panel size using the given effective tile edge, with an optional
+    /// preview pane below the title.
+    ///
+    /// When `previewEnabled` is true:
+    ///   - Width is widened to at least (previewWidth + horizontalMargin*2) so
+    ///     the preview box always fits without clipping.
+    ///   - Height gains `previewTopGap + previewHeight` below the title.
+    ///
+    /// The two-argument overload without `previewEnabled` forwards here with
+    /// `false` so all existing callers and tests remain source-compatible.
+    public static func panelSize(itemCount: Int,
+                                 effectiveTile: CGFloat,
+                                 previewEnabled: Bool) -> NSSize {
         let count = max(itemCount, 1)
-        let width = horizontalMargin * 2
-                  + CGFloat(count) * effectiveTile
-                  + CGFloat(count - 1) * tileSpacing
-        let height = topPadding + effectiveTile + titleGap + titleHeight + bottomPadding
-        return NSSize(width: width, height: height)
+        let tileRowWidth = horizontalMargin * 2
+                         + CGFloat(count) * effectiveTile
+                         + CGFloat(count - 1) * tileSpacing
+        let baseHeight = topPadding + effectiveTile + titleGap + titleHeight + bottomPadding
+        if previewEnabled {
+            let minPreviewPanelWidth = previewWidth + horizontalMargin * 2
+            return NSSize(
+                width:  max(tileRowWidth, minPreviewPanelWidth),
+                height: baseHeight + previewTopGap + previewHeight
+            )
+        }
+        return NSSize(width: tileRowWidth, height: baseHeight)
+    }
+
+    /// Preview pane rect in flipped (top-left origin) coordinates, consistent
+    /// with `SwitcherListView.isFlipped == true`.
+    ///
+    /// - Parameters:
+    ///   - width: The total panel width (used to center the pane horizontally).
+    ///   - effectiveTile: The effective tile edge currently in use.
+    public static func previewRect(inBoundsWidth width: CGFloat,
+                                   effectiveTile: CGFloat) -> NSRect {
+        let x = (width - previewWidth) / 2
+        let y = topPadding + effectiveTile + titleGap + titleHeight + previewTopGap
+        return NSRect(x: x, y: y, width: previewWidth, height: previewHeight)
     }
 
     /// Tile rect for the given index using the nominal tile size, in flipped
@@ -153,6 +203,14 @@ final class SwitcherListView: NSView {
     // a stored value rather than calling into Settings during the draw pass.
     var accentColor: NSColor = .controlAccentColor
 
+    // When true, a live preview pane is drawn below the title.
+    // Pushed by the panel on each show(); never changes during a session.
+    var previewEnabled: Bool = false
+
+    // Owned by the panel; injected once in SwitcherPanel.init().
+    // Weak to avoid a retain cycle: panel → cache ← listView.
+    weak var previewCache: WindowPreviewCache?
+
     // Top-left origin so tile math matches SwitcherLayout directly.
     override var isFlipped: Bool { true }
 
@@ -174,6 +232,7 @@ final class SwitcherListView: NSView {
             effectiveTile = SwitcherLayout.tileSize
         }
         needsDisplay = true
+        if previewEnabled { requestPreviews() }
     }
 
     /// Move the selection highlight, invalidating only the two affected tiles
@@ -190,6 +249,10 @@ final class SwitcherListView: NSView {
                             .insetBy(dx: -2, dy: -2))
         }
         setNeedsDisplay(titleRect)
+        if previewEnabled {
+            setNeedsDisplay(previewRect)
+            requestPreviews()
+        }
     }
 
     // MARK: Drawing
@@ -234,9 +297,116 @@ final class SwitcherListView: NSView {
             let textRect = titleRect.insetBy(dx: SwitcherLayout.horizontalMargin, dy: 0)
             (items[selectedIndex].title as NSString).draw(in: textRect, withAttributes: attributes)
         }
+
+        // Live preview pane — only drawn when enabled and the dirty rect overlaps.
+        // draw() is kept pure/fast: only reads from the cache dict, never triggers
+        // a capture (that happens in requestPreviews, called from setItems/moveSelection).
+        if previewEnabled,
+           previewRect.intersects(dirtyRect),
+           items.indices.contains(selectedIndex) {
+            drawPreview(in: previewRect, for: items[selectedIndex])
+        }
     }
 
-    // MARK: Private helpers
+    /// Draw the preview pane for the given item.
+    /// Called only from draw(_:); assumes previewEnabled is already checked.
+    private func drawPreview(in rect: NSRect, for item: SwitcherItem) {
+        let clip = NSBezierPath(roundedRect: rect, xRadius: 10, yRadius: 10)
+        let borderColor = NSColor.white.withAlphaComponent(0.18)
+
+        if let img = previewCache?.cachedImage(for: item.windowID) {
+            // Aspect-fit the capture inside the preview rect (letterbox if needed).
+            let fitRect = aspectFitRect(imageSize: img.size, inRect: rect)
+            clip.setClip()
+            img.draw(
+                in: fitRect,
+                from: .zero,
+                operation: .sourceOver,
+                fraction: 1.0,
+                respectFlipped: true,
+                hints: [.interpolation: NSImageInterpolation.high.rawValue]
+            )
+            // Faint glass-rim border drawn over the image.
+            borderColor.setStroke()
+            clip.lineWidth = 1
+            clip.stroke()
+        } else {
+            // Placeholder: translucent filled box + dimmed app icon.
+            // The box has the same geometry as the real preview, so no layout
+            // reflow occurs when the real image arrives — minimises flicker.
+            NSColor.white.withAlphaComponent(0.05).setFill()
+            clip.fill()
+
+            if let icon = item.icon {
+                let iconEdge: CGFloat = 64
+                let iconRect = NSRect(
+                    x: rect.midX - iconEdge / 2,
+                    y: rect.midY - iconEdge / 2,
+                    width: iconEdge,
+                    height: iconEdge
+                )
+                icon.draw(
+                    in: iconRect,
+                    from: .zero,
+                    operation: .sourceOver,
+                    fraction: 0.25,
+                    respectFlipped: true,
+                    hints: [.interpolation: NSImageInterpolation.high.rawValue]
+                )
+            }
+
+            borderColor.setStroke()
+            clip.lineWidth = 1
+            clip.stroke()
+        }
+    }
+
+    /// Returns the largest rect that fits `imageSize` aspect-fitted inside `container`,
+    /// centered on both axes.
+    private func aspectFitRect(imageSize: NSSize, inRect container: NSRect) -> NSRect {
+        guard imageSize.width > 0, imageSize.height > 0 else { return container }
+        let scale = min(container.width / imageSize.width,
+                        container.height / imageSize.height)
+        let fitW = imageSize.width * scale
+        let fitH = imageSize.height * scale
+        return NSRect(
+            x: container.midX - fitW / 2,
+            y: container.midY - fitH / 2,
+            width: fitW,
+            height: fitH
+        )
+    }
+
+    // MARK: - Preview callbacks
+
+    /// Called by the panel when the cache delivers a new image.
+    /// Invalidates only the preview rect so a full tile-row redraw is avoided.
+    func previewDidArrive(for id: CGWindowID) {
+        guard items.indices.contains(selectedIndex),
+              items[selectedIndex].windowID == id else { return }
+        setNeedsDisplay(previewRect)
+    }
+
+    // MARK: - Private helpers
+
+    /// Preview rect in flipped (top-left origin) coordinates.
+    private var previewRect: NSRect {
+        SwitcherLayout.previewRect(inBoundsWidth: bounds.width, effectiveTile: effectiveTile)
+    }
+
+    /// Kick off (or refresh) captures for the selected window and its neighbors.
+    private func requestPreviews() {
+        guard previewEnabled, items.indices.contains(selectedIndex) else { return }
+        // Force-refresh the currently-visible window so it's always fresh.
+        previewCache?.prefetch(items[selectedIndex].windowID, force: true)
+        // Prefetch neighbors with force:false so cached images are reused.
+        if selectedIndex > 0 {
+            previewCache?.prefetch(items[selectedIndex - 1].windowID, force: false)
+        }
+        if selectedIndex < items.count - 1 {
+            previewCache?.prefetch(items[selectedIndex + 1].windowID, force: false)
+        }
+    }
 
     private var titleRect: NSRect {
         NSRect(
