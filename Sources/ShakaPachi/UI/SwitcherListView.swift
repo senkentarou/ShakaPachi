@@ -14,14 +14,14 @@ import CoreGraphics
 
 /// Lightweight value type carrying display data for one row.
 /// Step 7 uses dummy data; Step 8 wires this to real WindowInfo.
-public struct SwitcherItem: Equatable {
-    public let icon: NSImage?
-    public let title: String
+struct SwitcherItem: Equatable {
+    let icon: NSImage?
+    let title: String
     /// CGWindowID for the window preview cache lookup.
     /// 0 is a safe sentinel for items that have no associated window (e.g. tests).
-    public let windowID: CGWindowID
+    let windowID: CGWindowID
 
-    public init(icon: NSImage?, title: String, windowID: CGWindowID = 0) {
+    init(icon: NSImage?, title: String, windowID: CGWindowID = 0) {
         self.icon = icon
         self.title = title
         self.windowID = windowID
@@ -32,34 +32,34 @@ public struct SwitcherItem: Equatable {
 
 /// Shared layout constants used by both the tile row and the panel.
 /// All geometry functions are pure — unit-testable.
-public enum SwitcherLayout {
+enum SwitcherLayout {
     /// Square highlight tile per window (§7.4 amended) — the nominal (maximum) size.
-    public static let tileSize: CGFloat = 76
+    static let tileSize: CGFloat = 76
     /// App icon drawn centered inside the nominal tile.
-    public static let iconSize: CGFloat = 60
+    static let iconSize: CGFloat = 60
     /// Minimum tile edge when shrink-to-fit kicks in (Step 8).
-    public static let minTileSize: CGFloat = 40
+    static let minTileSize: CGFloat = 40
     /// Gap between adjacent tiles.
-    public static let tileSpacing: CGFloat = 8
+    static let tileSpacing: CGFloat = 8
     /// Left/right panel margin around the tile row.
-    public static let horizontalMargin: CGFloat = 20
+    static let horizontalMargin: CGFloat = 20
     /// Space above the tile row.
-    public static let topPadding: CGFloat = 20
+    static let topPadding: CGFloat = 20
     /// Gap between the tile row and the title line.
-    public static let titleGap: CGFloat = 6
+    static let titleGap: CGFloat = 6
     /// Height of the selected-window title line.
-    public static let titleHeight: CGFloat = 20
+    static let titleHeight: CGFloat = 20
     /// Space below the title line.
-    public static let bottomPadding: CGFloat = 14
+    static let bottomPadding: CGFloat = 14
 
     // MARK: - Window preview constants
 
     /// Width of the optional live-preview pane (16:10 ratio with previewHeight).
-    public static let previewWidth: CGFloat = 320
+    static let previewWidth: CGFloat = 320
     /// Height of the optional live-preview pane.
-    public static let previewHeight: CGFloat = 200
+    static let previewHeight: CGFloat = 200
     /// Gap between the title line and the top of the preview pane.
-    public static let previewTopGap: CGFloat = 10
+    static let previewTopGap: CGFloat = 10
 
     // MARK: - Shrink-to-fit (Step 8)
 
@@ -75,7 +75,7 @@ public enum SwitcherLayout {
     ///
     /// Below minTileSize the tiles are allowed to clip off-screen (acceptable,
     /// rare edge case per spec).
-    public static func effectiveTileSize(itemCount: Int, availableWidth: CGFloat) -> CGFloat {
+    static func effectiveTileSize(itemCount: Int, availableWidth: CGFloat) -> CGFloat {
         guard itemCount > 0 else { return tileSize }
         let natural = panelSize(itemCount: itemCount).width
         if natural <= availableWidth {
@@ -91,14 +91,14 @@ public enum SwitcherLayout {
 
     /// Icon inset inside a tile of the given effective size (keeps same visual
     /// proportion as the nominal 76pt tile / 60pt icon).
-    public static func effectiveIconSize(for effectiveTile: CGFloat) -> CGFloat {
+    static func effectiveIconSize(for effectiveTile: CGFloat) -> CGFloat {
         let ratio = iconSize / tileSize   // 60/76 ≈ 0.789
         return effectiveTile * ratio
     }
 
     /// Total panel size for a given window count, using nominal tile size.
     /// Use `panelSize(itemCount:effectiveTile:)` when shrinking is active.
-    public static func panelSize(itemCount: Int) -> NSSize {
+    static func panelSize(itemCount: Int) -> NSSize {
         let count = max(itemCount, 1)
         let width = horizontalMargin * 2
                   + CGFloat(count) * tileSize
@@ -109,7 +109,7 @@ public enum SwitcherLayout {
 
     /// Total panel size using the given effective tile edge (used when tiles are
     /// shrunk so all fit within the screen width).
-    public static func panelSize(itemCount: Int, effectiveTile: CGFloat) -> NSSize {
+    static func panelSize(itemCount: Int, effectiveTile: CGFloat) -> NSSize {
         panelSize(itemCount: itemCount, effectiveTile: effectiveTile, previewEnabled: false)
     }
 
@@ -123,7 +123,7 @@ public enum SwitcherLayout {
     ///
     /// The two-argument overload without `previewEnabled` forwards here with
     /// `false` so all existing callers and tests remain source-compatible.
-    public static func panelSize(itemCount: Int,
+    static func panelSize(itemCount: Int,
                                  effectiveTile: CGFloat,
                                  previewEnabled: Bool) -> NSSize {
         let count = max(itemCount, 1)
@@ -147,7 +147,7 @@ public enum SwitcherLayout {
     /// - Parameters:
     ///   - width: The total panel width (used to center the pane horizontally).
     ///   - effectiveTile: The effective tile edge currently in use.
-    public static func previewRect(inBoundsWidth width: CGFloat,
+    static func previewRect(inBoundsWidth width: CGFloat,
                                    effectiveTile: CGFloat) -> NSRect {
         let x = (width - previewWidth) / 2
         let y = topPadding + effectiveTile + titleGap + titleHeight + previewTopGap
@@ -156,12 +156,12 @@ public enum SwitcherLayout {
 
     /// Tile rect for the given index using the nominal tile size, in flipped
     /// (top-left origin) coordinates.
-    public static func tileRect(index: Int) -> NSRect {
+    static func tileRect(index: Int) -> NSRect {
         tileRect(index: index, effectiveTile: tileSize)
     }
 
     /// Tile rect for the given index using a specified effective tile edge.
-    public static func tileRect(index: Int, effectiveTile: CGFloat) -> NSRect {
+    static func tileRect(index: Int, effectiveTile: CGFloat) -> NSRect {
         NSRect(
             x: horizontalMargin + CGFloat(index) * (effectiveTile + tileSpacing),
             y: topPadding,
@@ -171,13 +171,13 @@ public enum SwitcherLayout {
     }
 
     /// Advance the selection index by +1 with wrap-around (§6.2).
-    public static func advanceIndex(_ current: Int, count: Int) -> Int {
+    static func advanceIndex(_ current: Int, count: Int) -> Int {
         guard count > 0 else { return 0 }
         return (current + 1) % count
     }
 
     /// The tile indices needing redraw when the selection moves (§7.5).
-    public static func indicesToRedraw(old: Int, new: Int) -> IndexSet {
+    static func indicesToRedraw(old: Int, new: Int) -> IndexSet {
         var set = IndexSet()
         set.insert(old)
         if new != old { set.insert(new) }
