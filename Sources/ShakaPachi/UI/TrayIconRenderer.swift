@@ -36,7 +36,7 @@ enum TrayIconState: CaseIterable {
         case .permission:
             return NSLocalizedString("利用に必要な権限が足りない状態です。mac の設定から権限を追加してください。", comment: "Card detail: permissions missing")
         case .restricted:
-            return NSLocalizedString("ShakaPachi の利用を一時的に制限している状態です。mac 標準のアプリ切り替え機能にフォールバックします。", comment: "Card detail: tap is paused")
+            return NSLocalizedString("ShakaPachi の利用を一時的に制限している状態です。mac 標準のアプリ切り替え機能にフォールバックします。メニューバーの「ウィンドウ切替を有効化」から再開できます。", comment: "Card detail: tap is paused")
         }
     }
 
