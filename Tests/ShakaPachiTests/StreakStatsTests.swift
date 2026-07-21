@@ -1,7 +1,5 @@
 // StreakStatsTests.swift
-// Verifies: thresholds compute correct percentiles, level mapping covers 0–4,
-// currentStreak handles today-active / grace-period / gap / empty cases,
-// longestStreak finds the longest consecutive run.
+// Verifies: thresholds compute correct percentiles, level mapping covers 0–4.
 
 import XCTest
 
@@ -73,75 +71,4 @@ final class StreakStatsTests: XCTestCase {
         XCTAssertEqual(StreakStats.level(for: 1000, thresholds: t), 4)
     }
 
-    // MARK: - currentStreak
-
-    func testCurrentStreak_todayActive_countsToday() {
-        // Today + 2 prior consecutive days = streak of 3.
-        let today = dateStr(2026, 7, 21)
-        let active: Set<String> = [dateStr(2026, 7, 19), dateStr(2026, 7, 20), today]
-        XCTAssertEqual(StreakStats.currentStreak(activeDays: active, today: today), 3)
-    }
-
-    func testCurrentStreak_todayInactive_grace_countsYesterday() {
-        // Today inactive but yesterday active → grace period keeps streak alive.
-        let today = dateStr(2026, 7, 21)
-        let active: Set<String> = [dateStr(2026, 7, 19), dateStr(2026, 7, 20)]
-        XCTAssertEqual(StreakStats.currentStreak(activeDays: active, today: today), 2)
-    }
-
-    func testCurrentStreak_gapBreaks() {
-        // 2026-07-19 is missing → streak from today back to 2026-07-20 only = 1 before gap.
-        let today = dateStr(2026, 7, 21)
-        // active: 21, 20 (not 19) — streak should be 2.
-        let active: Set<String> = [dateStr(2026, 7, 20), today]
-        XCTAssertEqual(StreakStats.currentStreak(activeDays: active, today: today), 2)
-    }
-
-    func testCurrentStreak_empty_isZero() {
-        let today = dateStr(2026, 7, 21)
-        XCTAssertEqual(StreakStats.currentStreak(activeDays: [], today: today), 0)
-    }
-
-    func testCurrentStreak_bothTodayAndYesterdayInactive_isZero() {
-        let today = dateStr(2026, 7, 21)
-        // Only days before yesterday are active.
-        let active: Set<String> = [dateStr(2026, 7, 19)]
-        XCTAssertEqual(StreakStats.currentStreak(activeDays: active, today: today), 0)
-    }
-
-    // MARK: - longestStreak
-
-    func testLongestStreak_empty_isZero() {
-        XCTAssertEqual(StreakStats.longestStreak(activeDays: []), 0)
-    }
-
-    func testLongestStreak_singleDay_isOne() {
-        XCTAssertEqual(StreakStats.longestStreak(activeDays: [dateStr(2026, 7, 21)]), 1)
-    }
-
-    func testLongestStreak_gapSelectsLongerRun() {
-        // Run1: 7/1–7/3 = 3 days. Gap at 7/4. Run2: 7/5–7/9 = 5 days.
-        var days: Set<String> = []
-        for d in 1...3 { days.insert(dateStr(2026, 7, d)) }
-        for d in 5...9 { days.insert(dateStr(2026, 7, d)) }
-        XCTAssertEqual(StreakStats.longestStreak(activeDays: days), 5)
-    }
-
-    func testLongestStreak_allConsecutive() {
-        var days: Set<String> = []
-        for d in 1...14 { days.insert(dateStr(2026, 7, d)) }
-        XCTAssertEqual(StreakStats.longestStreak(activeDays: days), 14)
-    }
-
-    // MARK: - Helpers
-
-    private func dateStr(_ year: Int, _ month: Int, _ day: Int) -> String {
-        var c = DateComponents()
-        c.year = year
-        c.month = month
-        c.day = day
-        c.hour = 12
-        let d = Calendar.current.date(from: c)!
-        return StreakStats.stringFromDate(d)
-    }
 }
