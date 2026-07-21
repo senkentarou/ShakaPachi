@@ -178,19 +178,21 @@ final class SettingsStore: ObservableObject {
     @Published var theme: Theme
     @Published var launchAtLogin: Bool
     @Published var accentColor: AccentColor
+    @Published var showWindowPreview: Bool
 
     private var observer: (any NSObjectProtocol)?
 
     init() {
         let s = Settings.shared
-        triggerModifier  = s.triggerModifier
-        triggerKey       = s.triggerKey
-        showDelayMs      = s.showDelayMs
-        currentSpaceOnly = s.currentSpaceOnly
-        sortMode         = s.sortMode
+        triggerModifier   = s.triggerModifier
+        triggerKey        = s.triggerKey
+        showDelayMs       = s.showDelayMs
+        currentSpaceOnly  = s.currentSpaceOnly
+        sortMode          = s.sortMode
         excludedBundleIDs = s.excludedBundleIDs
-        theme            = s.theme
-        accentColor      = s.accentColor
+        theme             = s.theme
+        accentColor       = s.accentColor
+        showWindowPreview = s.showWindowPreview
         // The real login-item state lives in SMAppService, not the cached bool;
         // read it so the toggle reflects reality (and heal a stale mirror).
         launchAtLogin    = LoginItemManager.isEnabled
@@ -216,9 +218,10 @@ final class SettingsStore: ObservableObject {
         if currentSpaceOnly != s.currentSpaceOnly { currentSpaceOnly = s.currentSpaceOnly }
         if sortMode         != s.sortMode         { sortMode         = s.sortMode         }
         if excludedBundleIDs != s.excludedBundleIDs { excludedBundleIDs = s.excludedBundleIDs }
-        if theme            != s.theme            { theme            = s.theme            }
-        if accentColor      != s.accentColor      { accentColor      = s.accentColor      }
-        if launchAtLogin    != s.launchAtLogin    { launchAtLogin    = s.launchAtLogin    }
+        if theme             != s.theme             { theme             = s.theme             }
+        if accentColor       != s.accentColor       { accentColor       = s.accentColor       }
+        if launchAtLogin     != s.launchAtLogin     { launchAtLogin     = s.launchAtLogin     }
+        if showWindowPreview != s.showWindowPreview { showWindowPreview = s.showWindowPreview }
     }
 }
 
@@ -263,6 +266,14 @@ struct GeneralSettingsView: View {
                     }
                 }
                 .pickerStyle(.menu)
+
+                // Show live window preview below the title line.
+                // Actual capture is gated on screen-recording permission at show time;
+                // turning this off avoids any CGWindowListCreateImage call entirely.
+                Toggle("ウィンドウプレビューを表示", isOn: Binding(
+                    get: { store.showWindowPreview },
+                    set: { Settings.shared.showWindowPreview = $0 }
+                ))
             } header: {
                 Text("動作")
             }

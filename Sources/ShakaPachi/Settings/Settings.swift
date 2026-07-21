@@ -299,6 +299,7 @@ final class Settings {
         _launchAtLogin      = DefaultsBool(key: "launchAtLogin",      defaultValue: true,  defaults: defaults)
         _excludedBundleIDs  = DefaultsStringArray(key: "excludedBundleIDs", defaultValue: [], defaults: defaults)
         _accentColor        = DefaultsEnum(key: "accentColor",        defaultValue: .system, defaults: defaults)
+        _showWindowPreview  = DefaultsBool(key: "showWindowPreview",  defaultValue: true,  defaults: defaults)
     }
 
     // MARK: Backing store
@@ -402,6 +403,17 @@ final class Settings {
     var accentColor: AccentColor {
         get { _accentColor.wrappedValue }
         set { _accentColor.wrappedValue = newValue }
+    }
+
+    // -- Window preview --
+
+    /// When true (and screen recording permission is granted), a live preview of
+    /// the selected window is drawn below the title line in the switcher panel.
+    /// Default true: users who grant screen recording see it immediately.
+    private var _showWindowPreview: DefaultsBool
+    var showWindowPreview: Bool {
+        get { _showWindowPreview.wrappedValue }
+        set { _showWindowPreview.wrappedValue = newValue }
     }
 
     // -- Panel width (advisory in v1 — see note below) --

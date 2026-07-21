@@ -25,11 +25,20 @@ final class SwitcherPanel {
     // Set once per show(); never participates in the selection-move partial redraw.
     private let tintLayer = CALayer()
 
+    // Window preview cache: owned here, injected into listView once in init().
+    // Not cleared on hide() so cached images survive between panel sessions;
+    // the selected window is force-refreshed on each show(), keeping it current.
+    // Initialized in init() (not at the property declaration) because
+    // WindowPreviewCache is @MainActor and stored-property initializers run in
+    // a nonisolated context in Swift 6 strict concurrency.
+    private let previewCache: WindowPreviewCache
+
     /// Liquid-glass corner radius (user request: pronounced rounding).
     private static let cornerRadius: CGFloat = 24
 
     // MARK: - Init
 
+    @MainActor
     init() {
         // §7.1: panel configuration.
         let initialSize = SwitcherLayout.panelSize(itemCount: 1)
@@ -105,9 +114,19 @@ final class SwitcherPanel {
 
         p.contentView = ev
 
+        let cache = WindowPreviewCache()
+
         self.panel = p
         self.effectView = ev
         self.listView = lv
+        self.previewCache = cache
+
+        // Wire the preview cache to the list view.
+        // Weak reference from listView avoids a retain cycle (panel owns cache).
+        lv.previewCache = cache
+        cache.onImageReady = { [weak lv] id in
+            lv?.previewDidArrive(for: id)
+        }
     }
 
     /// Inset kept between the panel and each screen edge.
@@ -126,13 +145,21 @@ final class SwitcherPanel {
     /// Show the panel with the given items, placing the initial selection at
     /// `selectedIndex`. Repositions to the screen containing the mouse cursor,
     /// shrinking the tiles when the natural width would overflow that screen.
+    ///
+    /// - Parameter previewEnabled: When true (and screen-recording permission is
+    ///   granted by the caller), a live window preview is drawn below the title.
+    ///   Defaults to false so existing call sites without the parameter still work.
     @MainActor
-    func show(items: [SwitcherItem], selectedIndex: Int) {
+    func show(items: [SwitcherItem], selectedIndex: Int, previewEnabled: Bool = false) {
         // Read accent color once per show — runs once per trigger, not on the
         // hot selection-move path, so calling into Settings here is fine.
         let accent = Settings.shared.accentColor.nsColor
         tintLayer.backgroundColor = accent.withAlphaComponent(AccentColor.backgroundTintAlpha).cgColor
         listView.accentColor = accent
+
+        // Set previewEnabled BEFORE setItems so the first requestPreviews() call
+        // inside setItems already sees the correct flag.
+        listView.previewEnabled = previewEnabled
 
         let screenFrame = targetScreenFrame()
         let availableWidth = screenFrame.width - Self.screenEdgeInset * 2
@@ -142,7 +169,8 @@ final class SwitcherPanel {
             itemCount: items.count, availableWidth: availableWidth)
         repositionPanel(itemCount: items.count,
                         effectiveTile: effectiveTile,
-                        screenFrame: screenFrame)
+                        screenFrame: screenFrame,
+                        previewEnabled: previewEnabled)
         panel.orderFrontRegardless()
     }
 
@@ -176,9 +204,11 @@ final class SwitcherPanel {
 
     private func repositionPanel(itemCount: Int,
                                  effectiveTile: CGFloat,
-                                 screenFrame: NSRect) {
+                                 screenFrame: NSRect,
+                                 previewEnabled: Bool = false) {
         let size = SwitcherLayout.panelSize(itemCount: itemCount,
-                                            effectiveTile: effectiveTile)
+                                            effectiveTile: effectiveTile,
+                                            previewEnabled: previewEnabled)
         // Tiles are shrunk to fit; if the count is so large they hit the 40pt
         // floor, the panel is still capped to the screen and the overflow
         // clips at the panel edge (acceptable, rare — §16 edge case).
