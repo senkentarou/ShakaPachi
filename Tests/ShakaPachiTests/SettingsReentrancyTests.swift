@@ -1,8 +1,9 @@
 // SettingsReentrancyTests.swift
 // Regression test for the exclusive-access (SIGABRT) crash that happened when a
 // synchronous .settingsDidChange observer read the SAME Settings property while
-// that property's wrapper setter was still on the stack (as SettingsStore does
-// when a SwiftUI binding writes Settings). The `nonmutating set` on the Defaults*
+// that property's wrapper setter was still on the stack (as Settings' own
+// objectWillChange bridge does when a SwiftUI binding writes Settings). The
+// `nonmutating set` on the Defaults*
 // wrappers fixes it: writing to `defaults` no longer requires exclusive access to
 // the wrapper, so the concurrent read is a harmless shared read. Before the fix
 // the `settings.xxx = ...` lines below aborted the process — "not crashing" IS

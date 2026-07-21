@@ -50,8 +50,8 @@ enum AppearancePreview {
 // MARK: - SwiftUI preview view
 
 /// A mini mock of the switcher panel showing the chosen theme + accent color.
-/// Passed as arguments rather than reading from SettingsStore directly so the
-/// struct stays a pure, reusable view (the parent decides when to re-render).
+/// Passed as arguments rather than reading Settings directly so the struct
+/// stays a pure, reusable view (the parent decides when to re-render).
 struct AppearancePreviewView: View {
 
     let theme: Theme
