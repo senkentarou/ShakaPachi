@@ -395,7 +395,7 @@ struct StatusSettingsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("画面収録")
                                 .font(.body)
-                            Text("ウィンドウ名の取得だけに使います。画面の撮影・保存はしません。")
+                            Text("ウィンドウ名の取得と、プレビュー表示に使います。録画やファイルへの保存はしません。")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
