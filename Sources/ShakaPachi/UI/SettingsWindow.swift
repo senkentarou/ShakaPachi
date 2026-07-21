@@ -623,15 +623,30 @@ struct AboutSettingsView: View {
         (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "—"
     }
 
+    /// The bundled app icon, read straight from AppIcon.icns instead of
+    /// `NSApp.applicationIconImage`. The latter is served from macOS's
+    /// IconServices cache, which keeps returning a stale icon after the bundled
+    /// icns changes (until the system icon cache is cleared), so a rebuilt icon
+    /// would not show here. Reading the file directly always reflects the
+    /// shipped icon; falls back to the cached/generic icon if the resource is
+    /// missing.
+    private var appIcon: NSImage {
+        if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+           let image = NSImage(contentsOf: url) {
+            return image
+        }
+        return NSApp.applicationIconImage
+            ?? NSImage(named: NSImage.applicationIconName)
+            ?? NSImage()
+    }
+
     var body: some View {
         VStack(spacing: 16) {
             Spacer()
 
-            // App icon (the bundled AppIcon), shown via SwiftUI Image for clean
-            // scaling — falls back to the generic app icon if none is bundled.
-            Image(nsImage: NSApp.applicationIconImage
-                  ?? NSImage(named: NSImage.applicationIconName)
-                  ?? NSImage())
+            // App icon read directly from the bundled icns (see `appIcon`),
+            // shown via SwiftUI Image for clean scaling.
+            Image(nsImage: appIcon)
                 .resizable()
                 .frame(width: 72, height: 72)
 
