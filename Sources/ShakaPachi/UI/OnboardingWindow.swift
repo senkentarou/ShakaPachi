@@ -215,40 +215,29 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
     }
 
     /// Draws a 64x64 rounded app-icon tile with the overlapping-windows glyph.
-    /// Used until the bundle ships a real AppIcon asset.
+    /// Uses TrayIconRenderer.drawGlyph so this tile, the menu-bar icon and the
+    /// app icon all share one glyph definition. The accent-blue tile background
+    /// is drawn here; the glyph is white on top.
+    /// Note: consolidating onto drawGlyph changes this tile in two intentional
+    /// ways — (1) the front window is now filled white (was accent-blue),
+    /// matching the tray/app icon's white front card that this tile previously
+    /// diverged from; (2) window proportions follow drawGlyph (back 0.078-0.672,
+    /// front 0.328-0.922), so the windows are slightly larger and more offset.
     private static func makeAppIconTile() -> NSImage {
         let size = NSSize(width: 64, height: 64)
-        let image = NSImage(size: size)
-        image.lockFocus()
+        return NSImage(size: size, flipped: false) { bounds in
+            // Tile background: rounded rect filled with the system accent colour.
+            let tile = NSBezierPath(
+                roundedRect: bounds,
+                xRadius: 14, yRadius: 14
+            )
+            NSColor.controlAccentColor.setFill()
+            tile.fill()
 
-        let tileColor = NSColor.controlAccentColor
-        let tile = NSBezierPath(
-            roundedRect: NSRect(x: 0, y: 0, width: 64, height: 64),
-            xRadius: 14, yRadius: 14
-        )
-        tileColor.setFill()
-        tile.fill()
-
-        NSColor.white.setStroke()
-
-        let back = NSBezierPath(
-            roundedRect: NSRect(x: 13, y: 13, width: 26, height: 26),
-            xRadius: 5, yRadius: 5
-        )
-        back.lineWidth = 4
-        back.stroke()
-
-        let front = NSBezierPath(
-            roundedRect: NSRect(x: 25, y: 25, width: 26, height: 26),
-            xRadius: 5, yRadius: 5
-        )
-        front.lineWidth = 4
-        tileColor.setFill()
-        front.fill()
-        front.stroke()
-
-        image.unlockFocus()
-        return image
+            // Glyph: back window outline + solid white front window.
+            TrayIconRenderer.drawGlyph(in: bounds, outline: .white, fill: .white)
+            return true
+        }
     }
 
     // MARK: - Button actions
