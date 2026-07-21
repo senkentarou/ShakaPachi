@@ -603,6 +603,17 @@ struct AboutSettingsView: View {
             Text(String(format: NSLocalizedString("バージョン %@", comment: "App version label"), version))
                 .foregroundColor(.secondary)
 
+            // Copyright + author credit. The notice is a canonical, non-localized
+            // form (kept in English even in the Japanese UI, per macOS convention);
+            // the GitHub link credits the author.
+            Text(verbatim: "© 2026 Masahiro Senda. All rights reserved.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            Link("github.com/senkentarou",
+                 destination: URL(string: "https://github.com/senkentarou")!)
+                .font(.caption)
+
             Spacer()
         }
         .frame(maxWidth: .infinity)
