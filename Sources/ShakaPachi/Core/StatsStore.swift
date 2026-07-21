@@ -97,7 +97,7 @@ final class StatsStore {
         defaults.removeObject(forKey: Key.todayCount)
         defaults.removeObject(forKey: Key.todayDate)
         defaults.removeObject(forKey: Key.statsDailyCounts)
-        defaults.set(Self.localDateString(from: now), forKey: Key.statsFirstUseDate)
+        defaults.set(StreakStats.stringFromDate(now), forKey: Key.statsFirstUseDate)
     }
 
     /// Record one window switch at the given instant.
@@ -107,7 +107,7 @@ final class StatsStore {
     func recordSwitch(now: Date = Date()) {
         guard isStatsEnabled else { return }
 
-        let today = Self.localDateString(from: now)
+        let today = StreakStats.stringFromDate(now)
         let storedDate = defaults.string(forKey: Key.todayDate) ?? ""
 
         // Reset the daily counter when the calendar day has changed.
@@ -132,14 +132,4 @@ final class StatsStore {
         defaults.set(d, forKey: Key.statsDailyCounts)
     }
 
-    // MARK: - Private helpers
-
-    /// Format a Date as "yyyy-MM-dd" in the current locale/timezone.
-    private static func localDateString(from date: Date) -> String {
-        let fmt = DateFormatter()
-        fmt.dateFormat = "yyyy-MM-dd"
-        fmt.locale = Locale.current
-        fmt.timeZone = TimeZone.current
-        return fmt.string(from: date)
-    }
 }

@@ -200,13 +200,19 @@ struct ContributionHeatmap: View {
         }
     }
 
-    // Format firstUseDate for the legend row; returns "—" when absent.
-    private func formattedStartDate() -> String {
-        guard let s = firstUseDate, let d = StreakStats.dateFromString(s) else { return "—" }
+    // Cached formatter for the legend start-date label (dateStyle: .medium, not yyyy-MM-dd).
+    private static let startDateFormatter: DateFormatter = {
         let fmt = DateFormatter()
         fmt.dateStyle = .medium
         fmt.timeStyle = .none
         fmt.locale = Locale.current
-        return String(format: NSLocalizedString("開始 %@", comment: "Heatmap start date"), fmt.string(from: d))
+        return fmt
+    }()
+
+    // Format firstUseDate for the legend row; returns "—" when absent.
+    private func formattedStartDate() -> String {
+        guard let s = firstUseDate, let d = StreakStats.dateFromString(s) else { return "—" }
+        return String(format: NSLocalizedString("開始 %@", comment: "Heatmap start date"),
+                      Self.startDateFormatter.string(from: d))
     }
 }
