@@ -22,7 +22,7 @@
 "未許可" = "Not granted";
 "設定を開く" = "Open Settings";
 "画面収録" = "Screen Recording";
-"ウィンドウ名の取得だけに使います。画面の撮影・保存はしません。" = "Used only to read window names. Nothing is captured or saved.";
+"ウィンドウ名の取得と、プレビュー表示に使います。録画やファイルへの保存はしません。" = "Used to read window names and show live previews. Not recorded or saved to files.";
 "権限の状態" = "Permission Status";
 "オンボーディング画面を開く" = "Open Onboarding";
 "統計を記録" = "Record Statistics";

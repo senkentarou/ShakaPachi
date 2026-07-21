@@ -131,7 +131,8 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
         let srCard = PermissionCardView(
             name: NSLocalizedString("画面収録", comment: "Permission name: screen recording"),
             benefit: NSLocalizedString(
-                "ウィンドウ名の取得だけに使います。画面の撮影・保存はしません。", comment: "Screen recording permission benefit"),
+                "ウィンドウ名の取得と、プレビュー表示に使います。録画やファイルへの保存はしません。",
+                comment: "Screen recording permission benefit"),
             target: self,
             action: #selector(grantScreenRecording)
         )
