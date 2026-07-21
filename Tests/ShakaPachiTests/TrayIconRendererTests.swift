@@ -30,4 +30,18 @@ final class TrayIconRendererTests: XCTestCase {
         XCTAssertEqual(img.size.width, 32, accuracy: 0.01)
         XCTAssertEqual(img.size.height, 32, accuracy: 0.01)
     }
+
+    func testNormalPreviewFrontWindowIsOpaque() {
+        // The centre pixel lands inside the filled front window; it must be
+        // opaque. Regression guard: the normal card previously rendered as a
+        // see-through outline because .labelColor did not resolve offscreen.
+        let img = TrayIconRenderer.previewImage(for: .normal, size: 32)
+        guard let tiff = img.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff) else {
+            return XCTFail("could not rasterise preview")
+        }
+        let color = rep.colorAt(x: rep.pixelsWide / 2, y: rep.pixelsHigh / 2)
+        XCTAssertNotNil(color)
+        XCTAssertGreaterThan(color!.alphaComponent, 0.5)
+    }
 }

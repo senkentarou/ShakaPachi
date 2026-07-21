@@ -32,7 +32,7 @@ enum TrayIconState: CaseIterable {
         case .normal:
             return "機能が有効な状態です。"
         case .settings:
-            return "設定画面を開いている状態です。ShakaPachi ではウィンドウの移動ができないことがあるため、設定を閉じてください。"
+            return "設定画面を開いている状態です。開いている間はウィンドウの移動ができないことがあるため、機能を有効にするには一度設定を閉じてください。"
         case .permission:
             return "利用に必要な権限が足りない状態です。mac の設定から権限を追加してください。"
         case .restricted:
@@ -79,16 +79,36 @@ enum TrayIconRenderer {
     }
 
     /// Larger preview used in the Settings 「状態」 tab. Always non-template and
-    /// concrete: outline in the adaptive label colour, fill in the state colour.
+    /// concrete. Coloured states fill the front window with the state colour and
+    /// outline in the adaptive label colour. Normal has no state colour, so its
+    /// front window is filled with a solid appearance-adaptive foreground (white
+    /// in dark mode, black in light) — resolving `.labelColor` inside an
+    /// offscreen image yields an unfilled-looking glyph, so we pick the concrete
+    /// colour explicitly to match the live template icon.
     static func previewImage(for state: TrayIconState, size: CGFloat) -> NSImage {
         let px = NSSize(width: size, height: size)
-        let fill = state.fillColor
         let image = NSImage(size: px, flipped: false) { bounds in
-            drawGlyph(in: bounds, outline: .labelColor, fill: fill)
+            if state == .normal {
+                let fg = adaptiveForeground()
+                drawGlyph(in: bounds, outline: fg, fill: fg)
+            } else {
+                drawGlyph(in: bounds, outline: .labelColor, fill: state.fillColor)
+            }
             return true
         }
         image.isTemplate = false
         return image
+    }
+
+    /// Solid foreground colour matching the current appearance (white in dark
+    /// mode, black in light), used for the normal preview so its filled front
+    /// window is opaque rather than a see-through outline.
+    static func adaptiveForeground() -> NSColor {
+        // NSApplication.shared (not NSApp, which is nil in unit tests) so the
+        // appearance query is safe headless as well as in the live app.
+        let appearance = NSApplication.shared.effectiveAppearance
+        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        return isDark ? .white : .black
     }
 
     /// Draws the ShakaPachi glyph — two overlapping windows — with the back

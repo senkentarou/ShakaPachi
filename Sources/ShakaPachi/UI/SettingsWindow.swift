@@ -37,8 +37,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         NotificationCenter.default.post(
             name: .settingsWindowStateChanged, object: nil, userInfo: ["open": true])
         if let win = window {
-            win.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            raiseToFront(win)
             return
         }
 
@@ -51,10 +50,21 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         win.contentViewController = makeSettingsRootController()
         win.setContentSize(NSSize(width: 520, height: 420))
         win.center()
-        win.makeKeyAndOrderFront(nil)
+        // Keep the settings window findable: float above other windows and
+        // follow the user onto whichever Space is active, so it can't get lost
+        // behind other apps once opened.
+        win.level = .floating
+        win.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         self.window = win
 
+        raiseToFront(win)
+    }
+
+    /// Bring the settings window to the absolute front on the active Space.
+    private func raiseToFront(_ win: NSWindow) {
         NSApp.activate(ignoringOtherApps: true)
+        win.makeKeyAndOrderFront(nil)
+        win.orderFrontRegardless()
     }
 
     /// Close the Settings window programmatically (e.g. from the tray menu).
