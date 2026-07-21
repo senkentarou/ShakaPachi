@@ -205,6 +205,6 @@ struct ContributionHeatmap: View {
         fmt.dateStyle = .medium
         fmt.timeStyle = .none
         fmt.locale = Locale.current
-        return "開始 " + fmt.string(from: d)
+        return String(format: NSLocalizedString("開始 %@", comment: "Heatmap start date"), fmt.string(from: d))
     }
 }

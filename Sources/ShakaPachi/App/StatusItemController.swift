@@ -104,13 +104,13 @@ final class StatusItemController {
         let tooltip: String
         if !permissionManager.allPermissionsGranted() {
             state = .permission
-            tooltip = "ShakaPachi — 権限が不足しています"
+            tooltip = NSLocalizedString("ShakaPachi — 権限が不足しています", comment: "Tooltip: missing permissions")
         } else if !tapEnabled {
             state = .restricted
-            tooltip = "ShakaPachi — 停止中" + (tapStopReason.map { " (\($0))" } ?? "")
+            tooltip = NSLocalizedString("ShakaPachi — 停止中", comment: "Tooltip: tap is paused") + (tapStopReason.map { " (\($0))" } ?? "")
         } else if settingsOpen {
             state = .settings
-            tooltip = "ShakaPachi — 設定を開いています"
+            tooltip = NSLocalizedString("ShakaPachi — 設定を開いています", comment: "Tooltip: settings window is open")
         } else {
             state = .normal
             tooltip = "ShakaPachi"
@@ -137,7 +137,7 @@ final class StatusItemController {
         // Tap enable/disable toggle (§10) — also the recovery path after an
         // emergency stop or deadman fire without relaunching the app.
         let toggle = NSMenuItem(
-            title: "ウィンドウ切替を有効化",
+            title: NSLocalizedString("ウィンドウ切替を有効化", comment: "Menu item: enable window switching"),
             action: #selector(toggleTap),
             keyEquivalent: ""
         )
@@ -149,7 +149,7 @@ final class StatusItemController {
 
         // §10 / §11.3: Settings… with Cmd+, shortcut
         let settingsItem = NSMenuItem(
-            title: "設定…",
+            title: NSLocalizedString("設定…", comment: "Menu item: open settings"),
             action: #selector(openSettings),
             keyEquivalent: ","
         )
@@ -162,7 +162,7 @@ final class StatusItemController {
         // when a permission is missing, pinned to the top of the menu by
         // updatePermissionWarning(); in the normal (granted) state it is absent.
         let permItem = NSMenuItem(
-            title: "⚠ 権限の状態…",
+            title: NSLocalizedString("⚠ 権限の状態…", comment: "Menu item: permission status warning"),
             action: #selector(showPermissions),
             keyEquivalent: ""
         )
@@ -173,7 +173,7 @@ final class StatusItemController {
 
         // "Quit" item with Cmd+Q shortcut
         let quitItem = NSMenuItem(
-            title: "終了",
+            title: NSLocalizedString("終了", comment: "Menu item: quit"),
             action: #selector(quitApp),
             keyEquivalent: "q"
         )
@@ -186,7 +186,9 @@ final class StatusItemController {
     /// Reflect the Settings-window open state on the settings menu item: while
     /// open it reads 「設定を閉じる」 with a check, and selecting it closes the window.
     private func refreshSettingsMenuItem() {
-        settingsMenuItem?.title = settingsOpen ? "設定を閉じる" : "設定…"
+        settingsMenuItem?.title = settingsOpen
+            ? NSLocalizedString("設定を閉じる", comment: "Menu item: close settings")
+            : NSLocalizedString("設定…", comment: "Menu item: open settings")
         settingsMenuItem?.state = settingsOpen ? .on : .off
     }
 

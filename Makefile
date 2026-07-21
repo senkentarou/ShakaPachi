@@ -15,6 +15,8 @@ build:
 	@cp .build/debug/$(APP_NAME) "$(MACOS_DIR)/$(APP_NAME)"
 	@cp Resources/Info.plist "$(CONTENTS_DIR)/Info.plist"
 	@cp Resources/AppIcon.icns "$(RESOURCES_DIR)/AppIcon.icns"
+	@cp -R Resources/en.lproj "$(RESOURCES_DIR)/"
+	@cp -R Resources/ja.lproj "$(RESOURCES_DIR)/"
 	codesign --force --sign "$(CODESIGN_IDENTITY)" "$(BUNDLE_DIR)"
 
 # Regenerate the app icon (.icns) from tools/make-icon.swift.
@@ -38,6 +40,8 @@ release:
 	@cp .build/release/$(APP_NAME) "$(MACOS_DIR)/$(APP_NAME)"
 	@cp Resources/Info.plist "$(CONTENTS_DIR)/Info.plist"
 	@cp Resources/AppIcon.icns "$(RESOURCES_DIR)/AppIcon.icns"
+	@cp -R Resources/en.lproj "$(RESOURCES_DIR)/"
+	@cp -R Resources/ja.lproj "$(RESOURCES_DIR)/"
 	codesign --force --options runtime --sign "$(CODESIGN_IDENTITY)" "$(BUNDLE_DIR)"
 
 # Notarize a release build. Requires a stored notarytool credential profile

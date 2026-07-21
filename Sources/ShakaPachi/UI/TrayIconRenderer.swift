@@ -19,10 +19,10 @@ enum TrayIconState: CaseIterable {
     /// User-facing card name.
     var cardName: String {
         switch self {
-        case .normal:     return "ノーマルカード"
-        case .settings:   return "ブルーカード"
-        case .permission: return "イエローカード"
-        case .restricted: return "レッドカード"
+        case .normal:     return NSLocalizedString("ノーマルカード", comment: "Card name: normal")
+        case .settings:   return NSLocalizedString("ブルーカード", comment: "Card name: blue (settings open)")
+        case .permission: return NSLocalizedString("イエローカード", comment: "Card name: yellow (permission missing)")
+        case .restricted: return NSLocalizedString("レッドカード", comment: "Card name: red (tap stopped)")
         }
     }
 
@@ -30,13 +30,13 @@ enum TrayIconState: CaseIterable {
     var detail: String {
         switch self {
         case .normal:
-            return "機能が有効な状態です。"
+            return NSLocalizedString("機能が有効な状態です。", comment: "Card detail: feature is active")
         case .settings:
-            return "設定画面を開いている状態です。開いている間はウィンドウの移動ができないことがあるため、機能を有効にするには一度設定を閉じてください。"
+            return NSLocalizedString("設定画面を開いている状態です。開いている間はウィンドウの移動ができないことがあるため、機能を有効にするには一度設定を閉じてください。", comment: "Card detail: settings window is open")
         case .permission:
-            return "利用に必要な権限が足りない状態です。mac の設定から権限を追加してください。"
+            return NSLocalizedString("利用に必要な権限が足りない状態です。mac の設定から権限を追加してください。", comment: "Card detail: permissions missing")
         case .restricted:
-            return "ShakaPachi の利用を一時的に制限している状態です。mac 標準のアプリ切り替え機能にフォールバックします。"
+            return NSLocalizedString("ShakaPachi の利用を一時的に制限している状態です。mac 標準のアプリ切り替え機能にフォールバックします。", comment: "Card detail: tap is paused")
         }
     }
 

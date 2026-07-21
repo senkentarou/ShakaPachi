@@ -83,9 +83,9 @@ public enum SortMode: String, CaseIterable, Sendable {
     /// Human-readable label for UI display.
     public var displayName: String {
         switch self {
-        case .mru:    return "最近使った順 (MRU)"
-        case .zOrder: return "Z オーダー"
-        case .byApp:  return "アプリ別"
+        case .mru:    return NSLocalizedString("最近使った順 (MRU)", comment: "Sort mode: most recently used")
+        case .zOrder: return NSLocalizedString("Z オーダー", comment: "Sort mode: Z-order")
+        case .byApp:  return NSLocalizedString("アプリ別", comment: "Sort mode: by app")
         }
     }
 }
@@ -99,9 +99,9 @@ public enum Theme: String, CaseIterable, Sendable {
     /// Human-readable label for UI display.
     public var displayName: String {
         switch self {
-        case .light:  return "ライト"
-        case .dark:   return "ダーク"
-        case .system: return "システム"
+        case .light:  return NSLocalizedString("ライト", comment: "Theme: light")
+        case .dark:   return NSLocalizedString("ダーク", comment: "Theme: dark")
+        case .system: return NSLocalizedString("システム", comment: "Theme: system")
         }
     }
 
@@ -127,12 +127,12 @@ public enum AccentColor: String, CaseIterable, Sendable {
     /// Human-readable label for UI display.
     public var displayName: String {
         switch self {
-        case .system:   return "システム"
-        case .blue:     return "ブルー"
-        case .graphite: return "グラファイト"
-        case .teal:     return "ティール"
-        case .sand:     return "サンド"
-        case .plum:     return "プラム"
+        case .system:   return NSLocalizedString("システム", comment: "Accent color: system")
+        case .blue:     return NSLocalizedString("ブルー", comment: "Accent color: blue")
+        case .graphite: return NSLocalizedString("グラファイト", comment: "Accent color: graphite")
+        case .teal:     return NSLocalizedString("ティール", comment: "Accent color: teal")
+        case .sand:     return NSLocalizedString("サンド", comment: "Accent color: sand")
+        case .plum:     return NSLocalizedString("プラム", comment: "Accent color: plum")
         }
     }
 
