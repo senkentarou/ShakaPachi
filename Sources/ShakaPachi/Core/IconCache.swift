@@ -77,18 +77,17 @@ final class IconCache {
     /// This is done once at cache-fill time; subsequent draws are a plain blit.
     private func resize(_ source: NSImage, to edge: CGFloat) -> NSImage {
         let targetSize = NSSize(width: edge, height: edge)
-        let result = NSImage(size: targetSize)
-        result.lockFocus()
-        source.draw(
-            in: NSRect(origin: .zero, size: targetSize),
-            from: .zero,
-            operation: .sourceOver,
-            fraction: 1.0,
-            respectFlipped: false,
-            hints: [.interpolation: NSImageInterpolation.high.rawValue]
-        )
-        result.unlockFocus()
-        return result
+        return NSImage(size: targetSize, flipped: false) { bounds in
+            source.draw(
+                in: bounds,
+                from: .zero,
+                operation: .sourceOver,
+                fraction: 1.0,
+                respectFlipped: false,
+                hints: [.interpolation: NSImageInterpolation.high.rawValue]
+            )
+            return true
+        }
     }
 
     // MARK: - Eviction
