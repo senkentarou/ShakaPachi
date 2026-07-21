@@ -1,5 +1,5 @@
 // SafetyGuard.swift
-// Pure logic for §4 safety mechanisms — no AppKit dependency, fully testable.
+// Pure safety-mechanism logic — no AppKit dependency, fully testable.
 
 import Foundation
 
@@ -42,7 +42,7 @@ enum KeyCode {
     static let rightArrow: UInt16 = 124
     static let downArrow: UInt16 = 125
     static let upArrow: UInt16 = 126
-    // Grave accent / backtick (`~) — used for same-app jump (§6.2).
+    // Grave accent / backtick (`~) — used for same-app jump.
     static let grave: UInt16 = 50
 }
 
@@ -57,7 +57,7 @@ enum ModifierFlag: UInt64 {
     case command = 0x0000000000100000
 }
 
-// MARK: - Tap event types (for §4.4 auto-recovery mapping)
+// MARK: - Tap event types (for auto-recovery mapping)
 
 enum TapEvent: Sendable {
     case tapDisabledByTimeout
@@ -70,11 +70,11 @@ enum TapEvent: Sendable {
 /// The result returned by SafetyGuard.evaluate().
 /// Order of precedence: emergencyStop > passthroughSecureInput > reenableTap > proceed.
 enum SafetyGuardResult: Equatable, Sendable {
-    /// §4.1 — Ctrl+Option+Cmd+Esc detected. Caller must disable the tap.
+    /// Ctrl+Option+Cmd+Esc detected. Caller must disable the tap.
     case emergencyStop
-    /// §4.5 — Secure Input is active; pass the event through untouched.
+    /// Secure Input is active; pass the event through untouched.
     case passthroughSecureInput
-    /// §4.4 — Tap was disabled by timeout or user input; caller must re-enable it.
+    /// Tap was disabled by timeout or user input; caller must re-enable it.
     case reenableTap
     /// Normal event; proceed with further processing.
     case proceed
@@ -84,7 +84,7 @@ enum SafetyGuardResult: Equatable, Sendable {
 
 /// Stateless safety evaluator for CGEventTap callbacks.
 ///
-/// Usage in the tap callback (Step 5):
+/// Usage in the tap callback:
 /// ```swift
 /// let result = SafetyGuard.evaluate(event: abstractEvent, isSecureInputEnabled: ...)
 /// switch result {
@@ -96,10 +96,10 @@ enum SafetyGuardResult: Equatable, Sendable {
 /// ```
 enum SafetyGuard {
 
-    // MARK: §4.1 Emergency stop combo
+    // MARK: - Emergency stop combo
 
     /// Returns true if the event is the Ctrl+Option+Cmd+Esc emergency stop combo.
-    /// This check must run before any other logic (§4.1 mandate).
+    /// This check must run before any other logic.
     static func isEmergencyStop(_ event: KeyEvent) -> Bool {
         guard event.eventType == .keyDown, event.keyCode == KeyCode.escape else {
             return false
@@ -112,7 +112,7 @@ enum SafetyGuard {
         return (event.modifierFlags & required) == required
     }
 
-    // MARK: §4.4 Tap auto-recovery
+    // MARK: - Tap auto-recovery
 
     /// Maps a tap-disabled event type to a .reenableTap result.
     static func tapRecoveryResult(for tapEvent: TapEvent) -> SafetyGuardResult {
@@ -124,14 +124,14 @@ enum SafetyGuard {
         }
     }
 
-    // MARK: §4.5 Secure Input passthrough
+    // MARK: - Secure Input passthrough
 
     /// Returns true when Secure Input is active and events should not be consumed.
     static func isSecureInputPassthrough(isSecureInputEnabled: Bool) -> Bool {
         return isSecureInputEnabled
     }
 
-    // MARK: Primary evaluation (§4 precedence order)
+    // MARK: - Primary evaluation
 
     /// Evaluate a key event and return the action the caller must take.
     /// Precedence: emergencyStop > passthroughSecureInput > reenableTap > proceed.
@@ -139,12 +139,12 @@ enum SafetyGuard {
         event: KeyEvent,
         isSecureInputEnabled: Bool
     ) -> SafetyGuardResult {
-        // 1. Emergency stop is always checked first and wins over everything (§4.1).
+        // 1. Emergency stop is always checked first and wins over everything.
         if isEmergencyStop(event) {
             return .emergencyStop
         }
 
-        // 2. Tap-disabled events map to reenableTap before secure-input check (§4.4).
+        // 2. Tap-disabled events map to reenableTap before the secure-input check.
         switch event.eventType {
         case .tapDisabledByTimeout:
             return tapRecoveryResult(for: .tapDisabledByTimeout)
@@ -154,7 +154,7 @@ enum SafetyGuard {
             break
         }
 
-        // 3. Secure Input: pass everything through untouched (§4.5).
+        // 3. Secure Input: pass everything through untouched.
         if isSecureInputPassthrough(isSecureInputEnabled: isSecureInputEnabled) {
             return .passthroughSecureInput
         }
@@ -163,7 +163,7 @@ enum SafetyGuard {
     }
 }
 
-// MARK: - §4.2 Deadman switch (DEBUG only)
+// MARK: - Deadman switch (DEBUG only)
 
 #if DEBUG
 
@@ -185,7 +185,7 @@ enum SafetyGuard {
     /// (default 60 seconds; set to "0" to disable).
     ///
     /// The handler is a closure; the actual tap-disable call is injected at
-    /// Step 5 so this type remains AppKit-free and unit-testable.
+    /// the call site so this type remains AppKit-free and unit-testable.
     // @unchecked Sendable: all mutable state (timer) is accessed exclusively on `queue`.
     final class DeadmanSwitch: @unchecked Sendable {
 

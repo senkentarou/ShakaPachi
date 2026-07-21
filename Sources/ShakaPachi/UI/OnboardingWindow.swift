@@ -2,7 +2,7 @@
 // Permission onboarding: app-icon header, one rounded card per permission
 // with live status, and a single action per card.
 // Switching to .regular activation policy while open lets the window come
-// to front (§11.3 pattern); reverts to .accessory on close.
+// to front; reverts to .accessory on close.
 // TCC grants happen in System Settings, outside this process, so the window
 // polls permission status once per second while open instead of requiring
 // the user to restart just to see the new state.
@@ -42,7 +42,7 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
             return
         }
 
-        // Bring app to front so the window is visible (§11.3).
+        // Bring app to front so the window is visible.
         WindowPresentationCoordinator.shared.windowDidOpen()
 
         let win = makeWindow()

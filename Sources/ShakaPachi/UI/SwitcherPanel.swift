@@ -1,14 +1,14 @@
 // SwitcherPanel.swift
-// §7.1–7.4: NSPanel-based switcher UI.
+// NSPanel-based switcher UI.
 //
-// Lifetime rule (§7.2): the panel is created ONCE at app startup and retained
-// forever. show/hide use orderFrontRegardless / orderOut(nil). Never destroy
-// or recreate the panel — doing so would cost hundreds of milliseconds and
-// make N1 ≤ 50ms impossible.
+// Lifetime rule: the panel is created ONCE at app startup and retained forever.
+// show/hide use orderFrontRegardless / orderOut(nil). Never destroy or recreate
+// the panel — doing so would cost hundreds of milliseconds and make N1 ≤ 50ms
+// impossible.
 //
-// The panel is nonactivating (§7.1): it must NEVER steal focus from the app
-// the user is switching away from, because AppDelegate reads "the previously
-// active window" after the panel appears.
+// The panel is nonactivating: it must NEVER steal focus from the app the user
+// is switching away from, because AppDelegate reads "the previously active
+// window" after the panel appears.
 
 import AppKit
 
@@ -40,7 +40,7 @@ final class SwitcherPanel {
 
     @MainActor
     init() {
-        // §7.1: panel configuration.
+        // Panel configuration: nonactivating, borderless, floating.
         let initialSize = SwitcherLayout.panelSize(itemCount: 1)
         let initialRect = NSRect(origin: .zero, size: initialSize)
 
@@ -58,7 +58,7 @@ final class SwitcherPanel {
         p.backgroundColor = .clear
         p.hasShadow = true
 
-        // §7.1 content: NSVisualEffectView, liquid-glass styling.
+        // NSVisualEffectView for liquid-glass styling.
         // .popover (not .hudWindow): the user chose the system-standard look
         // that follows the light/dark appearance over the always-dark HUD.
         let ev = NSVisualEffectView(frame: initialRect.insetBy(dx: 0, dy: 0))
@@ -175,12 +175,12 @@ final class SwitcherPanel {
         panel.orderFrontRegardless()
     }
 
-    /// Move the highlight to a different row without reloading the table (§7.5).
+    /// Move the highlight to a different row without reloading the table.
     func updateSelection(to newIndex: Int) {
         listView.moveSelection(to: newIndex)
     }
 
-    /// Hide the panel without destroying it (§7.2).
+    /// Hide the panel without destroying it (the panel is reused across sessions).
     func hide() {
         panel.orderOut(nil)
     }
@@ -191,9 +191,9 @@ final class SwitcherPanel {
         panel.contentView?.displayIfNeeded()
     }
 
-    // MARK: - Layout (§7.4)
+    // MARK: - Layout
 
-    /// The visibleFrame of the screen containing the mouse cursor (§7.4),
+    /// The visibleFrame of the screen containing the mouse cursor,
     /// falling back to the main screen and finally a sane default.
     private func targetScreenFrame() -> NSRect {
         let mouseLocation = NSEvent.mouseLocation
@@ -216,7 +216,7 @@ final class SwitcherPanel {
             previewEnabled: previewEnabled)
         // Tiles are shrunk to fit; if the count is so large they hit the 40pt
         // floor, the panel is still capped to the screen and the overflow
-        // clips at the panel edge (acceptable, rare — §16 edge case).
+        // clips at the panel edge (acceptable, rare edge case).
         let width = min(size.width, screenFrame.width - Self.screenEdgeInset * 2)
         let height = size.height
         let x = screenFrame.midX - width / 2

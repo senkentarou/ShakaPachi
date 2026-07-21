@@ -65,13 +65,13 @@ enum SpacesEnumerator {
     /// 3. Ask CGSCopySpacesForWindows which of those IDs belong to a managed Space.
     /// 4. Return the union of matching window IDs.
     ///
-    /// Step 3 naturally filters out transient system compositing buffers,
-    /// off-Space ghosts, and other CGWindowList artefacts that have no Space
-    /// attribution — those simply do not appear in the returned dictionary.
+    /// CGSCopySpacesForWindows naturally filters out transient system compositing
+    /// buffers, off-Space ghosts, and other CGWindowList artefacts that have no
+    /// Space attribution — those simply do not appear in the returned dictionary.
     nonisolated static func allSpaceWindowIDs() -> Set<CGWindowID>? {
         let cid = CGSMainConnectionID()
 
-        // Step 1: collect all managed Space IDs.
+        // Collect all managed Space IDs.
         guard let managedSpaceIDs = collectManagedSpaceIDs(cid: cid),
             !managedSpaceIDs.isEmpty
         else {
@@ -79,7 +79,7 @@ enum SpacesEnumerator {
             return nil
         }
 
-        // Step 2: enumerate ALL window IDs via the public API.
+        // Enumerate ALL window IDs via the public API.
         guard let allWindowIDs = collectAllWindowIDs(),
             !allWindowIDs.isEmpty
         else {
@@ -87,7 +87,7 @@ enum SpacesEnumerator {
             return nil
         }
 
-        // Step 3: map window IDs to Space IDs via the private API.
+        // Map window IDs to Space IDs via the private API.
         guard
             let windowToSpaces = windowSpaceMap(
                 cid: cid,
@@ -98,7 +98,7 @@ enum SpacesEnumerator {
             return nil
         }
 
-        // Step 4: keep only window IDs that map to at least one managed Space.
+        // Keep only window IDs that map to at least one managed Space.
         // This discards off-Space compositing artefacts and system-only windows.
         let managedSet = managedSpaceIDs
         var result: Set<CGWindowID> = []

@@ -1,8 +1,8 @@
 // SwitcherStateMachine.swift
-// Pure deterministic state machine for window-switcher input (§6.2).
+// Pure deterministic state machine for window-switcher input.
 // No AppKit or CoreGraphics dependency — fully unit-testable.
 //
-// Transition diagram (§6.2):
+// Transition diagram:
 //   IDLE + modifierDown         → MODIFIER_HELD          (not consumed)
 //   MODIFIER_HELD + trigger     → ACTIVE(index, count)   (consumed)
 //   MODIFIER_HELD + modifierUp  → IDLE                   (not consumed)
@@ -11,7 +11,7 @@
 //   ACTIVE + arrowForward/Back  → advance/retreat index   (consumed)
 //   ACTIVE + escape             → cancel → IDLE           (consumed)
 //   ACTIVE + sameAppJump        → jump via resolver       (consumed)
-//   ACTIVE + otherKey           → no-op, NOT consumed     (§6.3)
+//   ACTIVE + otherKey           → no-op, NOT consumed
 //   ACTIVE + modifierUp         → confirmSelection → IDLE (not consumed)
 
 import Foundation
@@ -35,7 +35,7 @@ enum SwitcherInput: Equatable {
     case escape
     /// Grave accent (`): jump to the next window of the same app.
     case sameAppJump
-    /// Any other key — must NOT be consumed (§6.3).
+    /// Any other key — must NOT be consumed (passed through to the front app).
     case otherKey
 }
 
@@ -50,7 +50,7 @@ enum SwitcherAction: Equatable {
     case showPanel(initialIndex: Int)
     /// Move the highlight to a new index without rebuilding the list.
     case moveSelection(to: Int)
-    /// Confirm the selection (Step 10: Activator raises the window).
+    /// Confirm the selection (Activator raises the window).
     case confirmSelection(index: Int)
     /// Cancel: hide the panel without activating anything.
     case cancel
@@ -66,7 +66,7 @@ private enum State: Equatable {
 
 // MARK: - SwitcherStateMachine
 
-/// Deterministic state machine for the window switcher (§6.2).
+/// Deterministic state machine for the window switcher.
 ///
 /// Usage:
 /// ```swift
@@ -117,7 +117,7 @@ final class SwitcherStateMachine {
             switch input {
             case .modifierDown:
                 state = .modifierHeld
-                // The modifier key itself is never consumed (§6.2).
+                // The modifier key itself is never consumed.
                 return (.none, false)
             default:
                 // All other inputs in IDLE are irrelevant; pass through.
@@ -129,7 +129,7 @@ final class SwitcherStateMachine {
             switch input {
             case .trigger(let shift):
                 // Build the list and show the panel.
-                // §6.2: initial index = 1 when count ≥ 2, else 0.
+                // Initial index = 1 when count ≥ 2, else 0 (skip the current window).
                 let count = itemCount
                 guard count > 0 else {
                     // No windows — stay in MODIFIER_HELD, consume the key.
@@ -159,7 +159,7 @@ final class SwitcherStateMachine {
             case .trigger(let shift):
                 let newIndex: Int
                 if shift {
-                    // Shift+Tab: go backward (§6.2).
+                    // Shift+Tab: go backward.
                     newIndex = (index - 1 + count) % count
                 } else {
                     // Tab: go forward.
@@ -169,13 +169,13 @@ final class SwitcherStateMachine {
                 return (.moveSelection(to: newIndex), true)
 
             case .arrowForward:
-                // → / ↓: advance (§6.2).
+                // → / ↓: advance.
                 let newIndex = (index + 1) % count
                 state = .active(index: newIndex, count: count)
                 return (.moveSelection(to: newIndex), true)
 
             case .arrowBackward:
-                // ← / ↑: retreat (§6.2).
+                // ← / ↑: retreat.
                 let newIndex = (index - 1 + count) % count
                 state = .active(index: newIndex, count: count)
                 return (.moveSelection(to: newIndex), true)
@@ -193,12 +193,12 @@ final class SwitcherStateMachine {
                 return (.moveSelection(to: newIndex), true)
 
             case .otherKey:
-                // §6.3: undefined keys are NOT consumed, action is none.
+                // Undefined keys are NOT consumed — pass them to the front app.
                 return (.none, false)
 
             case .modifierUp:
                 // Modifier release: confirm selection, hide panel, → IDLE.
-                // Releasing the modifier is not consumed (§6.2).
+                // Releasing the modifier is not consumed.
                 state = .idle
                 return (.confirmSelection(index: index), false)
 

@@ -1,10 +1,10 @@
 // SettingsWindow.swift
-// Settings window (§11.3): NSWindow + NSTabView with four tabs.
-// SwiftUI is embedded via NSHostingView for the control-heavy tabs (§11.3
-// explicitly permits this: "the settings screen has no speed requirements so embedding SwiftUI is fine").
+// Settings window: NSWindow + NSTabView with four tabs.
+// SwiftUI is embedded via NSHostingView for the control-heavy tabs — the
+// settings screen has no speed requirements so embedding SwiftUI is fine.
 //
 // Activation policy: switches to .regular on show and back to .accessory on
-// close — but ONLY if the onboarding window is not also open (§11.3 note).
+// close — but ONLY if the onboarding window is not also open.
 
 import AppKit
 import SwiftUI
@@ -35,7 +35,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             return
         }
 
-        // §11.3: bring app to front so the window is visible.
+        // Bring app to front so the window is visible.
         WindowPresentationCoordinator.shared.windowDidOpen()
 
         let win = makeWindow()
@@ -65,9 +65,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         NotificationCenter.default.post(
             name: .settingsWindowStateChanged, object: nil, userInfo: ["open": false])
-        // §11.3: revert to .accessory only when no other presentation-managed
-        // window is open. WindowPresentationCoordinator tracks the count so
-        // this window and OnboardingWindow share a single revert decision.
+        // Revert to .accessory only when no other presentation-managed window
+        // is open. WindowPresentationCoordinator tracks the count so this window
+        // and OnboardingWindow share a single revert decision.
         WindowPresentationCoordinator.shared.windowDidClose()
         window = nil
     }
@@ -234,8 +234,8 @@ struct GeneralSettingsView: View {
             }
 
             Section {
-                // §11.4: launch-at-login via SMAppService. The system status is
-                // the source of truth; the Settings bool mirrors it for the UI.
+                // Launch-at-login via SMAppService. The system status is the
+                // source of truth; the Settings bool mirrors it for the UI.
                 // Read the live SMAppService status directly (not the cached
                 // mirror) so the toggle always reflects reality; the mirror is
                 // healed on appear (see .onAppear below) and after every write.

@@ -1,5 +1,5 @@
 // Settings.swift
-// Type-safe UserDefaults wrapper for all ShakaPachi preferences (§11.1, §11.2).
+// Type-safe UserDefaults wrapper for all ShakaPachi preferences.
 //
 // Design notes:
 // - All keys stored as raw String/Int values so UserDefaults can persist them.
@@ -74,7 +74,7 @@ public enum TriggerKey: String, CaseIterable, Sendable {
 
 /// Sort order for the window list.
 public enum SortMode: String, CaseIterable, Sendable {
-    /// Most-recently-used order (the §5.5 MRU array).
+    /// Most-recently-used order (MRU array, sorted by last activation time).
     case mru
     /// Raw CGWindowList z-order — no MRU sort applied.
     case zOrder
@@ -415,15 +415,14 @@ final class Settings: ObservableObject {
     /// `objectWillChange` (see `init`). Held so it can be removed on `deinit`.
     private var observer: (any NSObjectProtocol)?
 
-    // MARK: §11.2 Settings
+    // MARK: - Settings
 
     // -- Input --
 
     /// The modifier key that must be held to trigger the switcher.
-    /// Default: .command — the shipping default (§13-2 chose Cmd+Tab as the
-    /// primary trigger, and Step 5b verified the standard App Switcher can be
-    /// suppressed). During early development this was .option (§4.7); it is
-    /// switched now that the app is stable. Users can change it in Settings.
+    /// Default: .command (Cmd+Tab), which suppresses the standard App Switcher.
+    /// During early development this was .option; it was switched to .command
+    /// once the app was stable. Users can change it in Settings.
     private var _triggerModifier: DefaultsEnum<TriggerModifier>
     var triggerModifier: TriggerModifier {
         get { _triggerModifier.wrappedValue }
@@ -441,10 +440,10 @@ final class Settings: ObservableObject {
 
     /// Maximum number of rows to display.
     ///
-    /// NOTE: The Step 7 implementation chose a HORIZONTAL tile layout that
-    /// auto-sizes its width to the tile count and shrinks tiles to fit.
-    /// This property is retained for model completeness but is NOT wired to
-    /// the panel in v1 — the horizontal auto-sizing layout makes it advisory.
+    /// NOTE: The implementation uses a HORIZONTAL tile layout that auto-sizes
+    /// its width to the tile count and shrinks tiles to fit. This property is
+    /// retained for model completeness but is NOT wired to the panel in v1 —
+    /// the horizontal auto-sizing layout makes it advisory.
     private var _maxRows: DefaultsInt
     var maxRows: Int {
         get { _maxRows.wrappedValue }
@@ -498,7 +497,7 @@ final class Settings: ObservableObject {
     // -- System integration --
 
     /// Whether to register the app as a Login Item.
-    /// Model only — actual SMAppService registration is Step 13.
+    /// Model only — actual SMAppService registration is handled by LoginItemManager.
     private var _launchAtLogin: DefaultsBool
     var launchAtLogin: Bool {
         get { _launchAtLogin.wrappedValue }
@@ -551,10 +550,10 @@ final class Settings: ObservableObject {
 
     /// Panel width in points.
     ///
-    /// NOTE: The Step 7 implementation chose a HORIZONTAL tile layout that
-    /// derives its width from the tile count (auto-sizing). This property is
-    /// retained for model completeness but is NOT wired to the panel in v1 —
-    /// the horizontal auto-sizing layout makes it advisory.
+    /// NOTE: The implementation derives panel width from the tile count
+    /// (auto-sizing). This property is retained for model completeness but is
+    /// NOT wired to the panel in v1 — the horizontal auto-sizing layout makes
+    /// it advisory.
     private var _panelWidth: DefaultsInt
     var panelWidth: Int {
         get { _panelWidth.wrappedValue }
