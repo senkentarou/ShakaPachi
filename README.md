@@ -31,7 +31,7 @@ Builds the SPM executable, assembles `ShakaPachi.app`, codesigns it, and launche
 
 ## Architecture
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for a full system overview, component map, and sequence/state diagrams.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for a full system overview, component map, and sequence/state diagrams. New to the codebase? Start with its "Start here — reading order" section.
 
 ## License
 
