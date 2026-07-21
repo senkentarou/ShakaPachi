@@ -92,7 +92,7 @@ struct AppearancePreviewView: View {
             // matching the real panel's ev.layer?.borderColor.
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+                        .strokeBorder(Color.white.opacity(AccentColor.glassBorderAlpha), lineWidth: 1)
                 )
 
             // Content: icon row + title line

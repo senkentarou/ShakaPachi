@@ -143,6 +143,9 @@ public enum AccentColor: String, CaseIterable, Sendable {
     /// Alpha applied to the accent color for the selected tile's highlight fill.
     /// Shared by SwitcherListView and the Settings appearance preview.
     public static let selectionHighlightAlpha: CGFloat = 0.30
+    /// Alpha for the 1px glass rim border on the switcher panel.
+    /// Shared by SwitcherPanel (CALayer borderColor) and AppearancePreviewView (SwiftUI strokeBorder).
+    public static let glassBorderAlpha: CGFloat = 0.18
 
     /// The NSColor for this accent. Muted / desaturated — this is a work app.
     public var nsColor: NSColor {
@@ -309,6 +312,26 @@ final class Settings {
 
     static let shared = Settings()
 
+    // MARK: - UserDefaults keys
+
+    private enum Key {
+        static let triggerModifier  = "triggerModifier"
+        static let triggerKey       = "triggerKey"
+        static let sortMode         = "sortMode"
+        static let theme            = "theme"
+        static let maxRows          = "maxRows"
+        static let showDelayMs      = "showDelayMs"
+        static let panelWidth       = "panelWidth"
+        static let currentSpaceOnly = "currentSpaceOnly"
+        static let launchAtLogin    = "launchAtLogin"
+        static let excludedBundleIDs = "excludedBundleIDs"
+        static let accentColor      = "accentColor"
+        static let showWindowPreview = "showWindowPreview"
+        static let appLanguage      = "appLanguage"
+        // Apple-defined global key that overrides the bundle's resolved language.
+        static let appleLanguages   = "AppleLanguages"
+    }
+
     // MARK: Init
 
     /// Creates a Settings instance backed by the given UserDefaults.
@@ -316,19 +339,19 @@ final class Settings {
     ///   in production; pass a test suite in unit tests.
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        _triggerModifier = DefaultsEnum(key: "triggerModifier", defaultValue: .command, defaults: defaults)
-        _triggerKey      = DefaultsEnum(key: "triggerKey",      defaultValue: .tab,     defaults: defaults)
-        _sortMode        = DefaultsEnum(key: "sortMode",        defaultValue: .mru,     defaults: defaults)
-        _theme           = DefaultsEnum(key: "theme",           defaultValue: .system,  defaults: defaults)
-        _maxRows         = DefaultsInt (key: "maxRows",         defaultValue: 20,       defaults: defaults)
-        _showDelayMs     = DefaultsInt (key: "showDelayMs",     defaultValue: 0,        defaults: defaults)
-        _panelWidth      = DefaultsInt (key: "panelWidth",      defaultValue: 480,      defaults: defaults)
-        _currentSpaceOnly   = DefaultsBool(key: "currentSpaceOnly",   defaultValue: true,  defaults: defaults)
-        _launchAtLogin      = DefaultsBool(key: "launchAtLogin",      defaultValue: true,  defaults: defaults)
-        _excludedBundleIDs  = DefaultsStringArray(key: "excludedBundleIDs", defaultValue: [], defaults: defaults)
-        _accentColor        = DefaultsEnum(key: "accentColor",        defaultValue: .system, defaults: defaults)
-        _showWindowPreview  = DefaultsBool(key: "showWindowPreview",  defaultValue: true,  defaults: defaults)
-        _appLanguage        = DefaultsEnum(key: "appLanguage",        defaultValue: .system, defaults: defaults)
+        _triggerModifier = DefaultsEnum(key: Key.triggerModifier, defaultValue: .command, defaults: defaults)
+        _triggerKey      = DefaultsEnum(key: Key.triggerKey,      defaultValue: .tab,     defaults: defaults)
+        _sortMode        = DefaultsEnum(key: Key.sortMode,        defaultValue: .mru,     defaults: defaults)
+        _theme           = DefaultsEnum(key: Key.theme,           defaultValue: .system,  defaults: defaults)
+        _maxRows         = DefaultsInt (key: Key.maxRows,         defaultValue: 20,       defaults: defaults)
+        _showDelayMs     = DefaultsInt (key: Key.showDelayMs,     defaultValue: 0,        defaults: defaults)
+        _panelWidth      = DefaultsInt (key: Key.panelWidth,      defaultValue: 480,      defaults: defaults)
+        _currentSpaceOnly   = DefaultsBool(key: Key.currentSpaceOnly,   defaultValue: true,  defaults: defaults)
+        _launchAtLogin      = DefaultsBool(key: Key.launchAtLogin,      defaultValue: true,  defaults: defaults)
+        _excludedBundleIDs  = DefaultsStringArray(key: Key.excludedBundleIDs, defaultValue: [], defaults: defaults)
+        _accentColor        = DefaultsEnum(key: Key.accentColor,        defaultValue: .system, defaults: defaults)
+        _showWindowPreview  = DefaultsBool(key: Key.showWindowPreview,  defaultValue: true,  defaults: defaults)
+        _appLanguage        = DefaultsEnum(key: Key.appLanguage,        defaultValue: .system, defaults: defaults)
     }
 
     // MARK: Backing store
@@ -456,9 +479,9 @@ final class Settings {
         set {
             _appLanguage.wrappedValue = newValue   // persists + posts .settingsDidChange
             if let langs = newValue.appleLanguagesValue {
-                defaults.set(langs, forKey: "AppleLanguages")
+                defaults.set(langs, forKey: Key.appleLanguages)
             } else {
-                defaults.removeObject(forKey: "AppleLanguages")
+                defaults.removeObject(forKey: Key.appleLanguages)
             }
         }
     }

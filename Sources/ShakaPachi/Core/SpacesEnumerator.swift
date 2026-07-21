@@ -188,8 +188,10 @@ enum SpacesEnumerator {
         windowIDs: [CGWindowID]
     ) -> [CGWindowID: [Int]]? {
         // Build a CFArray of CFNumber from the window IDs.
+        // Use sInt64Type so IDs above Int32.max (0x7FFF_FFFF) are not sign-flipped.
         let cfNumbers = windowIDs.map { id in
-            CFNumberCreate(kCFAllocatorDefault, .sInt32Type, [UInt32(id)] as [UInt32])
+            var val = Int64(id)
+            return CFNumberCreate(kCFAllocatorDefault, .sInt64Type, &val)
                 as CFNumber? ?? 0 as CFNumber
         }
         // Use NSArray bridging to create the CFArray.

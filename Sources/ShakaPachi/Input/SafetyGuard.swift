@@ -185,6 +185,7 @@ public struct SystemClock: Clock {
 ///
 /// The handler is a closure; the actual tap-disable call is injected at
 /// Step 5 so this type remains AppKit-free and unit-testable.
+// @unchecked Sendable: all mutable state (timer) is accessed exclusively on `queue`.
 public final class DeadmanSwitch: @unchecked Sendable {
 
     /// Seconds until the deadman fires. Reads SHAKAPACHI_DEADMAN_SEC; defaults to 60.
