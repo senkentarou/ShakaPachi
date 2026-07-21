@@ -99,7 +99,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        win.title = "ShakaPachi 設定"
+        win.title = NSLocalizedString("ShakaPachi 設定", comment: "Settings window title")
         win.isReleasedWhenClosed = false
         win.minSize = NSSize(width: 460, height: 420)
         return win
@@ -137,7 +137,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             let sized = view.frame(minWidth: 520, maxWidth: .infinity,
                                    minHeight: 360, maxHeight: .infinity)
             let item = NSTabViewItem(viewController: NSHostingController(rootView: sized))
-            item.label = label
+            // NSTabViewItem.label is verbatim AppKit (no LocalizedStringKey), so
+            // localize it explicitly. Keys live in Localizable.strings.
+            item.label = NSLocalizedString(label, comment: "Settings tab label")
             tvc.addTabViewItem(item)
         }
 
@@ -510,7 +512,7 @@ struct StatsSettingsView: View {
                 // ── アクティビティ (streak strip + heatmap) ──
                 Section {
                     // Streak count above the heatmap.
-                    Text("\(currentStreak) 日連続")
+                    Text(String(format: NSLocalizedString("%lld 日連続", comment: "Consecutive-day streak"), currentStreak))
                         .font(.headline)
                         .padding(.bottom, 8)   // breathing room above the heatmap
 
@@ -569,7 +571,8 @@ struct StatsSettingsView: View {
     }
 
     private func formatted(_ n: Int) -> String {
-        (countFormatter.string(from: NSNumber(value: n)) ?? "\(n)") + " 回"
+        String(format: NSLocalizedString("%@ 回", comment: "Switch count with unit"),
+               (countFormatter.string(from: NSNumber(value: n)) ?? "\(n)"))
     }
 }
 
@@ -597,7 +600,7 @@ struct AboutSettingsView: View {
                 .font(.title)
                 .fontWeight(.bold)
 
-            Text("バージョン \(version)")
+            Text(String(format: NSLocalizedString("バージョン %@", comment: "App version label"), version))
                 .foregroundColor(.secondary)
 
             Spacer()

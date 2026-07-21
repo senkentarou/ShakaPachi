@@ -119,7 +119,7 @@ final class HotkeyTap {
             // Fires on the deadman's private queue; hop to main for AppKit.
             DispatchQueue.main.async {
                 guard let self, self.isEnabled else { return }
-                self.disable(reason: "デッドマンスイッチ (自動停止)")
+                self.disable(reason: NSLocalizedString("デッドマンスイッチ (自動停止)", comment: "Dead-man switch auto-stop reason"))
             }
         }
         dm.arm()
@@ -171,7 +171,7 @@ final class HotkeyTap {
             DispatchQueue.main.async { [weak self] in
                 NSLog("[ShakaPachi] EMERGENCY STOP (Ctrl+Option+Cmd+Esc) — tap disabled")
                 self?.disarmDeadman()
-                self?.onStateChange?(.stopped(reason: "緊急停止"))
+                self?.onStateChange?(.stopped(reason: NSLocalizedString("緊急停止", comment: "Emergency stop reason")))
             }
             return Unmanaged.passUnretained(event)
 

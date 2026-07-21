@@ -87,7 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if enable {
                 tap.enable()
             } else {
-                tap.disable(reason: "メニューから無効化")
+                tap.disable(reason: NSLocalizedString("メニューから無効化", comment: "Tap disabled from menu"))
             }
         }
 

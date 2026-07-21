@@ -127,16 +127,16 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
         let header = makeHeader()
 
         let axCard = PermissionCardView(
-            name: "アクセシビリティ",
-            benefit: "切替キーの捕捉と、選んだウィンドウの前面化に使います。",
+            name: NSLocalizedString("アクセシビリティ", comment: "Permission name: accessibility"),
+            benefit: NSLocalizedString("切替キーの捕捉と、選んだウィンドウの前面化に使います。", comment: "Accessibility permission benefit"),
             target: self,
             action: #selector(grantAccessibility)
         )
         accessibilityCard = axCard
 
         let srCard = PermissionCardView(
-            name: "画面収録",
-            benefit: "ウィンドウ名の取得だけに使います。画面の撮影・保存はしません。",
+            name: NSLocalizedString("画面収録", comment: "Permission name: screen recording"),
+            benefit: NSLocalizedString("ウィンドウ名の取得だけに使います。画面の撮影・保存はしません。", comment: "Screen recording permission benefit"),
             target: self,
             action: #selector(grantScreenRecording)
         )
@@ -182,7 +182,7 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
         let title = NSTextField(labelWithString: "ShakaPachi")
         title.font = .boldSystemFont(ofSize: 26)
 
-        let subtitle = NSTextField(labelWithString: "ウィンドウを切り替えるには 2 つの権限が必要です。")
+        let subtitle = NSTextField(labelWithString: NSLocalizedString("ウィンドウを切り替えるには 2 つの権限が必要です。", comment: "Onboarding subtitle: two permissions required"))
         subtitle.font = .systemFont(ofSize: 13)
         subtitle.textColor = .secondaryLabelColor
 
@@ -200,13 +200,13 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
 
     private func makeFooter() -> NSView {
         let helper = NSTextField(wrappingLabelWithString:
-            "「設定を開く」を押して ShakaPachi をオンにしてください。この画面は自動で更新されます。画面収録は再起動後に反映されます。")
+            NSLocalizedString("「設定を開く」を押して ShakaPachi をオンにしてください。この画面は自動で更新されます。画面収録は再起動後に反映されます。", comment: "Onboarding footer helper text"))
         helper.font = .systemFont(ofSize: 11)
         helper.textColor = .secondaryLabelColor
         helper.preferredMaxLayoutWidth = 240
         helper.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        let restartButton = NSButton(title: "再起動", target: self, action: #selector(relaunch))
+        let restartButton = NSButton(title: NSLocalizedString("再起動", comment: "Button: restart app"), target: self, action: #selector(relaunch))
         restartButton.bezelStyle = .rounded
         restartButton.keyEquivalent = "\r"
 
@@ -288,7 +288,7 @@ private final class PermissionCardView: NSView {
     private var granted = false
 
     init(name: String, benefit: String, target: AnyObject, action: Selector) {
-        actionButton = NSButton(title: "設定を開く", target: target, action: action)
+        actionButton = NSButton(title: NSLocalizedString("設定を開く", comment: "Button: open system settings"), target: target, action: action)
         super.init(frame: .zero)
 
         wantsLayer = true
@@ -351,18 +351,18 @@ private final class PermissionCardView: NSView {
         if newValue {
             statusIconView.image = NSImage(
                 systemSymbolName: "checkmark.circle.fill",
-                accessibilityDescription: "許可済み"
+                accessibilityDescription: NSLocalizedString("許可済み", comment: "Permission status: granted")
             )?.withSymbolConfiguration(.init(pointSize: 24, weight: .regular))
             statusIconView.contentTintColor = .systemGreen
-            actionButton.title = "許可済み"
+            actionButton.title = NSLocalizedString("許可済み", comment: "Button title: already granted")
             actionButton.isEnabled = false
         } else {
             statusIconView.image = NSImage(
                 systemSymbolName: "circle.dashed",
-                accessibilityDescription: "未許可"
+                accessibilityDescription: NSLocalizedString("未許可", comment: "Permission status: not granted")
             )?.withSymbolConfiguration(.init(pointSize: 24, weight: .regular))
             statusIconView.contentTintColor = .tertiaryLabelColor
-            actionButton.title = "設定を開く"
+            actionButton.title = NSLocalizedString("設定を開く", comment: "Button: open system settings")
             actionButton.isEnabled = true
         }
     }
