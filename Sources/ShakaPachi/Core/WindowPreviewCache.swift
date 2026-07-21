@@ -65,6 +65,17 @@ final class WindowPreviewCache {
         cache[id]
     }
 
+    /// Discard all cached images, eviction order, and in-flight tracking.
+    /// Does not cancel in-flight captures already dispatched to `schedule`;
+    /// their results will be silently dropped because `inFlight` is cleared.
+    /// Also clears `onImageReady` to prevent stale callbacks after a reset.
+    func clearCache() {
+        cache.removeAll()
+        lruOrder.removeAll()
+        inFlight.removeAll()
+        onImageReady = nil
+    }
+
     /// Request a capture for `id`.
     ///
     /// - Parameters:

@@ -33,9 +33,19 @@ final class WindowStore {
     private var mruOrder: [CGWindowID] = []
     private let mruCap = 200
 
+    // Retained token for the NSWorkspace activation observer so it can be
+    // removed in deinit and avoids a dangling closure after deallocation.
+    private var workspaceObserver: (any NSObjectProtocol)?
+
     init(excludedBundleIDs: Set<String> = []) {
         self.excludedBundleIDs = excludedBundleIDs
         subscribeToWorkspaceActivations()
+    }
+
+    deinit {
+        if let token = workspaceObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(token)
+        }
     }
 
     // MARK: - Public interface
@@ -117,7 +127,7 @@ final class WindowStore {
     /// Subscribe to NSWorkspace app-activation events so that windows brought
     /// to the front by means other than the switcher are also tracked.
     private func subscribeToWorkspaceActivations() {
-        NSWorkspace.shared.notificationCenter.addObserver(
+        workspaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil,
             queue: .main          // always main — safe to mutate mruOrder directly

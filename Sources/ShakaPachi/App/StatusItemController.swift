@@ -21,6 +21,9 @@ final class StatusItemController {
     // Whether the Settings window is open — drives the blue "info" icon state.
     private var settingsOpen = false
 
+    // Retained observer token for the settingsWindowStateChanged subscription.
+    private var settingsWindowObserver: (any NSObjectProtocol)?
+
     /// Called when the user toggles "Enable window switching" (「ウィンドウ切替を有効化」).
     /// Receives the desired new state.
     var onToggleTap: ((Bool) -> Void)?
@@ -39,7 +42,7 @@ final class StatusItemController {
         updatePermissionWarning()
 
         // Show a blue "info" icon while the Settings window is open.
-        NotificationCenter.default.addObserver(
+        settingsWindowObserver = NotificationCenter.default.addObserver(
             forName: .settingsWindowStateChanged, object: nil, queue: .main
         ) { [weak self] note in
             MainActor.assumeIsolated {
@@ -47,6 +50,12 @@ final class StatusItemController {
                 self?.refreshSettingsMenuItem()
                 self?.refreshIcon()
             }
+        }
+    }
+
+    deinit {
+        if let token = settingsWindowObserver {
+            NotificationCenter.default.removeObserver(token)
         }
     }
 
