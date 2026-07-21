@@ -18,12 +18,12 @@ final class StatsStore {
     // MARK: - UserDefaults keys
 
     private enum Key {
-        static let totalCount      = "statsTotalCount"
-        static let todayCount      = "statsTodayCount"
-        static let todayDate       = "statsTodayDate"
+        static let totalCount = "statsTotalCount"
+        static let todayCount = "statsTodayCount"
+        static let todayDate = "statsTodayDate"
         static let statsDailyCounts = "statsDailyCounts"
         static let statsFirstUseDate = "statsFirstUseDate"
-        static let statsEnabled    = "statsEnabled"
+        static let statsEnabled = "statsEnabled"
     }
 
     // MARK: - Backing store

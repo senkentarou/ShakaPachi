@@ -11,16 +11,16 @@ import AppKit
 /// (see StatusItemController.refreshIcon); the case order here is the
 /// explanation order shown to the user (normal → blue → yellow → red).
 enum TrayIconState: CaseIterable {
-    case normal      // normal card
-    case settings    // blue card
+    case normal  // normal card
+    case settings  // blue card
     case permission  // yellow card
     case restricted  // red card
 
     /// User-facing card name.
     var cardName: String {
         switch self {
-        case .normal:     return NSLocalizedString("ノーマルカード", comment: "Card name: normal")
-        case .settings:   return NSLocalizedString("ブルーカード", comment: "Card name: blue (settings open)")
+        case .normal: return NSLocalizedString("ノーマルカード", comment: "Card name: normal")
+        case .settings: return NSLocalizedString("ブルーカード", comment: "Card name: blue (settings open)")
         case .permission: return NSLocalizedString("イエローカード", comment: "Card name: yellow (permission missing)")
         case .restricted: return NSLocalizedString("レッドカード", comment: "Card name: red (tap stopped)")
         }
@@ -32,11 +32,16 @@ enum TrayIconState: CaseIterable {
         case .normal:
             return NSLocalizedString("機能が有効な状態です。", comment: "Card detail: feature is active")
         case .settings:
-            return NSLocalizedString("設定画面を開いている状態です。開いている間はウィンドウの移動ができないことがあるため、機能を有効にするには一度設定を閉じてください。", comment: "Card detail: settings window is open")
+            return NSLocalizedString(
+                "設定画面を開いている状態です。開いている間はウィンドウの移動ができないことがあるため、機能を有効にするには一度設定を閉じてください。",
+                comment: "Card detail: settings window is open")
         case .permission:
-            return NSLocalizedString("利用に必要な権限が足りない状態です。mac の設定から権限を追加してください。", comment: "Card detail: permissions missing")
+            return NSLocalizedString(
+                "利用に必要な権限が足りない状態です。mac の設定から権限を追加してください。", comment: "Card detail: permissions missing")
         case .restricted:
-            return NSLocalizedString("ShakaPachi の利用を一時的に制限している状態です。mac 標準のアプリ切り替え機能にフォールバックします。メニューバーの「ウィンドウ切替を有効化」から再開できます。", comment: "Card detail: tap is paused")
+            return NSLocalizedString(
+                "ShakaPachi の利用を一時的に制限している状態です。mac 標準のアプリ切り替え機能にフォールバックします。メニューバーの「ウィンドウ切替を有効化」から再開できます。",
+                comment: "Card detail: tap is paused")
         }
     }
 
@@ -45,10 +50,10 @@ enum TrayIconState: CaseIterable {
     /// adaptive label colour so the glyph matches the menu bar as before.
     var fillColor: NSColor {
         switch self {
-        case .normal:     return .labelColor
-        case .settings:   return NSColor(srgbRed: 0.52, green: 0.68, blue: 0.92, alpha: 1.0) // soft blue
-        case .permission: return NSColor(srgbRed: 0.95, green: 0.81, blue: 0.45, alpha: 1.0) // soft amber
-        case .restricted: return NSColor(srgbRed: 0.92, green: 0.53, blue: 0.51, alpha: 1.0) // soft coral
+        case .normal: return .labelColor
+        case .settings: return NSColor(srgbRed: 0.52, green: 0.68, blue: 0.92, alpha: 1.0)  // soft blue
+        case .permission: return NSColor(srgbRed: 0.95, green: 0.81, blue: 0.45, alpha: 1.0)  // soft amber
+        case .restricted: return NSColor(srgbRed: 0.92, green: 0.53, blue: 0.51, alpha: 1.0)  // soft coral
         }
     }
 }

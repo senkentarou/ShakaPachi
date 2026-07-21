@@ -6,7 +6,7 @@ CONTENTS_DIR  := $(BUNDLE_DIR)/Contents
 MACOS_DIR     := $(CONTENTS_DIR)/MacOS
 RESOURCES_DIR := $(CONTENTS_DIR)/Resources
 
-.PHONY: build run release test clean icon notarize
+.PHONY: build run release test clean icon notarize format lint
 
 # Debug build: compile, assemble .app bundle, and sign.
 build:
@@ -57,6 +57,20 @@ notarize: release
 # Run unit tests.
 test:
 	swift test 2>&1
+
+# swift-format is bundled with the Swift toolchain (Swift 5.8+ / Xcode 14.3+)
+# and is invoked as the `swift format` subcommand — no separate install needed.
+# (If your toolchain predates the bundled subcommand, `brew install swift-format`
+#  and replace `swift format` with `swift-format` below.)
+# Configuration lives in .swift-format at the repo root.
+
+# Reformat all sources in place.
+format:
+	swift format --configuration .swift-format --in-place --recursive Sources Tests
+
+# Lint without modifying files; fails on any violation (CI-friendly).
+lint:
+	swift format lint --configuration .swift-format --strict --recursive Sources Tests
 
 # Remove build artefacts.
 clean:

@@ -23,8 +23,8 @@ enum AppearancePreview {
     static func backgroundBaseColor(theme: Theme, systemIsDark: Bool) -> NSColor {
         let isDark: Bool
         switch theme {
-        case .light:  isDark = false
-        case .dark:   isDark = true
+        case .light: isDark = false
+        case .dark: isDark = true
         case .system: isDark = systemIsDark
         }
         if isDark {
@@ -73,8 +73,8 @@ struct AppearancePreviewView: View {
         // low-contrast chrome on top of the flipped base color.
         let resolvedScheme: ColorScheme = {
             switch theme {
-            case .light:  return .light
-            case .dark:   return .dark
+            case .light: return .light
+            case .dark: return .dark
             case .system: return colorScheme
             }
         }()
@@ -88,8 +88,8 @@ struct AppearancePreviewView: View {
                     RoundedRectangle(cornerRadius: 16)
                         .fill(Color(nsColor: tint))
                 )
-            // Glass rim — 1px light border reads as the edge of a liquid pane,
-            // matching the real panel's ev.layer?.borderColor.
+                // Glass rim — 1px light border reads as the edge of a liquid pane,
+                // matching the real panel's ev.layer?.borderColor.
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
                         .strokeBorder(Color.white.opacity(AccentColor.glassBorderAlpha), lineWidth: 1)

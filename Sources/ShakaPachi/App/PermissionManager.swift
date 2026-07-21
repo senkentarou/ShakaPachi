@@ -79,7 +79,8 @@ final class PermissionManager {
     /// Re-launches the app so screen-recording permission takes effect.
     /// Opens a new instance via /usr/bin/open, then terminates self.
     func relaunchApp() {
-        guard let bundlePath = Bundle.main.bundlePath
+        guard
+            let bundlePath = Bundle.main.bundlePath
                 .addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
         else { return }
 

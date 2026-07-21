@@ -3,6 +3,7 @@
 // No AX / AppKit / TCC permissions required — all inputs are plain values.
 
 import XCTest
+
 @testable import ShakaPachi
 
 final class ActivatorTests: XCTestCase {
@@ -11,8 +12,10 @@ final class ActivatorTests: XCTestCase {
 
     private typealias Candidate = (title: String, bounds: CGRect)
 
-    private func rect(_ x: CGFloat, _ y: CGFloat,
-                      _ w: CGFloat, _ h: CGFloat) -> CGRect {
+    private func rect(
+        _ x: CGFloat, _ y: CGFloat,
+        _ w: CGFloat, _ h: CGFloat
+    ) -> CGRect {
         CGRect(x: x, y: y, width: w, height: h)
     }
 
@@ -21,9 +24,9 @@ final class ActivatorTests: XCTestCase {
     /// Exactly one candidate with a matching title → returns that index.
     func testExactSingleTitleMatch() {
         let candidates: [Candidate] = [
-            (title: "Finder",   bounds: rect(100, 100, 800, 600)),
+            (title: "Finder", bounds: rect(100, 100, 800, 600)),
             (title: "Terminal", bounds: rect(200, 200, 800, 600)),
-            (title: "Xcode",    bounds: rect(300, 300, 800, 600)),
+            (title: "Xcode", bounds: rect(300, 300, 800, 600)),
         ]
         let result = Activator.matchWindow(
             title: "Terminal", bounds: rect(0, 0, 1, 1), candidates: candidates)
@@ -35,9 +38,9 @@ final class ActivatorTests: XCTestCase {
     func testPrefixMatch_chromeExtendedTitle() {
         let maximized = rect(0, 25, 1440, 875)
         let candidates: [Candidate] = [
-            (title: "",                                          bounds: rect(121, 160, 140, 18)),
-            (title: "YouTube - Google Chrome - 太郎 (Masahiro)",  bounds: maximized),
-            (title: "注文履歴 - Google Chrome - 将大 (Masahiro)",  bounds: maximized),
+            (title: "", bounds: rect(121, 160, 140, 18)),
+            (title: "YouTube - Google Chrome - 太郎 (Masahiro)", bounds: maximized),
+            (title: "注文履歴 - Google Chrome - 将大 (Masahiro)", bounds: maximized),
         ]
         // Target "注文履歴" (order history) uniquely prefixes candidate 2 even though bounds tie.
         XCTAssertEqual(
@@ -52,13 +55,14 @@ final class ActivatorTests: XCTestCase {
     /// The reverse direction: AX title is a prefix of the (longer) target.
     func testPrefixMatch_axTitleShorterThanTarget() {
         let candidates: [Candidate] = [
-            (title: "Inbox",  bounds: rect(0, 0, 100, 100)),
+            (title: "Inbox", bounds: rect(0, 0, 100, 100)),
             (title: "Report", bounds: rect(0, 0, 100, 100)),
         ]
         // Target is longer than the AX title but shares the prefix.
         XCTAssertEqual(
-            Activator.matchWindow(title: "Report — Draft", bounds: rect(9, 9, 9, 9),
-                                  candidates: candidates),
+            Activator.matchWindow(
+                title: "Report — Draft", bounds: rect(9, 9, 9, 9),
+                candidates: candidates),
             1)
     }
 
@@ -77,19 +81,20 @@ final class ActivatorTests: XCTestCase {
     /// Exact match still wins even when another candidate is prefix-compatible.
     func testExactWinsOverPrefix() {
         let candidates: [Candidate] = [
-            (title: "Doc",        bounds: rect(0, 0, 100, 100)),
+            (title: "Doc", bounds: rect(0, 0, 100, 100)),
             (title: "Doc - Extra", bounds: rect(0, 0, 100, 100)),
         ]
         XCTAssertEqual(
-            Activator.matchWindow(title: "Doc", bounds: rect(9, 9, 9, 9),
-                                  candidates: candidates),
+            Activator.matchWindow(
+                title: "Doc", bounds: rect(9, 9, 9, 9),
+                candidates: candidates),
             0)
     }
 
     /// Two candidates with identical titles → fall through to bounds.
     func testMultipleIdenticalTitlesFallsThroughToBoundsAndMatches() {
         let target = rect(100, 200, 800, 600)
-        let other  = rect(900, 200, 800, 600)
+        let other = rect(900, 200, 800, 600)
         let candidates: [Candidate] = [
             (title: "Untitled", bounds: other),
             (title: "Untitled", bounds: target),
@@ -104,7 +109,7 @@ final class ActivatorTests: XCTestCase {
     func testZeroTitleMatchesFallsThroughToBounds() {
         let target = rect(50, 50, 1280, 720)
         let candidates: [Candidate] = [
-            (title: "Safari",  bounds: target),
+            (title: "Safari", bounds: target),
             (title: "Preview", bounds: rect(0, 0, 400, 300)),
         ]
         // Title doesn't match any candidate; bounds match index 0.
@@ -119,8 +124,8 @@ final class ActivatorTests: XCTestCase {
     func testEmptyTitleSkipsTitleMatchAndUsesBounds() {
         let target = rect(10, 20, 640, 480)
         let candidates: [Candidate] = [
-            (title: "App",      bounds: rect(200, 200, 640, 480)),
-            (title: "App",      bounds: target),
+            (title: "App", bounds: rect(200, 200, 640, 480)),
+            (title: "App", bounds: target),
         ]
         let result = Activator.matchWindow(
             title: "", bounds: target, candidates: candidates)
@@ -203,7 +208,7 @@ final class ActivatorTests: XCTestCase {
     /// No candidate matches title or bounds → nil.
     func testNoCandidateMatchReturnsNil() {
         let candidates: [Candidate] = [
-            (title: "A", bounds: rect(0,   0,   100, 100)),
+            (title: "A", bounds: rect(0, 0, 100, 100)),
             (title: "B", bounds: rect(200, 200, 100, 100)),
         ]
         let result = Activator.matchWindow(
@@ -222,7 +227,7 @@ final class ActivatorTests: XCTestCase {
 
     /// Three candidates, two share the title; the one within bounds is chosen.
     func testBoundsDisambiguatesWhenTwoTitleMatchesBothCandidates() {
-        let target  = rect(100, 100, 800, 600)
+        let target = rect(100, 100, 800, 600)
         let farAway = rect(999, 999, 800, 600)
         let candidates: [Candidate] = [
             (title: "Doc", bounds: farAway),
@@ -238,7 +243,7 @@ final class ActivatorTests: XCTestCase {
     /// target bounds → ambiguous → nil (cannot pick one safely).
     func testAmbiguousBoundsMatchReturnsNil() {
         let b1 = rect(100, 100, 800, 600)
-        let b2 = rect(101, 100, 800, 600)   // within 2pt of b1 (and of target)
+        let b2 = rect(101, 100, 800, 600)  // within 2pt of b1 (and of target)
         let target = b1
         let candidates: [Candidate] = [
             (title: "Doc", bounds: b1),

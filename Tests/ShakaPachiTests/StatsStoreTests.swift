@@ -7,6 +7,7 @@
 // teardown so the filesystem stays clean.
 
 import XCTest
+
 @testable import ShakaPachi
 
 @MainActor
@@ -72,9 +73,11 @@ final class StatsStoreTests: XCTestCase {
         let tomorrow = date(year: 2026, month: 7, day: 21)
         store.recordSwitch(now: tomorrow)
 
-        XCTAssertEqual(store.todayCount, 1,
+        XCTAssertEqual(
+            store.todayCount, 1,
             "todayCount must reset to 1 after a calendar day change")
-        XCTAssertEqual(store.totalCount, 4,
+        XCTAssertEqual(
+            store.totalCount, 4,
             "totalCount must continue climbing across day boundaries")
     }
 
@@ -87,9 +90,11 @@ final class StatsStoreTests: XCTestCase {
 
         // Create a second instance backed by the same UserDefaults suite.
         let store2 = makeStore()
-        XCTAssertEqual(store2.todayCount, 2,
+        XCTAssertEqual(
+            store2.todayCount, 2,
             "todayCount must survive across a new StatsStore instance")
-        XCTAssertEqual(store2.totalCount, 2,
+        XCTAssertEqual(
+            store2.totalCount, 2,
             "totalCount must survive across a new StatsStore instance")
     }
 
@@ -155,7 +160,8 @@ final class StatsStoreTests: XCTestCase {
         XCTAssertEqual(store.todayCount, 0, "todayCount must be 0 after reset")
         XCTAssertTrue(store.dailyCounts.isEmpty, "dailyCounts must be empty after reset")
         let expectedFirstUse = StreakStats.stringFromDate(resetDay)
-        XCTAssertEqual(store.firstUseDate, expectedFirstUse,
+        XCTAssertEqual(
+            store.firstUseDate, expectedFirstUse,
             "firstUseDate must be set to the reset date")
     }
 
@@ -164,10 +170,10 @@ final class StatsStoreTests: XCTestCase {
     /// Build a Date in the local timezone for a specific calendar date.
     private func date(year: Int, month: Int, day: Int) -> Date {
         var comps = DateComponents()
-        comps.year  = year
+        comps.year = year
         comps.month = month
-        comps.day   = day
-        comps.hour  = 12   // Midday — avoids any edge case around midnight.
+        comps.day = day
+        comps.hour = 12  // Midday — avoids any edge case around midnight.
         comps.minute = 0
         comps.second = 0
         return Calendar.current.date(from: comps)!

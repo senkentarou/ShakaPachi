@@ -5,6 +5,7 @@
 //   - previewRect is centered and positioned correctly.
 
 import XCTest
+
 @testable import ShakaPachi
 
 final class SwitcherLayoutPreviewTests: XCTestCase {
@@ -13,22 +14,27 @@ final class SwitcherLayoutPreviewTests: XCTestCase {
 
     func testPanelHeight_withPreview_isBaseHeightPlusPreviewBlock() {
         let tile: CGFloat = SwitcherLayout.tileSize
-        let base = SwitcherLayout.panelSize(itemCount: 5, effectiveTile: tile,
-                                            previewEnabled: false)
-        let withPreview = SwitcherLayout.panelSize(itemCount: 5, effectiveTile: tile,
-                                                   previewEnabled: true)
+        let base = SwitcherLayout.panelSize(
+            itemCount: 5, effectiveTile: tile,
+            previewEnabled: false)
+        let withPreview = SwitcherLayout.panelSize(
+            itemCount: 5, effectiveTile: tile,
+            previewEnabled: true)
         let expectedExtra = SwitcherLayout.previewTopGap + SwitcherLayout.previewHeight
-        XCTAssertEqual(withPreview.height, base.height + expectedExtra,
-                       "Preview height must add previewTopGap + previewHeight")
+        XCTAssertEqual(
+            withPreview.height, base.height + expectedExtra,
+            "Preview height must add previewTopGap + previewHeight")
     }
 
     func testPanelWidth_withPreview_atLeastPreviewWidthPlusMargins() {
         // 1 tile is narrower than the preview pane — panel must widen.
         let tile = SwitcherLayout.tileSize
-        let withPreview = SwitcherLayout.panelSize(itemCount: 1, effectiveTile: tile,
-                                                   previewEnabled: true)
+        let withPreview = SwitcherLayout.panelSize(
+            itemCount: 1, effectiveTile: tile,
+            previewEnabled: true)
         let minPreviewWidth = SwitcherLayout.previewWidth + SwitcherLayout.horizontalMargin * 2
-        XCTAssertGreaterThanOrEqual(withPreview.width, minPreviewWidth,
+        XCTAssertGreaterThanOrEqual(
+            withPreview.width, minPreviewWidth,
             "Panel must be at least wide enough to show the preview pane")
     }
 
@@ -36,12 +42,15 @@ final class SwitcherLayoutPreviewTests: XCTestCase {
         // Many tiles produce a tile-row wider than the preview pane.
         let tile = SwitcherLayout.tileSize
         let many = 20
-        let withPreview = SwitcherLayout.panelSize(itemCount: many, effectiveTile: tile,
-                                                   previewEnabled: true)
-        let withoutPreview = SwitcherLayout.panelSize(itemCount: many, effectiveTile: tile,
-                                                      previewEnabled: false)
+        let withPreview = SwitcherLayout.panelSize(
+            itemCount: many, effectiveTile: tile,
+            previewEnabled: true)
+        let withoutPreview = SwitcherLayout.panelSize(
+            itemCount: many, effectiveTile: tile,
+            previewEnabled: false)
         // Width should be the tile-row width (already > preview), so unchanged.
-        XCTAssertEqual(withPreview.width, withoutPreview.width,
+        XCTAssertEqual(
+            withPreview.width, withoutPreview.width,
             "When tile row is wider than preview pane, width should not grow further")
     }
 
@@ -50,9 +59,11 @@ final class SwitcherLayoutPreviewTests: XCTestCase {
         let tile: CGFloat = SwitcherLayout.tileSize
         let count = 8
         let legacy = SwitcherLayout.panelSize(itemCount: count, effectiveTile: tile)
-        let explicit = SwitcherLayout.panelSize(itemCount: count, effectiveTile: tile,
-                                                previewEnabled: false)
-        XCTAssertEqual(legacy, explicit,
+        let explicit = SwitcherLayout.panelSize(
+            itemCount: count, effectiveTile: tile,
+            previewEnabled: false)
+        XCTAssertEqual(
+            legacy, explicit,
             "previewEnabled:false must be identical to the two-argument overload")
     }
 
@@ -61,30 +72,35 @@ final class SwitcherLayoutPreviewTests: XCTestCase {
     func testPreviewRect_isCenteredHorizontally() {
         let panelWidth: CGFloat = 480
         let tile = SwitcherLayout.tileSize
-        let rect = SwitcherLayout.previewRect(inBoundsWidth: panelWidth,
-                                              effectiveTile: tile)
+        let rect = SwitcherLayout.previewRect(
+            inBoundsWidth: panelWidth,
+            effectiveTile: tile)
         let expectedX = (panelWidth - SwitcherLayout.previewWidth) / 2
-        XCTAssertEqual(rect.origin.x, expectedX, accuracy: 0.001,
-                       "Preview pane must be centered horizontally")
+        XCTAssertEqual(
+            rect.origin.x, expectedX, accuracy: 0.001,
+            "Preview pane must be centered horizontally")
     }
 
     func testPreviewRect_hasCorrectSize() {
-        let rect = SwitcherLayout.previewRect(inBoundsWidth: 500,
-                                              effectiveTile: SwitcherLayout.tileSize)
-        XCTAssertEqual(rect.width,  SwitcherLayout.previewWidth)
+        let rect = SwitcherLayout.previewRect(
+            inBoundsWidth: 500,
+            effectiveTile: SwitcherLayout.tileSize)
+        XCTAssertEqual(rect.width, SwitcherLayout.previewWidth)
         XCTAssertEqual(rect.height, SwitcherLayout.previewHeight)
     }
 
     func testPreviewRect_topIsJustBelowTitleLine() {
         let tile = SwitcherLayout.tileSize
         let rect = SwitcherLayout.previewRect(inBoundsWidth: 500, effectiveTile: tile)
-        let expectedY = SwitcherLayout.topPadding
-                      + tile
-                      + SwitcherLayout.titleGap
-                      + SwitcherLayout.titleHeight
-                      + SwitcherLayout.previewTopGap
-        XCTAssertEqual(rect.origin.y, expectedY, accuracy: 0.001,
-                       "Preview top must be exactly titleLine.maxY + previewTopGap")
+        let expectedY =
+            SwitcherLayout.topPadding
+            + tile
+            + SwitcherLayout.titleGap
+            + SwitcherLayout.titleHeight
+            + SwitcherLayout.previewTopGap
+        XCTAssertEqual(
+            rect.origin.y, expectedY, accuracy: 0.001,
+            "Preview top must be exactly titleLine.maxY + previewTopGap")
     }
 
     // MARK: - Backward compatibility (one-argument panelSize unchanged)
@@ -93,12 +109,14 @@ final class SwitcherLayoutPreviewTests: XCTestCase {
         // The one-argument overload (no effectiveTile, no previewEnabled) must
         // remain identical to what it was before the preview feature was added.
         let size = SwitcherLayout.panelSize(itemCount: 3)
-        let expected = SwitcherLayout.topPadding
-                     + SwitcherLayout.tileSize
-                     + SwitcherLayout.titleGap
-                     + SwitcherLayout.titleHeight
-                     + SwitcherLayout.bottomPadding
-        XCTAssertEqual(size.height, expected,
+        let expected =
+            SwitcherLayout.topPadding
+            + SwitcherLayout.tileSize
+            + SwitcherLayout.titleGap
+            + SwitcherLayout.titleHeight
+            + SwitcherLayout.bottomPadding
+        XCTAssertEqual(
+            size.height, expected,
             "One-argument panelSize must not include preview height")
     }
 }

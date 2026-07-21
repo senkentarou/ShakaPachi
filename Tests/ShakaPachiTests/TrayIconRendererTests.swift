@@ -1,5 +1,6 @@
-import XCTest
 import AppKit
+import XCTest
+
 @testable import ShakaPachi
 
 final class TrayIconRendererTests: XCTestCase {
@@ -27,7 +28,8 @@ final class TrayIconRendererTests: XCTestCase {
 
     func testRestrictedDetailContainsResolutionHint() {
         let detail = TrayIconState.restricted.detail
-        XCTAssertTrue(detail.contains("ウィンドウ切替を有効化"), "Restricted detail must include enable-switch menu action for resolution")
+        XCTAssertTrue(
+            detail.contains("ウィンドウ切替を有効化"), "Restricted detail must include enable-switch menu action for resolution")
     }
 
     func testPreviewImageHasRequestedSize() {
@@ -42,7 +44,8 @@ final class TrayIconRendererTests: XCTestCase {
         // see-through outline because .labelColor did not resolve offscreen.
         let img = TrayIconRenderer.previewImage(for: .normal, size: 32)
         guard let tiff = img.tiffRepresentation,
-              let rep = NSBitmapImageRep(data: tiff) else {
+            let rep = NSBitmapImageRep(data: tiff)
+        else {
             return XCTFail("could not rasterise preview")
         }
         let color = rep.colorAt(x: rep.pixelsWide / 2, y: rep.pixelsHigh / 2)

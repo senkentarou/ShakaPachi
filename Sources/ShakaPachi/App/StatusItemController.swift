@@ -83,7 +83,8 @@ final class StatusItemController {
             } else if allGranted && inMenu {
                 let idx = menu.index(of: permItem)
                 if idx + 1 < menu.numberOfItems,
-                   menu.item(at: idx + 1)?.isSeparatorItem == true {
+                    menu.item(at: idx + 1)?.isSeparatorItem == true
+                {
                     menu.removeItem(at: idx + 1)
                 }
                 menu.removeItem(permItem)
@@ -112,7 +113,9 @@ final class StatusItemController {
             tooltip = NSLocalizedString("ShakaPachi — 権限が不足しています", comment: "Tooltip: missing permissions")
         } else if !tapEnabled {
             state = .restricted
-            tooltip = NSLocalizedString("ShakaPachi — 停止中", comment: "Tooltip: tap is paused") + (tapStopReason.map { " (\($0))" } ?? "")
+            tooltip =
+                NSLocalizedString("ShakaPachi — 停止中", comment: "Tooltip: tap is paused")
+                + (tapStopReason.map { " (\($0))" } ?? "")
         } else if settingsOpen {
             state = .settings
             tooltip = NSLocalizedString("ShakaPachi — 設定を開いています", comment: "Tooltip: settings window is open")
@@ -193,7 +196,8 @@ final class StatusItemController {
     /// The verb title conveys the state, so no check mark is used — a check next to
     /// an action verb ("Close settings ✓") reads as if the action were already applied.
     private func refreshSettingsMenuItem() {
-        settingsMenuItem?.title = settingsOpen
+        settingsMenuItem?.title =
+            settingsOpen
             ? NSLocalizedString("設定を閉じる", comment: "Menu item: close settings")
             : NSLocalizedString("設定…", comment: "Menu item: open settings")
         settingsMenuItem?.state = .off
@@ -209,9 +213,11 @@ final class StatusItemController {
     private func refreshToggleItem() {
         let allGranted = permissionManager.allPermissionsGranted()
         if tapEnabled {
-            toggleItem?.title = NSLocalizedString("ウィンドウ切替を一時的に無効化", comment: "Menu item: temporarily disable window switching")
+            toggleItem?.title = NSLocalizedString(
+                "ウィンドウ切替を一時的に無効化", comment: "Menu item: temporarily disable window switching")
         } else if allGranted {
-            toggleItem?.title = NSLocalizedString("⚠ ウィンドウ切替を有効化", comment: "Menu item: enable window switching (needs attention)")
+            toggleItem?.title = NSLocalizedString(
+                "⚠ ウィンドウ切替を有効化", comment: "Menu item: enable window switching (needs attention)")
         } else {
             toggleItem?.title = NSLocalizedString("ウィンドウ切替を有効化", comment: "Menu item: enable window switching")
         }

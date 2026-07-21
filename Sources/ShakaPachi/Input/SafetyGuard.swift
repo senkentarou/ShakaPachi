@@ -38,10 +38,10 @@ enum KeyCode {
     static let escape: UInt16 = 53
     static let tab: UInt16 = 48
     // Arrow keys (US ANSI layout, same across all keyboard types).
-    static let leftArrow: UInt16  = 123
+    static let leftArrow: UInt16 = 123
     static let rightArrow: UInt16 = 124
-    static let downArrow: UInt16  = 125
-    static let upArrow: UInt16    = 126
+    static let downArrow: UInt16 = 125
+    static let upArrow: UInt16 = 126
     // Grave accent / backtick (`~) — used for same-app jump (§6.2).
     static let grave: UInt16 = 50
 }
@@ -50,11 +50,11 @@ enum KeyCode {
 
 enum ModifierFlag: UInt64 {
     /// kCGEventFlagMaskControl (0x40000)
-    case control  = 0x0000000000040000
+    case control = 0x0000000000040000
     /// kCGEventFlagMaskAlternate / Option (0x80000)
-    case option   = 0x0000000000080000
+    case option = 0x0000000000080000
     /// kCGEventFlagMaskCommand (0x100000)
-    case command  = 0x0000000000100000
+    case command = 0x0000000000100000
 }
 
 // MARK: - Tap event types (for §4.4 auto-recovery mapping)
@@ -104,9 +104,10 @@ enum SafetyGuard {
         guard event.eventType == .keyDown, event.keyCode == KeyCode.escape else {
             return false
         }
-        let required: UInt64 = ModifierFlag.control.rawValue
-                             | ModifierFlag.option.rawValue
-                             | ModifierFlag.command.rawValue
+        let required: UInt64 =
+            ModifierFlag.control.rawValue
+            | ModifierFlag.option.rawValue
+            | ModifierFlag.command.rawValue
         // All three modifier bits must be set; no extra modifier check needed.
         return (event.modifierFlags & required) == required
     }
@@ -166,78 +167,79 @@ enum SafetyGuard {
 
 #if DEBUG
 
-/// Injectable clock protocol so tests can control time without sleeping.
-protocol Clock: Sendable {
-    /// Returns the current time as seconds since some epoch (monotonic).
-    func now() -> TimeInterval
-}
+    /// Injectable clock protocol so tests can control time without sleeping.
+    protocol Clock: Sendable {
+        /// Returns the current time as seconds since some epoch (monotonic).
+        func now() -> TimeInterval
+    }
 
-/// Production clock: uses CFAbsoluteTimeGetCurrent for a monotonic wall-clock.
-struct SystemClock: Clock {
-    init() {}
-    func now() -> TimeInterval { CFAbsoluteTimeGetCurrent() }
-}
+    /// Production clock: uses CFAbsoluteTimeGetCurrent for a monotonic wall-clock.
+    struct SystemClock: Clock {
+        init() {}
+        func now() -> TimeInterval { CFAbsoluteTimeGetCurrent() }
+    }
 
-/// Deadman switch that fires a handler after N seconds of inactivity.
-///
-/// The switch is configured via the `SHAKAPACHI_DEADMAN_SEC` environment variable
-/// (default 60 seconds; set to "0" to disable).
-///
-/// The handler is a closure; the actual tap-disable call is injected at
-/// Step 5 so this type remains AppKit-free and unit-testable.
-// @unchecked Sendable: all mutable state (timer) is accessed exclusively on `queue`.
-final class DeadmanSwitch: @unchecked Sendable {
+    /// Deadman switch that fires a handler after N seconds of inactivity.
+    ///
+    /// The switch is configured via the `SHAKAPACHI_DEADMAN_SEC` environment variable
+    /// (default 60 seconds; set to "0" to disable).
+    ///
+    /// The handler is a closure; the actual tap-disable call is injected at
+    /// Step 5 so this type remains AppKit-free and unit-testable.
+    // @unchecked Sendable: all mutable state (timer) is accessed exclusively on `queue`.
+    final class DeadmanSwitch: @unchecked Sendable {
 
-    /// Seconds until the deadman fires. Reads SHAKAPACHI_DEADMAN_SEC; defaults to 60.
-    static func configuredTimeout() -> TimeInterval {
-        if let raw = ProcessInfo.processInfo.environment["SHAKAPACHI_DEADMAN_SEC"],
-           let secs = TimeInterval(raw) {
-            return secs
+        /// Seconds until the deadman fires. Reads SHAKAPACHI_DEADMAN_SEC; defaults to 60.
+        static func configuredTimeout() -> TimeInterval {
+            if let raw = ProcessInfo.processInfo.environment["SHAKAPACHI_DEADMAN_SEC"],
+                let secs = TimeInterval(raw)
+            {
+                return secs
+            }
+            return 60
         }
-        return 60
-    }
 
-    private let timeoutSeconds: TimeInterval
-    private let clock: any Clock
-    private let handler: @Sendable () -> Void
-    private var timer: DispatchSourceTimer?
-    private let queue = DispatchQueue(label: "com.senkentarou.shakapachi.deadman")
+        private let timeoutSeconds: TimeInterval
+        private let clock: any Clock
+        private let handler: @Sendable () -> Void
+        private var timer: DispatchSourceTimer?
+        private let queue = DispatchQueue(label: "com.senkentarou.shakapachi.deadman")
 
-    /// - Parameters:
-    ///   - timeout: Seconds until the handler fires. Pass 0 to disable.
-    ///   - clock: Injectable clock for testing.
-    ///   - handler: Called when the deadman fires. Must be fast (no blocking).
-    init(
-        timeout: TimeInterval = DeadmanSwitch.configuredTimeout(),
-        clock: any Clock = SystemClock(),
-        handler: @escaping @Sendable () -> Void
-    ) {
-        self.timeoutSeconds = timeout
-        self.clock = clock
-        self.handler = handler
-    }
-
-    /// Arm the deadman switch. No-op if timeout is 0.
-    func arm() {
-        guard timeoutSeconds > 0 else { return }
-        let t = DispatchSource.makeTimerSource(queue: queue)
-        t.schedule(deadline: .now() + timeoutSeconds)
-        t.setEventHandler { [weak self] in
-            self?.handler()
-            self?.timer?.cancel()
-            self?.timer = nil
+        /// - Parameters:
+        ///   - timeout: Seconds until the handler fires. Pass 0 to disable.
+        ///   - clock: Injectable clock for testing.
+        ///   - handler: Called when the deadman fires. Must be fast (no blocking).
+        init(
+            timeout: TimeInterval = DeadmanSwitch.configuredTimeout(),
+            clock: any Clock = SystemClock(),
+            handler: @escaping @Sendable () -> Void
+        ) {
+            self.timeoutSeconds = timeout
+            self.clock = clock
+            self.handler = handler
         }
-        t.resume()
-        timer = t
+
+        /// Arm the deadman switch. No-op if timeout is 0.
+        func arm() {
+            guard timeoutSeconds > 0 else { return }
+            let t = DispatchSource.makeTimerSource(queue: queue)
+            t.schedule(deadline: .now() + timeoutSeconds)
+            t.setEventHandler { [weak self] in
+                self?.handler()
+                self?.timer?.cancel()
+                self?.timer = nil
+            }
+            t.resume()
+            timer = t
+        }
+
+        /// Cancel the deadman switch (e.g. on clean shutdown).
+        func disarm() {
+            timer?.cancel()
+            timer = nil
+        }
+
+        deinit { disarm() }
     }
 
-    /// Cancel the deadman switch (e.g. on clean shutdown).
-    func disarm() {
-        timer?.cancel()
-        timer = nil
-    }
-
-    deinit { disarm() }
-}
-
-#endif // DEBUG
+#endif  // DEBUG

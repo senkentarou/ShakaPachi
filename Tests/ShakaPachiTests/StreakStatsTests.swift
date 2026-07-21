@@ -4,6 +4,7 @@
 // longestStreak finds the longest consecutive run.
 
 import XCTest
+
 @testable import ShakaPachi
 
 final class StreakStatsTests: XCTestCase {
@@ -121,8 +122,8 @@ final class StreakStatsTests: XCTestCase {
     func testLongestStreak_gapSelectsLongerRun() {
         // Run1: 7/1–7/3 = 3 days. Gap at 7/4. Run2: 7/5–7/9 = 5 days.
         var days: Set<String> = []
-        for d in 1...3  { days.insert(dateStr(2026, 7, d)) }
-        for d in 5...9  { days.insert(dateStr(2026, 7, d)) }
+        for d in 1...3 { days.insert(dateStr(2026, 7, d)) }
+        for d in 5...9 { days.insert(dateStr(2026, 7, d)) }
         XCTAssertEqual(StreakStats.longestStreak(activeDays: days), 5)
     }
 
@@ -136,7 +137,9 @@ final class StreakStatsTests: XCTestCase {
 
     private func dateStr(_ year: Int, _ month: Int, _ day: Int) -> String {
         var c = DateComponents()
-        c.year = year; c.month = month; c.day = day
+        c.year = year
+        c.month = month
+        c.day = day
         c.hour = 12
         let d = Calendar.current.date(from: c)!
         return StreakStats.stringFromDate(d)

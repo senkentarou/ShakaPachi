@@ -93,7 +93,7 @@ final class SwitcherPanel {
             NSColor.clear.cgColor,
         ]
         sheen.locations = [0.0, 0.4, 0.75]
-        sheen.startPoint = CGPoint(x: 0.5, y: 1.0)   // layer coords: y=1 is the top
+        sheen.startPoint = CGPoint(x: 0.5, y: 1.0)  // layer coords: y=1 is the top
         sheen.endPoint = CGPoint(x: 0.5, y: 0.0)
         sheen.cornerRadius = Self.cornerRadius
         sheen.masksToBounds = true
@@ -167,10 +167,11 @@ final class SwitcherPanel {
 
         let effectiveTile = SwitcherLayout.effectiveTileSize(
             itemCount: items.count, availableWidth: availableWidth)
-        repositionPanel(itemCount: items.count,
-                        effectiveTile: effectiveTile,
-                        screenFrame: screenFrame,
-                        previewEnabled: previewEnabled)
+        repositionPanel(
+            itemCount: items.count,
+            effectiveTile: effectiveTile,
+            screenFrame: screenFrame,
+            previewEnabled: previewEnabled)
         panel.orderFrontRegardless()
     }
 
@@ -196,19 +197,23 @@ final class SwitcherPanel {
     /// falling back to the main screen and finally a sane default.
     private func targetScreenFrame() -> NSRect {
         let mouseLocation = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { $0.frame.contains(mouseLocation) }
-                     ?? NSScreen.main
-                     ?? NSScreen.screens.first
+        let screen =
+            NSScreen.screens.first { $0.frame.contains(mouseLocation) }
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
         return screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
     }
 
-    private func repositionPanel(itemCount: Int,
-                                 effectiveTile: CGFloat,
-                                 screenFrame: NSRect,
-                                 previewEnabled: Bool = false) {
-        let size = SwitcherLayout.panelSize(itemCount: itemCount,
-                                            effectiveTile: effectiveTile,
-                                            previewEnabled: previewEnabled)
+    private func repositionPanel(
+        itemCount: Int,
+        effectiveTile: CGFloat,
+        screenFrame: NSRect,
+        previewEnabled: Bool = false
+    ) {
+        let size = SwitcherLayout.panelSize(
+            itemCount: itemCount,
+            effectiveTile: effectiveTile,
+            previewEnabled: previewEnabled)
         // Tiles are shrunk to fit; if the count is so large they hit the 40pt
         // floor, the panel is still capped to the screen and the overflow
         // clips at the panel edge (acceptable, rare — §16 edge case).
@@ -239,8 +244,9 @@ final class SwitcherPanel {
             NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
             return true
         }
-        image.capInsets = NSEdgeInsets(top: radius, left: radius,
-                                       bottom: radius, right: radius)
+        image.capInsets = NSEdgeInsets(
+            top: radius, left: radius,
+            bottom: radius, right: radius)
         image.resizingMode = .stretch
         return image
     }

@@ -52,7 +52,8 @@ enum StreakStats {
             startDate = todayDate
         } else {
             guard let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: todayDate),
-                  activeDays.contains(stringFromDate(yesterday)) else { return 0 }
+                activeDays.contains(stringFromDate(yesterday))
+            else { return 0 }
             startDate = yesterday
         }
 
@@ -84,7 +85,7 @@ enum StreakStats {
         guard !dayNumbers.isEmpty else { return 0 }
         var longest = 1
         var current = 1
-        for i in 1 ..< dayNumbers.count {
+        for i in 1..<dayNumbers.count {
             if dayNumbers[i] == dayNumbers[i - 1] + 1 {
                 current += 1
                 longest = max(longest, current)

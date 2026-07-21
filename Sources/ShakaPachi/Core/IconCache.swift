@@ -66,7 +66,8 @@ final class IconCache {
     /// generic application bundle icon provided by NSWorkspace.
     private func resolveIcon(for pid: pid_t) -> NSImage {
         if let app = NSRunningApplication(processIdentifier: pid),
-           let icon = app.icon {
+            let icon = app.icon
+        {
             return icon
         }
         // Fallback: generic app icon that NSWorkspace provides for any .app bundle.
@@ -93,8 +94,10 @@ final class IconCache {
     // MARK: - Eviction
 
     @objc private func appDidTerminate(_ notification: Notification) {
-        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey]
-                        as? NSRunningApplication else { return }
+        guard
+            let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey]
+                as? NSRunningApplication
+        else { return }
         // Remove by bundleID if present, and also by pid-keyed entry.
         if let bid = app.bundleIdentifier {
             cache.removeValue(forKey: bid)

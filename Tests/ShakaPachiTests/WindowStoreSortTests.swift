@@ -2,8 +2,9 @@
 // Verifies WindowStore.sortedByApp (byApp sort mode) and the zOrder passthrough.
 // All tests use static pure functions — no TCC, no CGWindowList.
 
-import XCTest
 import CoreGraphics
+import XCTest
+
 @testable import ShakaPachi
 
 final class WindowStoreSortTests: XCTestCase {
@@ -44,14 +45,15 @@ final class WindowStoreSortTests: XCTestCase {
         // Two Safari windows and one Finder window: Safari, Finder, Safari.
         // byApp should group them: both Safaris together (in their original
         // relative order), then Finder.
-        let s1 = makeWindow(id: 1, pid: 101, bundleID: "com.apple.safari",  appName: "Safari", title: "Safari 1")
-        let fi = makeWindow(id: 2, pid: 102, bundleID: "com.apple.finder",  appName: "Finder", title: "Finder")
-        let s2 = makeWindow(id: 3, pid: 101, bundleID: "com.apple.safari",  appName: "Safari", title: "Safari 2")
+        let s1 = makeWindow(id: 1, pid: 101, bundleID: "com.apple.safari", appName: "Safari", title: "Safari 1")
+        let fi = makeWindow(id: 2, pid: 102, bundleID: "com.apple.finder", appName: "Finder", title: "Finder")
+        let s2 = makeWindow(id: 3, pid: 101, bundleID: "com.apple.safari", appName: "Safari", title: "Safari 2")
 
         let result = WindowStore.sortedByApp(windows: [s1, fi, s2])
         // Safari appears first (first-seen), so its two windows lead.
         // Finder comes after (second first-appearance).
-        XCTAssertEqual(result.map { $0.windowID }, [1, 3, 2],
+        XCTAssertEqual(
+            result.map { $0.windowID }, [1, 3, 2],
             "Expected Safari 1, Safari 2, Finder — byApp groups same-bundle windows")
     }
 
@@ -101,17 +103,20 @@ final class WindowStoreSortTests: XCTestCase {
         // zOrder: pass the list through as-is (no sort).
         // We verify that the zOrder path does NOT group by app:
         let zOrderResult = [w1, w2, w3]  // unchanged — this is what enumerate returns for .zOrder
-        XCTAssertEqual(zOrderResult.map { $0.windowID }, [10, 20, 30],
+        XCTAssertEqual(
+            zOrderResult.map { $0.windowID }, [10, 20, 30],
             "zOrder must preserve CGWindowList order without grouping")
 
         // byApp: groups same-app windows together.
         let byAppResult = WindowStore.sortedByApp(windows: [w1, w2, w3])
-        XCTAssertEqual(byAppResult.map { $0.windowID }, [10, 30, 20],
+        XCTAssertEqual(
+            byAppResult.map { $0.windowID }, [10, 30, 20],
             "byApp must group app 'A' windows together before app 'B'")
 
         // Verify zOrder and byApp give different results when apps are interleaved.
-        XCTAssertNotEqual(zOrderResult.map { $0.windowID },
-                          byAppResult.map  { $0.windowID })
+        XCTAssertNotEqual(
+            zOrderResult.map { $0.windowID },
+            byAppResult.map { $0.windowID })
     }
 
     // MARK: - sortedByApp is nonisolated (pure function property)

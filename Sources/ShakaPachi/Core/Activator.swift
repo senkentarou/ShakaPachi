@@ -63,10 +63,12 @@ final class Activator {
         let attrResult = AXUIElementCopyAttributeValue(
             appElement, kAXWindowsAttribute as CFString, &rawValue)
         guard attrResult == .success,
-              let axWindows = rawValue as? [AXUIElement],
-              !axWindows.isEmpty else {
-            NSLog("[ShakaPachi] Activate: fallback – app activate only " +
-                  "(failed to read kAXWindowsAttribute, pid %d)", pid)
+            let axWindows = rawValue as? [AXUIElement],
+            !axWindows.isEmpty
+        else {
+            NSLog(
+                "[ShakaPachi] Activate: fallback – app activate only " + "(failed to read kAXWindowsAttribute, pid %d)",
+                pid)
             return
         }
 
@@ -79,7 +81,8 @@ final class Activator {
         for axWin in axWindows {
             var axWinID: CGWindowID = 0
             if _AXUIElementGetWindow(axWin, &axWinID) == .success,
-               axWinID == window.windowID {
+                axWinID == window.windowID
+            {
                 targetWin = axWin
                 break
             }
@@ -106,16 +109,16 @@ final class Activator {
 
         guard let targetWin else {
             // Step 5c fallback (§9.2): app activation already done in step 1.
-            NSLog("[ShakaPachi] Activate: fallback – app activate only " +
-                  "(ambiguous or no match, pid %d)", pid)
+            NSLog("[ShakaPachi] Activate: fallback – app activate only " + "(ambiguous or no match, pid %d)", pid)
             return
         }
 
         // Step 5 (§9.1): raise and make main.
         AXUIElementPerformAction(targetWin, kAXRaiseAction as CFString)
-        AXUIElementSetAttributeValue(targetWin,
-                                     kAXMainAttribute as CFString,
-                                     kCFBooleanTrue)
+        AXUIElementSetAttributeValue(
+            targetWin,
+            kAXMainAttribute as CFString,
+            kCFBooleanTrue)
 
         NSLog("[ShakaPachi] Activate: raised window by %@ (pid %d)", matchStrategy, pid)
     }
@@ -157,10 +160,8 @@ final class Activator {
         let tolerance: CGFloat = 2.0
         func boundsMatches(_ i: Int) -> Bool {
             let c = candidates[i].bounds
-            return abs(c.origin.x - bounds.origin.x) <= tolerance &&
-                   abs(c.origin.y - bounds.origin.y) <= tolerance &&
-                   abs(c.width    - bounds.width)    <= tolerance &&
-                   abs(c.height   - bounds.height)   <= tolerance
+            return abs(c.origin.x - bounds.origin.x) <= tolerance && abs(c.origin.y - bounds.origin.y) <= tolerance
+                && abs(c.width - bounds.width) <= tolerance && abs(c.height - bounds.height) <= tolerance
         }
 
         if !title.isEmpty {
@@ -200,9 +201,11 @@ final class Activator {
     /// Read `kAXTitleAttribute` from an AX window element, returning "" on failure.
     private func axTitle(of element: AXUIElement) -> String {
         var raw: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(
-            element, kAXTitleAttribute as CFString, &raw) == .success,
-              let title = raw as? String else {
+        guard
+            AXUIElementCopyAttributeValue(
+                element, kAXTitleAttribute as CFString, &raw) == .success,
+            let title = raw as? String
+        else {
             return ""
         }
         return title
@@ -216,15 +219,18 @@ final class Activator {
         var posRaw: CFTypeRef?
         var sizeRaw: CFTypeRef?
 
-        guard AXUIElementCopyAttributeValue(
-            element, kAXPositionAttribute as CFString, &posRaw) == .success,
-              AXUIElementCopyAttributeValue(
-                  element, kAXSizeAttribute as CFString, &sizeRaw) == .success else {
+        guard
+            AXUIElementCopyAttributeValue(
+                element, kAXPositionAttribute as CFString, &posRaw) == .success,
+            AXUIElementCopyAttributeValue(
+                element, kAXSizeAttribute as CFString, &sizeRaw) == .success
+        else {
             return .zero
         }
 
         guard let posValue = posRaw,
-              let sizeValue = sizeRaw else {
+            let sizeValue = sizeRaw
+        else {
             return .zero
         }
 
@@ -240,7 +246,8 @@ final class Activator {
         // candidate fail the bounds match (title match / app-only fallback still
         // apply).
         guard CFGetTypeID(posValue) == AXValueGetTypeID(),
-              CFGetTypeID(sizeValue) == AXValueGetTypeID() else {
+            CFGetTypeID(sizeValue) == AXValueGetTypeID()
+        else {
             return .zero
         }
         let posAX = posValue as! AXValue

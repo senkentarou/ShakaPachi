@@ -79,12 +79,13 @@ enum SwitcherLayout {
         guard itemCount > 0 else { return tileSize }
         let natural = panelSize(itemCount: itemCount).width
         if natural <= availableWidth {
-            return tileSize   // fits at full size — no shrink needed
+            return tileSize  // fits at full size — no shrink needed
         }
         // Largest t such that: margin*2 + count*t + (count-1)*spacing ≤ availableWidth
         //   t ≤ (availableWidth - margin*2 - (count-1)*spacing) / count
-        let usable = availableWidth - horizontalMargin * 2
-                     - CGFloat(itemCount - 1) * tileSpacing
+        let usable =
+            availableWidth - horizontalMargin * 2
+            - CGFloat(itemCount - 1) * tileSpacing
         let fitted = usable / CGFloat(itemCount)
         return max(fitted, minTileSize)
     }
@@ -92,7 +93,7 @@ enum SwitcherLayout {
     /// Icon inset inside a tile of the given effective size (keeps same visual
     /// proportion as the nominal 76pt tile / 60pt icon).
     static func effectiveIconSize(for effectiveTile: CGFloat) -> CGFloat {
-        let ratio = iconSize / tileSize   // 60/76 ≈ 0.789
+        let ratio = iconSize / tileSize  // 60/76 ≈ 0.789
         return effectiveTile * ratio
     }
 
@@ -100,9 +101,10 @@ enum SwitcherLayout {
     /// Use `panelSize(itemCount:effectiveTile:)` when shrinking is active.
     static func panelSize(itemCount: Int) -> NSSize {
         let count = max(itemCount, 1)
-        let width = horizontalMargin * 2
-                  + CGFloat(count) * tileSize
-                  + CGFloat(count - 1) * tileSpacing
+        let width =
+            horizontalMargin * 2
+            + CGFloat(count) * tileSize
+            + CGFloat(count - 1) * tileSpacing
         let height = topPadding + tileSize + titleGap + titleHeight + bottomPadding
         return NSSize(width: width, height: height)
     }
@@ -123,18 +125,21 @@ enum SwitcherLayout {
     ///
     /// The two-argument overload without `previewEnabled` forwards here with
     /// `false` so all existing callers and tests remain source-compatible.
-    static func panelSize(itemCount: Int,
-                                 effectiveTile: CGFloat,
-                                 previewEnabled: Bool) -> NSSize {
+    static func panelSize(
+        itemCount: Int,
+        effectiveTile: CGFloat,
+        previewEnabled: Bool
+    ) -> NSSize {
         let count = max(itemCount, 1)
-        let tileRowWidth = horizontalMargin * 2
-                         + CGFloat(count) * effectiveTile
-                         + CGFloat(count - 1) * tileSpacing
+        let tileRowWidth =
+            horizontalMargin * 2
+            + CGFloat(count) * effectiveTile
+            + CGFloat(count - 1) * tileSpacing
         let baseHeight = topPadding + effectiveTile + titleGap + titleHeight + bottomPadding
         if previewEnabled {
             let minPreviewPanelWidth = previewWidth + horizontalMargin * 2
             return NSSize(
-                width:  max(tileRowWidth, minPreviewPanelWidth),
+                width: max(tileRowWidth, minPreviewPanelWidth),
                 height: baseHeight + previewTopGap + previewHeight
             )
         }
@@ -147,8 +152,10 @@ enum SwitcherLayout {
     /// - Parameters:
     ///   - width: The total panel width (used to center the pane horizontally).
     ///   - effectiveTile: The effective tile edge currently in use.
-    static func previewRect(inBoundsWidth width: CGFloat,
-                                   effectiveTile: CGFloat) -> NSRect {
+    static func previewRect(
+        inBoundsWidth width: CGFloat,
+        effectiveTile: CGFloat
+    ) -> NSRect {
         let x = (width - previewWidth) / 2
         let y = topPadding + effectiveTile + titleGap + titleHeight + previewTopGap
         return NSRect(x: x, y: y, width: previewWidth, height: previewHeight)
@@ -244,9 +251,12 @@ final class SwitcherListView: NSView {
 
         selectedIndex = new
         for index in SwitcherLayout.indicesToRedraw(old: old, new: new) {
-            setNeedsDisplay(SwitcherLayout.tileRect(index: index,
-                                                    effectiveTile: effectiveTile)
-                            .insetBy(dx: -2, dy: -2))
+            setNeedsDisplay(
+                SwitcherLayout.tileRect(
+                    index: index,
+                    effectiveTile: effectiveTile
+                )
+                .insetBy(dx: -2, dy: -2))
         }
         setNeedsDisplay(titleRect)
         if previewEnabled {
@@ -288,7 +298,7 @@ final class SwitcherListView: NSView {
         if titleRect.intersects(dirtyRect), items.indices.contains(selectedIndex) {
             let paragraph = NSMutableParagraphStyle()
             paragraph.alignment = .center
-            paragraph.lineBreakMode = .byTruncatingMiddle   // §7.4 middle truncation
+            paragraph.lineBreakMode = .byTruncatingMiddle  // §7.4 middle truncation
             let attributes: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: 13),
                 .foregroundColor: NSColor.labelColor,
@@ -302,8 +312,9 @@ final class SwitcherListView: NSView {
         // draw() is kept pure/fast: only reads from the cache dict, never triggers
         // a capture (that happens in requestPreviews, called from setItems/moveSelection).
         if previewEnabled,
-           previewRect.intersects(dirtyRect),
-           items.indices.contains(selectedIndex) {
+            previewRect.intersects(dirtyRect),
+            items.indices.contains(selectedIndex)
+        {
             drawPreview(in: previewRect, for: items[selectedIndex])
         }
     }
@@ -365,8 +376,9 @@ final class SwitcherListView: NSView {
     /// centered on both axes.
     private func aspectFitRect(imageSize: NSSize, inRect container: NSRect) -> NSRect {
         guard imageSize.width > 0, imageSize.height > 0 else { return container }
-        let scale = min(container.width / imageSize.width,
-                        container.height / imageSize.height)
+        let scale = min(
+            container.width / imageSize.width,
+            container.height / imageSize.height)
         let fitW = imageSize.width * scale
         let fitH = imageSize.height * scale
         return NSRect(
@@ -383,7 +395,8 @@ final class SwitcherListView: NSView {
     /// Invalidates only the preview rect so a full tile-row redraw is avoided.
     func previewDidArrive(for id: CGWindowID) {
         guard items.indices.contains(selectedIndex),
-              items[selectedIndex].windowID == id else { return }
+            items[selectedIndex].windowID == id
+        else { return }
         setNeedsDisplay(previewRect)
     }
 

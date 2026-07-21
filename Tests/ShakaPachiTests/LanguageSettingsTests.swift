@@ -3,6 +3,7 @@
 // and that Settings.appLanguage writes/removes AppleLanguages in UserDefaults.
 
 import XCTest
+
 @testable import ShakaPachi
 
 @MainActor
@@ -30,8 +31,9 @@ final class LanguageSettingsTests: XCTestCase {
     // MARK: - appleLanguagesValue
 
     func testAppleLanguagesValue_system_isNil() {
-        XCTAssertNil(AppLanguage.system.appleLanguagesValue,
-                     ".system must return nil (removes the override)")
+        XCTAssertNil(
+            AppLanguage.system.appleLanguagesValue,
+            ".system must return nil (removes the override)")
     }
 
     func testAppleLanguagesValue_japanese_isJa() {
@@ -46,8 +48,9 @@ final class LanguageSettingsTests: XCTestCase {
 
     func testAllCases_displayNameNonEmpty() {
         for lang in AppLanguage.allCases {
-            XCTAssertFalse(lang.displayName.isEmpty,
-                           "displayName for .\(lang) must not be empty")
+            XCTAssertFalse(
+                lang.displayName.isEmpty,
+                "displayName for .\(lang) must not be empty")
         }
     }
 
@@ -70,10 +73,11 @@ final class LanguageSettingsTests: XCTestCase {
         // system-level AppleLanguages key), so we must inspect the suite's own
         // persistent domain to confirm the key was actually removed from it.
         let (suite, suiteName, s) = makeSuite()
-        s.appLanguage = .english    // write into this suite's domain
-        s.appLanguage = .system     // remove from this suite's domain
-        XCTAssertTrue(keyAbsentInSuite("AppleLanguages", suite: suite, suiteName: suiteName),
-                      "Setting .system must remove AppleLanguages from the suite's own domain")
+        s.appLanguage = .english  // write into this suite's domain
+        s.appLanguage = .system  // remove from this suite's domain
+        XCTAssertTrue(
+            keyAbsentInSuite("AppleLanguages", suite: suite, suiteName: suiteName),
+            "Setting .system must remove AppleLanguages from the suite's own domain")
     }
 
     func testRoundTrip_allLanguages() {
@@ -84,16 +88,18 @@ final class LanguageSettingsTests: XCTestCase {
         XCTAssertEqual(suite.stringArray(forKey: "AppleLanguages"), ["ja"])
         // After reverting to .system the suite's own domain no longer has the key.
         s.appLanguage = .system
-        XCTAssertTrue(keyAbsentInSuite("AppleLanguages", suite: suite, suiteName: suiteName),
-                      "After .system the AppleLanguages key must be absent from the suite domain")
+        XCTAssertTrue(
+            keyAbsentInSuite("AppleLanguages", suite: suite, suiteName: suiteName),
+            "After .system the AppleLanguages key must be absent from the suite domain")
     }
 
     // MARK: - Default value
 
     func testDefault_appLanguage_isSystem() {
         let (_, _, s) = makeSuite()
-        XCTAssertEqual(s.appLanguage, .system,
-                       "Default appLanguage must be .system")
+        XCTAssertEqual(
+            s.appLanguage, .system,
+            "Default appLanguage must be .system")
     }
 
     // MARK: - rawValue round-trip
@@ -102,8 +108,9 @@ final class LanguageSettingsTests: XCTestCase {
         for lang in AppLanguage.allCases {
             let raw = lang.rawValue
             let recovered = AppLanguage(rawValue: raw)
-            XCTAssertEqual(recovered, lang,
-                           "AppLanguage(rawValue: \"\(raw)\") should round-trip to .\(lang)")
+            XCTAssertEqual(
+                recovered, lang,
+                "AppLanguage(rawValue: \"\(raw)\") should round-trip to .\(lang)")
         }
     }
 }

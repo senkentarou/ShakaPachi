@@ -59,7 +59,7 @@ final class HotkeyTap {
     private(set) var isEnabled = false
 
     #if DEBUG
-    private var deadman: DeadmanSwitch?
+        private var deadman: DeadmanSwitch?
     #endif
 
     // MARK: - Lifecycle
@@ -83,17 +83,20 @@ final class HotkeyTap {
     @discardableResult
     func enable() -> Bool {
         if eventTap == nil {
-            let mask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
-                                  | (1 << CGEventType.keyUp.rawValue)
-                                  | (1 << CGEventType.flagsChanged.rawValue)
-            guard let tap = CGEvent.tapCreate(
-                tap: .cgSessionEventTap,
-                place: .headInsertEventTap,   // ahead of the system App Switcher (§6.1)
-                options: .defaultTap,          // must consume, listenOnly is not enough
-                eventsOfInterest: mask,
-                callback: hotkeyTapCallback,
-                userInfo: Unmanaged.passUnretained(self).toOpaque()
-            ) else {
+            let mask: CGEventMask =
+                (1 << CGEventType.keyDown.rawValue)
+                | (1 << CGEventType.keyUp.rawValue)
+                | (1 << CGEventType.flagsChanged.rawValue)
+            guard
+                let tap = CGEvent.tapCreate(
+                    tap: .cgSessionEventTap,
+                    place: .headInsertEventTap,  // ahead of the system App Switcher (§6.1)
+                    options: .defaultTap,  // must consume, listenOnly is not enough
+                    eventsOfInterest: mask,
+                    callback: hotkeyTapCallback,
+                    userInfo: Unmanaged.passUnretained(self).toOpaque()
+                )
+            else {
                 NSLog("[ShakaPachi] Failed to create event tap — accessibility permission missing?")
                 return false
             }
@@ -107,8 +110,9 @@ final class HotkeyTap {
 
         isEnabled = true
         armDeadman()
-        NSLog("[ShakaPachi] Event tap enabled (triggerModifierMask=0x%llx, triggerKeyCode=%u)",
-              triggerModifierMask, triggerKeyCode)
+        NSLog(
+            "[ShakaPachi] Event tap enabled (triggerModifierMask=0x%llx, triggerKeyCode=%u)",
+            triggerModifierMask, triggerKeyCode)
         onStateChange?(.active)
         return true
     }
@@ -128,24 +132,25 @@ final class HotkeyTap {
 
     private func armDeadman() {
         #if DEBUG
-        deadman?.disarm()
-        let dm = DeadmanSwitch { [weak self] in
-            // Fires on the deadman's private queue; hop to main for AppKit.
-            DispatchQueue.main.async {
-                guard let self, self.isEnabled else { return }
-                self.disable(reason: NSLocalizedString("デッドマンスイッチ (自動停止)", comment: "Dead-man switch auto-stop reason"))
+            deadman?.disarm()
+            let dm = DeadmanSwitch { [weak self] in
+                // Fires on the deadman's private queue; hop to main for AppKit.
+                DispatchQueue.main.async {
+                    guard let self, self.isEnabled else { return }
+                    self.disable(
+                        reason: NSLocalizedString("デッドマンスイッチ (自動停止)", comment: "Dead-man switch auto-stop reason"))
+                }
             }
-        }
-        dm.arm()
-        deadman = dm
-        NSLog("[ShakaPachi] Deadman switch armed (%.0fs)", DeadmanSwitch.configuredTimeout())
+            dm.arm()
+            deadman = dm
+            NSLog("[ShakaPachi] Deadman switch armed (%.0fs)", DeadmanSwitch.configuredTimeout())
         #endif
     }
 
     private func disarmDeadman() {
         #if DEBUG
-        deadman?.disarm()
-        deadman = nil
+            deadman?.disarm()
+            deadman = nil
         #endif
     }
 
@@ -157,12 +162,12 @@ final class HotkeyTap {
 
         let eventType: KeyEvent.EventType
         switch type {
-        case .keyDown:                eventType = .keyDown
-        case .keyUp:                  eventType = .keyUp
-        case .flagsChanged:           eventType = .flagsChanged
-        case .tapDisabledByTimeout:   eventType = .tapDisabledByTimeout
+        case .keyDown: eventType = .keyDown
+        case .keyUp: eventType = .keyUp
+        case .flagsChanged: eventType = .flagsChanged
+        case .tapDisabledByTimeout: eventType = .tapDisabledByTimeout
         case .tapDisabledByUserInput: eventType = .tapDisabledByUserInput
-        default:                      eventType = .other
+        default: eventType = .other
         }
 
         let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
@@ -198,7 +203,9 @@ final class HotkeyTap {
             if isEnabled, let tap = eventTap {
                 CGEvent.tapEnable(tap: tap, enable: true)
                 DispatchQueue.main.async {
-                    NSLog("[ShakaPachi] Tap auto-recovered from tapDisabled event — frequent occurrences indicate a performance problem")
+                    NSLog(
+                        "[ShakaPachi] Tap auto-recovered from tapDisabled event — frequent occurrences indicate a performance problem"
+                    )
                 }
             }
             return nil
@@ -222,7 +229,7 @@ final class HotkeyTap {
         let configuredKeyCode = triggerKeyCode
         let rawFlags = event.flags.rawValue
         let hasTriggerModifier = (rawFlags & configuredMask) != 0
-        let hasShift  = event.flags.contains(.maskShift)
+        let hasShift = event.flags.contains(.maskShift)
 
         // Build the switcher-relevant input, if any.
         let switcherInput: SwitcherInput?

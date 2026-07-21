@@ -4,6 +4,7 @@
 // WindowStore.filterAndBuild() entry point.
 
 import XCTest
+
 @testable import ShakaPachi
 
 final class WindowStoreTests: XCTestCase {
@@ -191,14 +192,16 @@ final class WindowStoreTests: XCTestCase {
     func testTitleFallback_emptyWindowName_fallsBackToAppName() {
         let dict = validDict(windowName: "", ownerName: "TestApp")
         let result = build(rawList: [dict])
-        XCTAssertEqual(result.first?.title, "TestApp",
+        XCTAssertEqual(
+            result.first?.title, "TestApp",
             "Empty kCGWindowName must fall back to kCGWindowOwnerName")
     }
 
     func testTitleFallback_missingWindowName_fallsBackToAppName() {
         let dict = validDict(windowName: nil, ownerName: "TestApp")
         let result = build(rawList: [dict])
-        XCTAssertEqual(result.first?.title, "TestApp",
+        XCTAssertEqual(
+            result.first?.title, "TestApp",
             "Missing kCGWindowName must fall back to kCGWindowOwnerName")
     }
 
@@ -272,8 +275,9 @@ final class WindowStoreTests: XCTestCase {
     }
 
     func testApplyDuplicateSuffixes_singleWindow() {
-        let info = WindowInfo(windowID: 1, pid: 10, bundleID: nil,
-                              appName: "App", title: "App", bounds: .zero)
+        let info = WindowInfo(
+            windowID: 1, pid: 10, bundleID: nil,
+            appName: "App", title: "App", bounds: .zero)
         let result = WindowStore.applyDuplicateSuffixes(to: [info])
         XCTAssertEqual(result.count, 1)
         XCTAssertEqual(result[0].title, "App")

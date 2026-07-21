@@ -3,6 +3,7 @@
 // No AppKit or CoreGraphics required — the machine is pure logic.
 
 import XCTest
+
 @testable import ShakaPachi
 
 final class SwitcherStateMachineTests: XCTestCase {
@@ -16,7 +17,9 @@ final class SwitcherStateMachineTests: XCTestCase {
     /// Drive the machine from IDLE into ACTIVE with `count` items.
     /// Returns the machine after the MODIFIER_HELD → ACTIVE transition.
     @discardableResult
-    private func activateMachine(_ machine: SwitcherStateMachine, count: Int) -> (action: SwitcherAction, consumed: Bool) {
+    private func activateMachine(_ machine: SwitcherStateMachine, count: Int) -> (
+        action: SwitcherAction, consumed: Bool
+    ) {
         machine.handle(.modifierDown)
         return machine.handle(.trigger(shift: false), itemCount: count)
     }
@@ -85,8 +88,9 @@ final class SwitcherStateMachineTests: XCTestCase {
         let m = makeMachine()
         m.handle(.modifierDown)
         let (action, consumed) = m.handle(.trigger(shift: false), itemCount: 3)
-        XCTAssertEqual(action, .showPanel(initialIndex: 1),
-                       "§6.2: initial index=1 when count≥2")
+        XCTAssertEqual(
+            action, .showPanel(initialIndex: 1),
+            "§6.2: initial index=1 when count≥2")
         XCTAssertTrue(consumed, "Trigger must be consumed when showing panel")
         XCTAssertTrue(m.isActive)
         XCTAssertEqual(m.activeIndex, 1)
@@ -96,8 +100,9 @@ final class SwitcherStateMachineTests: XCTestCase {
         let m = makeMachine()
         m.handle(.modifierDown)
         let (action, consumed) = m.handle(.trigger(shift: false), itemCount: 1)
-        XCTAssertEqual(action, .showPanel(initialIndex: 0),
-                       "§6.2 last line: single window uses index 0")
+        XCTAssertEqual(
+            action, .showPanel(initialIndex: 0),
+            "§6.2 last line: single window uses index 0")
         XCTAssertTrue(consumed)
         XCTAssertEqual(m.activeIndex, 0)
     }
@@ -327,8 +332,8 @@ final class SwitcherStateMachineTests: XCTestCase {
         let m = makeMachine()
         m.handle(.modifierDown)
         m.handle(.trigger(shift: false), itemCount: 5)  // show, index=1
-        m.handle(.trigger(shift: false))                // →2
-        m.handle(.trigger(shift: false))                // →3
+        m.handle(.trigger(shift: false))  // →2
+        m.handle(.trigger(shift: false))  // →3
         let (action, _) = m.handle(.modifierUp)
         XCTAssertEqual(action, .confirmSelection(index: 3))
     }
@@ -358,7 +363,7 @@ final class SwitcherStateMachineTests: XCTestCase {
         let m = makeMachine()
         m.handle(.modifierDown)
         m.handle(.trigger(shift: false), itemCount: 3)  // index=1
-        m.handle(.trigger(shift: true))                  // →0
+        m.handle(.trigger(shift: true))  // →0
         let (action, _) = m.handle(.trigger(shift: true))  // →2 (wrap)
         XCTAssertEqual(action, .moveSelection(to: 2))
         let (confirmAction, _) = m.handle(.modifierUp)
@@ -424,11 +429,11 @@ final class SwitcherStateMachineTests: XCTestCase {
 
         // From IDLE: nothing is consumed.
         let idleCases: [Case] = [
-            .init(input: .modifierDown,        shouldConsume: false, label: "IDLE+modifierDown"),
-            .init(input: .modifierUp,          shouldConsume: false, label: "IDLE+modifierUp"),
-            .init(input: .escape,              shouldConsume: false, label: "IDLE+escape"),
-            .init(input: .otherKey,            shouldConsume: false, label: "IDLE+otherKey"),
-            .init(input: .trigger(shift:false), shouldConsume: false, label: "IDLE+trigger"),
+            .init(input: .modifierDown, shouldConsume: false, label: "IDLE+modifierDown"),
+            .init(input: .modifierUp, shouldConsume: false, label: "IDLE+modifierUp"),
+            .init(input: .escape, shouldConsume: false, label: "IDLE+escape"),
+            .init(input: .otherKey, shouldConsume: false, label: "IDLE+otherKey"),
+            .init(input: .trigger(shift: false), shouldConsume: false, label: "IDLE+trigger"),
         ]
         for c in idleCases {
             let fresh = SwitcherStateMachine()
@@ -438,9 +443,9 @@ final class SwitcherStateMachineTests: XCTestCase {
 
         // From MODIFIER_HELD
         let mhCases: [Case] = [
-            .init(input: .modifierUp,          shouldConsume: false, label: "MH+modifierUp"),
-            .init(input: .otherKey,            shouldConsume: false, label: "MH+otherKey"),
-            .init(input: .trigger(shift:false), shouldConsume: true,  label: "MH+trigger"),
+            .init(input: .modifierUp, shouldConsume: false, label: "MH+modifierUp"),
+            .init(input: .otherKey, shouldConsume: false, label: "MH+otherKey"),
+            .init(input: .trigger(shift: false), shouldConsume: true, label: "MH+trigger"),
         ]
         for c in mhCases {
             let fresh = SwitcherStateMachine()
@@ -451,14 +456,14 @@ final class SwitcherStateMachineTests: XCTestCase {
 
         // From ACTIVE
         let activeCases: [Case] = [
-            .init(input: .trigger(shift:false), shouldConsume: true,  label: "ACTIVE+trigger"),
-            .init(input: .trigger(shift:true),  shouldConsume: true,  label: "ACTIVE+shiftTrigger"),
-            .init(input: .arrowForward,         shouldConsume: true,  label: "ACTIVE+arrowFwd"),
-            .init(input: .arrowBackward,        shouldConsume: true,  label: "ACTIVE+arrowBack"),
-            .init(input: .escape,               shouldConsume: true,  label: "ACTIVE+escape"),
-            .init(input: .sameAppJump,          shouldConsume: true,  label: "ACTIVE+sameAppJump"),
-            .init(input: .otherKey,             shouldConsume: false, label: "ACTIVE+otherKey"),
-            .init(input: .modifierUp,           shouldConsume: false, label: "ACTIVE+modifierUp"),
+            .init(input: .trigger(shift: false), shouldConsume: true, label: "ACTIVE+trigger"),
+            .init(input: .trigger(shift: true), shouldConsume: true, label: "ACTIVE+shiftTrigger"),
+            .init(input: .arrowForward, shouldConsume: true, label: "ACTIVE+arrowFwd"),
+            .init(input: .arrowBackward, shouldConsume: true, label: "ACTIVE+arrowBack"),
+            .init(input: .escape, shouldConsume: true, label: "ACTIVE+escape"),
+            .init(input: .sameAppJump, shouldConsume: true, label: "ACTIVE+sameAppJump"),
+            .init(input: .otherKey, shouldConsume: false, label: "ACTIVE+otherKey"),
+            .init(input: .modifierUp, shouldConsume: false, label: "ACTIVE+modifierUp"),
         ]
         for c in activeCases {
             let fresh = SwitcherStateMachine()

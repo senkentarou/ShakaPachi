@@ -116,8 +116,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         // Give every tab the same min frame so switching tabs never resizes the
         // window (NSTabViewController otherwise fits each tab's own content).
         func addTab<V: View>(_ label: String, _ view: V) {
-            let sized = view.frame(minWidth: 520, maxWidth: .infinity,
-                                   minHeight: 360, maxHeight: .infinity)
+            let sized = view.frame(
+                minWidth: 520, maxWidth: .infinity,
+                minHeight: 360, maxHeight: .infinity)
             let item = NSTabViewItem(viewController: NSHostingController(rootView: sized))
             // NSTabViewItem.label is verbatim AppKit (no LocalizedStringKey), so
             // localize it explicitly. Keys live in Localizable.strings.
@@ -151,10 +152,13 @@ struct GeneralSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Picker("言語", selection: Binding(
-                    get: { settings.appLanguage },
-                    set: { Settings.shared.appLanguage = $0 }
-                )) {
+                Picker(
+                    "言語",
+                    selection: Binding(
+                        get: { settings.appLanguage },
+                        set: { Settings.shared.appLanguage = $0 }
+                    )
+                ) {
                     ForEach(AppLanguage.allCases, id: \.self) { lang in
                         Text(lang.displayName).tag(lang)
                     }
@@ -180,13 +184,16 @@ struct GeneralSettingsView: View {
                 // Modifier-only picker: the trigger key is fixed to Tab.
                 // On set, both modifier and key are written so any previously-
                 // stored .grave value is normalized to .tab on first save.
-                Picker("トリガー", selection: Binding(
-                    get: { settings.triggerModifier },
-                    set: { modifier in
-                        Settings.shared.triggerModifier = modifier
-                        Settings.shared.triggerKey      = .tab
-                    }
-                )) {
+                Picker(
+                    "トリガー",
+                    selection: Binding(
+                        get: { settings.triggerModifier },
+                        set: { modifier in
+                            Settings.shared.triggerModifier = modifier
+                            Settings.shared.triggerKey = .tab
+                        }
+                    )
+                ) {
                     ForEach(TriggerModifier.allCases, id: \.self) { modifier in
                         Text("\(modifier.displayName) + Tab").tag(modifier)
                     }
@@ -200,10 +207,13 @@ struct GeneralSettingsView: View {
                 // .zOrder is intentionally excluded from the picker; the enum
                 // case is kept for internal WindowStore use but is not exposed
                 // as a user-selectable option.
-                Picker("並び順", selection: Binding(
-                    get: { settings.sortMode },
-                    set: { Settings.shared.sortMode = $0 }
-                )) {
+                Picker(
+                    "並び順",
+                    selection: Binding(
+                        get: { settings.sortMode },
+                        set: { Settings.shared.sortMode = $0 }
+                    )
+                ) {
                     ForEach([SortMode.mru, .byApp], id: \.self) { mode in
                         Text(mode.displayName).tag(mode)
                     }
@@ -213,10 +223,12 @@ struct GeneralSettingsView: View {
                 // Show live window preview below the title line.
                 // Actual capture is gated on screen-recording permission at show time;
                 // turning this off avoids any CGWindowListCreateImage call entirely.
-                Toggle("ウィンドウプレビューを表示", isOn: Binding(
-                    get: { settings.showWindowPreview },
-                    set: { Settings.shared.showWindowPreview = $0 }
-                ))
+                Toggle(
+                    "ウィンドウプレビューを表示",
+                    isOn: Binding(
+                        get: { settings.showWindowPreview },
+                        set: { Settings.shared.showWindowPreview = $0 }
+                    ))
             } header: {
                 Text("動作")
             }
@@ -227,21 +239,24 @@ struct GeneralSettingsView: View {
                 // Read the live SMAppService status directly (not the cached
                 // mirror) so the toggle always reflects reality; the mirror is
                 // healed on appear (see .onAppear below) and after every write.
-                Toggle("ログイン時に起動", isOn: Binding(
-                    get: { LoginItemManager.isEnabled },
-                    set: { newValue in
-                        do {
-                            try LoginItemManager.setEnabled(newValue)
-                            Settings.shared.launchAtLogin = LoginItemManager.isEnabled
-                        } catch {
-                            // Registration failed — revert the mirror to the real
-                            // status so the toggle reflects reality, and surface it.
-                            Settings.shared.launchAtLogin = LoginItemManager.isEnabled
-                            NSLog("[ShakaPachi] Login item change failed: %@",
-                                  error.localizedDescription)
+                Toggle(
+                    "ログイン時に起動",
+                    isOn: Binding(
+                        get: { LoginItemManager.isEnabled },
+                        set: { newValue in
+                            do {
+                                try LoginItemManager.setEnabled(newValue)
+                                Settings.shared.launchAtLogin = LoginItemManager.isEnabled
+                            } catch {
+                                // Registration failed — revert the mirror to the real
+                                // status so the toggle reflects reality, and surface it.
+                                Settings.shared.launchAtLogin = LoginItemManager.isEnabled
+                                NSLog(
+                                    "[ShakaPachi] Login item change failed: %@",
+                                    error.localizedDescription)
+                            }
                         }
-                    }
-                ))
+                    ))
             } header: {
                 Text("システム")
             }
@@ -275,20 +290,26 @@ struct AppearanceSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Picker("テーマ", selection: Binding(
-                    get: { settings.theme },
-                    set: { Settings.shared.theme = $0 }
-                )) {
+                Picker(
+                    "テーマ",
+                    selection: Binding(
+                        get: { settings.theme },
+                        set: { Settings.shared.theme = $0 }
+                    )
+                ) {
                     ForEach(Theme.allCases, id: \.self) { t in
                         Text(t.displayName).tag(t)
                     }
                 }
                 .pickerStyle(.menu)
 
-                Picker("アクセントカラー", selection: Binding(
-                    get: { settings.accentColor },
-                    set: { Settings.shared.accentColor = $0 }
-                )) {
+                Picker(
+                    "アクセントカラー",
+                    selection: Binding(
+                        get: { settings.accentColor },
+                        set: { Settings.shared.accentColor = $0 }
+                    )
+                ) {
                     ForEach(AccentColor.allCases, id: \.self) { c in
                         Text(c.displayName).tag(c)
                     }
@@ -342,9 +363,11 @@ struct StatusSettingsView: View {
 
                 Section {
                     HStack {
-                        Image(systemName: accessibilityGranted
-                              ? "checkmark.circle.fill" : "circle.dashed")
-                            .foregroundColor(accessibilityGranted ? .green : .secondary)
+                        Image(
+                            systemName: accessibilityGranted
+                                ? "checkmark.circle.fill" : "circle.dashed"
+                        )
+                        .foregroundColor(accessibilityGranted ? .green : .secondary)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("アクセシビリティ")
                                 .font(.body)
@@ -364,9 +387,11 @@ struct StatusSettingsView: View {
                     }
 
                     HStack {
-                        Image(systemName: screenRecordingGranted
-                              ? "checkmark.circle.fill" : "circle.dashed")
-                            .foregroundColor(screenRecordingGranted ? .green : .secondary)
+                        Image(
+                            systemName: screenRecordingGranted
+                                ? "checkmark.circle.fill" : "circle.dashed"
+                        )
+                        .foregroundColor(screenRecordingGranted ? .green : .secondary)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("画面収録")
                                 .font(.body)
@@ -411,7 +436,7 @@ struct StatusSettingsView: View {
 
     private func refreshPermissions() {
         let pm = PermissionManager()
-        accessibilityGranted   = pm.accessibilityStatus() == .granted
+        accessibilityGranted = pm.accessibilityStatus() == .granted
         screenRecordingGranted = pm.screenRecordingStatus() == .granted
     }
 }
@@ -471,9 +496,11 @@ struct StatsSettingsView: View {
                 // ── Activity (streak strip + heatmap) ──
                 Section {
                     // Streak count above the heatmap.
-                    Text(String(format: NSLocalizedString("%lld 日連続", comment: "Consecutive-day streak"), currentStreak))
-                        .font(.headline)
-                        .padding(.bottom, 8)   // breathing room above the heatmap
+                    Text(
+                        String(format: NSLocalizedString("%lld 日連続", comment: "Consecutive-day streak"), currentStreak)
+                    )
+                    .font(.headline)
+                    .padding(.bottom, 8)  // breathing room above the heatmap
 
                     ContributionHeatmap(
                         dailyCounts: dailyCounts,
@@ -518,19 +545,20 @@ struct StatsSettingsView: View {
 
     private func reloadSnapshot() {
         statsEnabled = StatsStore.shared.isStatsEnabled
-        todayCount   = StatsStore.shared.todayCount
-        totalCount   = StatsStore.shared.totalCount
-        dailyCounts  = StatsStore.shared.dailyCounts
+        todayCount = StatsStore.shared.todayCount
+        totalCount = StatsStore.shared.totalCount
+        dailyCounts = StatsStore.shared.dailyCounts
         firstUseDate = StatsStore.shared.firstUseDate
         let activeDays = Set(dailyCounts.filter { $0.value > 0 }.keys)
-        let todayStr   = StreakStats.stringFromDate(Date())
-        currentStreak  = StreakStats.currentStreak(activeDays: activeDays, today: todayStr)
-        longest        = StreakStats.longestStreak(activeDays: activeDays)
+        let todayStr = StreakStats.stringFromDate(Date())
+        currentStreak = StreakStats.currentStreak(activeDays: activeDays, today: todayStr)
+        longest = StreakStats.longestStreak(activeDays: activeDays)
     }
 
     private func formatted(_ n: Int) -> String {
-        String(format: NSLocalizedString("%@ 回", comment: "Switch count with unit"),
-               (countFormatter.string(from: NSNumber(value: n)) ?? "\(n)"))
+        String(
+            format: NSLocalizedString("%@ 回", comment: "Switch count with unit"),
+            (countFormatter.string(from: NSNumber(value: n)) ?? "\(n)"))
     }
 }
 
@@ -551,7 +579,8 @@ struct AboutSettingsView: View {
     /// missing.
     private var appIcon: NSImage {
         if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
-           let image = NSImage(contentsOf: url) {
+            let image = NSImage(contentsOf: url)
+        {
             return image
         }
         return NSApp.applicationIconImage
@@ -583,9 +612,11 @@ struct AboutSettingsView: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
 
-            Link("github.com/senkentarou",
-                 destination: URL(string: "https://github.com/senkentarou")!)
-                .font(.caption)
+            Link(
+                "github.com/senkentarou",
+                destination: URL(string: "https://github.com/senkentarou")!
+            )
+            .font(.caption)
 
             Spacer()
         }
@@ -593,7 +624,6 @@ struct AboutSettingsView: View {
         .padding()
     }
 }
-
 
 // MARK: - Notification for onboarding open
 
