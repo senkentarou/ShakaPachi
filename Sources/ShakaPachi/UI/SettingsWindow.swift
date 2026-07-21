@@ -451,8 +451,6 @@ struct StatsSettingsView: View {
     @State private var totalCount: Int = 0
     @State private var dailyCounts: [String: Int] = [:]
     @State private var firstUseDate: String? = nil
-    @State private var currentStreak: Int = 0
-    @State private var longest: Int = 0
     @State private var showResetConfirm: Bool = false
 
     // Locale-aware thousands separator (e.g. "1,234").
@@ -493,15 +491,8 @@ struct StatsSettingsView: View {
                     Text("切替回数")
                 }
 
-                // ── Activity (streak strip + heatmap) ──
+                // ── Activity (heatmap) ──
                 Section {
-                    // Streak count above the heatmap.
-                    Text(
-                        String(format: NSLocalizedString("%lld 日連続", comment: "Consecutive-day streak"), currentStreak)
-                    )
-                    .font(.headline)
-                    .padding(.bottom, 8)  // breathing room above the heatmap
-
                     ContributionHeatmap(
                         dailyCounts: dailyCounts,
                         firstUseDate: firstUseDate
@@ -533,7 +524,7 @@ struct StatsSettingsView: View {
                     }
                     Button("キャンセル", role: .cancel) {}
                 } message: {
-                    Text("切替回数・連続記録・日次履歴がすべてクリアされます。この操作は元に戻せません。")
+                    Text("切替回数・日次履歴がすべてクリアされます。この操作は元に戻せません。")
                 }
                 Spacer()
             }
@@ -549,10 +540,6 @@ struct StatsSettingsView: View {
         totalCount = StatsStore.shared.totalCount
         dailyCounts = StatsStore.shared.dailyCounts
         firstUseDate = StatsStore.shared.firstUseDate
-        let activeDays = Set(dailyCounts.filter { $0.value > 0 }.keys)
-        let todayStr = StreakStats.stringFromDate(Date())
-        currentStreak = StreakStats.currentStreak(activeDays: activeDays, today: todayStr)
-        longest = StreakStats.longestStreak(activeDays: activeDays)
     }
 
     private func formatted(_ n: Int) -> String {

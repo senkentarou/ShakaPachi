@@ -30,13 +30,12 @@
 "今日" = "Today";
 "累計" = "Total";
 "切替回数" = "Switch Count";
-"%lld 日連続" = "%lld-day streak";
 "アクティビティ" = "Activity";
 "統計をリセット" = "Reset Statistics";
 "統計をリセットしますか？" = "Reset statistics?";
 "リセット" = "Reset";
 "キャンセル" = "Cancel";
-"切替回数・連続記録・日次履歴がすべてクリアされます。この操作は元に戻せません。" = "This clears your switch count, streak, and daily history. This action cannot be undone.";
+"切替回数・日次履歴がすべてクリアされます。この操作は元に戻せません。" = "This clears your switch count and daily history. This action cannot be undone.";
 "%@ 回" = "%@ times";
 "バージョン %@" = "Version %@";
 "ウィンドウ名" = "Window Name";
