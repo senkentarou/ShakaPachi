@@ -331,6 +331,12 @@ struct AppearanceSettingsView: View {
             } header: {
                 Text("外観")
             }
+
+            Section {
+                AppearancePreviewView(theme: store.theme, accent: store.accentColor)
+            } header: {
+                Text("プレビュー")
+            }
         }
         .formStyle(.grouped)
         .padding(.top, 12)
@@ -453,9 +459,15 @@ struct StatusSettingsView: View {
 
 struct StatsSettingsView: View {
 
-    // Snapshot taken at appear time — counts don't change while Settings is open.
+    // Snapshot taken at appear time.
+    @State private var statsEnabled: Bool = true
     @State private var todayCount: Int = 0
     @State private var totalCount: Int = 0
+    @State private var dailyCounts: [String: Int] = [:]
+    @State private var firstUseDate: String? = nil
+    @State private var currentStreak: Int = 0
+    @State private var longest: Int = 0
+    @State private var showResetConfirm: Bool = false
 
     // Locale-aware thousands separator (e.g. "1,234").
     private let countFormatter: NumberFormatter = {
@@ -465,31 +477,95 @@ struct StatsSettingsView: View {
     }()
 
     var body: some View {
-        Form {
-            Section {
-                HStack {
-                    Text("今日")
-                    Spacer()
-                    Text(formatted(todayCount))
-                        .foregroundColor(.secondary)
+        VStack(spacing: 0) {
+            Form {
+                // ── 記録 ──
+                Section {
+                    Toggle("統計を記録", isOn: $statsEnabled)
+                        .onChange(of: statsEnabled) { newValue in
+                            StatsStore.shared.setStatsEnabled(newValue)
+                        }
+                } header: {
+                    Text("記録")
                 }
-                HStack {
-                    Text("累計")
-                    Spacer()
-                    Text(formatted(totalCount))
-                        .foregroundColor(.secondary)
+
+                // ── 切替回数 ──
+                Section {
+                    HStack {
+                        Text("今日")
+                        Spacer()
+                        Text(formatted(todayCount))
+                            .foregroundColor(.secondary)
+                    }
+                    HStack {
+                        Text("累計")
+                        Spacer()
+                        Text(formatted(totalCount))
+                            .foregroundColor(.secondary)
+                    }
+                } header: {
+                    Text("切替回数")
                 }
-            } header: {
-                Text("切替回数")
+
+                // ── アクティビティ (streak strip + heatmap) ──
+                Section {
+                    // Streak count above the heatmap.
+                    Text("\(currentStreak) 日連続")
+                        .font(.headline)
+                        .padding(.bottom, 8)   // breathing room above the heatmap
+
+                    ContributionHeatmap(
+                        dailyCounts: dailyCounts,
+                        firstUseDate: firstUseDate,
+                        accent: Color(nsColor: Settings.shared.accentColor.nsColor)
+                    )
+                    .padding(.vertical, 4)
+                } header: {
+                    Text("アクティビティ")
+                }
             }
+            .formStyle(.grouped)
+            .padding(.top, 12)
+            .padding([.leading, .trailing])
+
+            // Reset button outside the Form — standalone, left-aligned (matches
+            // the permissions tab's "オンボーディング画面を開く" footer button).
+            HStack {
+                Button("統計をリセット") {
+                    showResetConfirm = true
+                }
+                .foregroundColor(.red)
+                .confirmationDialog(
+                    "統計をリセットしますか？",
+                    isPresented: $showResetConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("リセット", role: .destructive) {
+                        StatsStore.shared.reset()
+                        reloadSnapshot()
+                    }
+                    Button("キャンセル", role: .cancel) {}
+                } message: {
+                    Text("切替回数・連続記録・日次履歴がすべてクリアされます。この操作は元に戻せません。")
+                }
+                Spacer()
+            }
+            .padding([.leading, .trailing, .bottom])
+            .padding(.top, 8)
         }
-        .formStyle(.grouped)
-        .padding(.top, 12)
-        .padding([.leading, .trailing, .bottom])
-        .onAppear {
-            todayCount = StatsStore.shared.todayCount
-            totalCount = StatsStore.shared.totalCount
-        }
+        .onAppear { reloadSnapshot() }
+    }
+
+    private func reloadSnapshot() {
+        statsEnabled = StatsStore.shared.isStatsEnabled
+        todayCount   = StatsStore.shared.todayCount
+        totalCount   = StatsStore.shared.totalCount
+        dailyCounts  = StatsStore.shared.dailyCounts
+        firstUseDate = StatsStore.shared.firstUseDate
+        let activeDays = Set(dailyCounts.filter { $0.value > 0 }.keys)
+        let todayStr   = StreakStats.stringFromDate(Date())
+        currentStreak  = StreakStats.currentStreak(activeDays: activeDays, today: todayStr)
+        longest        = StreakStats.longestStreak(activeDays: activeDays)
     }
 
     private func formatted(_ n: Int) -> String {

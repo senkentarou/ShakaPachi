@@ -136,6 +136,14 @@ public enum AccentColor: String, CaseIterable, Sendable {
         }
     }
 
+    /// Alpha applied to the accent color when tinting the switcher panel
+    /// background. Single source of truth shared by SwitcherPanel and the
+    /// Settings appearance preview so the two never drift.
+    public static let backgroundTintAlpha: CGFloat = 0.14
+    /// Alpha applied to the accent color for the selected tile's highlight fill.
+    /// Shared by SwitcherListView and the Settings appearance preview.
+    public static let selectionHighlightAlpha: CGFloat = 0.30
+
     /// The NSColor for this accent. Muted / desaturated — this is a work app.
     public var nsColor: NSColor {
         switch self {

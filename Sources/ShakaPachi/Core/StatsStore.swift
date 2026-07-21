@@ -18,9 +18,12 @@ final class StatsStore {
     // MARK: - UserDefaults keys
 
     private enum Key {
-        static let totalCount  = "statsTotalCount"
-        static let todayCount  = "statsTodayCount"
-        static let todayDate   = "statsTodayDate"
+        static let totalCount      = "statsTotalCount"
+        static let todayCount      = "statsTodayCount"
+        static let todayDate       = "statsTodayDate"
+        static let statsDailyCounts = "statsDailyCounts"
+        static let statsFirstUseDate = "statsFirstUseDate"
+        static let statsEnabled    = "statsEnabled"
     }
 
     // MARK: - Backing store
@@ -57,13 +60,53 @@ final class StatsStore {
         defaults.integer(forKey: Key.todayCount)
     }
 
+    /// Per-day switch counts keyed by "yyyy-MM-dd". Empty dict if no data.
+    var dailyCounts: [String: Int] {
+        guard let raw = defaults.dictionary(forKey: Key.statsDailyCounts) else { return [:] }
+        var result: [String: Int] = [:]
+        for (key, value) in raw {
+            if let count = value as? Int {
+                result[key] = count
+            }
+        }
+        return result
+    }
+
+    /// ISO date string (yyyy-MM-dd) of the first recorded switch, or nil if no records yet.
+    var firstUseDate: String? {
+        defaults.string(forKey: Key.statsFirstUseDate)
+    }
+
+    /// Whether stats recording is enabled. Defaults to true when key is absent.
+    var isStatsEnabled: Bool {
+        defaults.object(forKey: Key.statsEnabled) != nil
+            ? defaults.bool(forKey: Key.statsEnabled)
+            : true
+    }
+
     // MARK: - Public API
+
+    /// Enable or disable stats recording.
+    func setStatsEnabled(_ enabled: Bool) {
+        defaults.set(enabled, forKey: Key.statsEnabled)
+    }
+
+    /// Reset all statistics. Sets firstUseDate to the reset date.
+    func reset(now: Date = Date()) {
+        defaults.removeObject(forKey: Key.totalCount)
+        defaults.removeObject(forKey: Key.todayCount)
+        defaults.removeObject(forKey: Key.todayDate)
+        defaults.removeObject(forKey: Key.statsDailyCounts)
+        defaults.set(Self.localDateString(from: now), forKey: Key.statsFirstUseDate)
+    }
 
     /// Record one window switch at the given instant.
     ///
     /// - Parameter now: The current time. Defaults to `Date()`.
     ///   Pass a synthetic date in tests to verify day-rollover behaviour.
     func recordSwitch(now: Date = Date()) {
+        guard isStatsEnabled else { return }
+
         let today = Self.localDateString(from: now)
         let storedDate = defaults.string(forKey: Key.todayDate) ?? ""
 
@@ -77,6 +120,16 @@ final class StatsStore {
         let newTotal = defaults.integer(forKey: Key.totalCount) + 1
         defaults.set(newToday, forKey: Key.todayCount)
         defaults.set(newTotal, forKey: Key.totalCount)
+
+        // Set firstUseDate on the very first switch.
+        if defaults.string(forKey: Key.statsFirstUseDate) == nil {
+            defaults.set(today, forKey: Key.statsFirstUseDate)
+        }
+
+        // Accumulate per-day counts.
+        var d = dailyCounts
+        d[today, default: 0] += 1
+        defaults.set(d, forKey: Key.statsDailyCounts)
     }
 
     // MARK: - Private helpers

@@ -206,7 +206,7 @@ final class SwitcherListView: NSView {
                 // chosen accent colour while staying tasteful. Color is pushed by
                 // the panel before each show so this path stays pure/fast.
                 let highlight = NSBezierPath(roundedRect: tileRect, xRadius: 14, yRadius: 14)
-                accentColor.withAlphaComponent(0.30).setFill()
+                accentColor.withAlphaComponent(AccentColor.selectionHighlightAlpha).setFill()
                 highlight.fill()
             }
 

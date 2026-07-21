@@ -93,6 +93,72 @@ final class StatsStoreTests: XCTestCase {
             "totalCount must survive across a new StatsStore instance")
     }
 
+    // MARK: - (e) dailyCounts accumulates per day
+
+    func testDailyCounts_accumulatesPerDay() {
+        let store = makeStore()
+        let day1 = date(year: 2026, month: 7, day: 20)
+        let day2 = date(year: 2026, month: 7, day: 21)
+        store.recordSwitch(now: day1)
+        store.recordSwitch(now: day1)
+        store.recordSwitch(now: day2)
+        let counts = store.dailyCounts
+        let key1 = StreakStats.stringFromDate(day1)
+        let key2 = StreakStats.stringFromDate(day2)
+        XCTAssertEqual(counts[key1], 2, "day1 should have 2 switches")
+        XCTAssertEqual(counts[key2], 1, "day2 should have 1 switch")
+    }
+
+    // MARK: - (f) firstUseDate is set on first record and unchanged afterwards
+
+    func testFirstUseDate_setOnFirstRecord_unchangedAfter() {
+        let store = makeStore()
+        let day1 = date(year: 2026, month: 7, day: 20)
+        let day2 = date(year: 2026, month: 7, day: 21)
+        store.recordSwitch(now: day1)
+        let first = store.firstUseDate
+        XCTAssertNotNil(first, "firstUseDate must be set after first record")
+        store.recordSwitch(now: day2)
+        XCTAssertEqual(store.firstUseDate, first, "firstUseDate must not change after subsequent records")
+    }
+
+    // MARK: - (g) isStatsEnabled defaults to true
+
+    func testIsStatsEnabled_defaultsToTrue() {
+        let store = makeStore()
+        XCTAssertTrue(store.isStatsEnabled, "isStatsEnabled should default to true")
+    }
+
+    // MARK: - (h) When disabled, recordSwitch does not count
+
+    func testSetStatsEnabled_false_recordSwitchIgnored() {
+        let store = makeStore()
+        store.setStatsEnabled(false)
+        store.recordSwitch(now: date(year: 2026, month: 7, day: 21))
+        XCTAssertEqual(store.totalCount, 0, "totalCount must not increment when stats disabled")
+        XCTAssertEqual(store.dailyCounts.values.reduce(0, +), 0, "dailyCounts must not accumulate when stats disabled")
+    }
+
+    // MARK: - (i) reset clears all data and sets firstUseDate to reset date
+
+    func testReset_clearsAllAndSetsFirstUseDate() {
+        let store = makeStore()
+        let day1 = date(year: 2026, month: 7, day: 20)
+        store.recordSwitch(now: day1)
+        store.recordSwitch(now: day1)
+        XCTAssertEqual(store.totalCount, 2)
+
+        let resetDay = date(year: 2026, month: 7, day: 21)
+        store.reset(now: resetDay)
+
+        XCTAssertEqual(store.totalCount, 0, "totalCount must be 0 after reset")
+        XCTAssertEqual(store.todayCount, 0, "todayCount must be 0 after reset")
+        XCTAssertTrue(store.dailyCounts.isEmpty, "dailyCounts must be empty after reset")
+        let expectedFirstUse = StreakStats.stringFromDate(resetDay)
+        XCTAssertEqual(store.firstUseDate, expectedFirstUse,
+            "firstUseDate must be set to the reset date")
+    }
+
     // MARK: - Private helpers
 
     /// Build a Date in the local timezone for a specific calendar date.
