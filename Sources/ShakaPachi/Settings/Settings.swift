@@ -13,6 +13,7 @@
 import AppKit
 import Combine
 import CoreGraphics
+import SwiftUI
 
 // MARK: - Notification
 
@@ -148,6 +149,12 @@ public enum AccentColor: String, CaseIterable, Sendable {
     /// Shared by SwitcherPanel (CALayer borderColor) and AppearancePreviewView (SwiftUI strokeBorder).
     public static let glassBorderAlpha: CGFloat = 0.18
 
+    /// Soft green used by the contribution heatmap cells and legend swatches.
+    /// Matches the tray icon soft palette. Kept here alongside the other shared
+    /// appearance constants so the heatmap and any future consumer never drift.
+    /// SwiftUI `Color` (not `NSColor`) because the heatmap is a SwiftUI view.
+    public static let heatmapActivityGreen = Color(red: 0.42, green: 0.69, blue: 0.47)
+
     /// The NSColor for this accent. Muted / desaturated — this is a work app.
     public var nsColor: NSColor {
         switch self {
@@ -185,9 +192,14 @@ public enum AppLanguage: String, CaseIterable, Sendable {
     /// their own endonyms (shown identically in any locale, like macOS does).
     public var displayName: String {
         switch self {
+        // `.system` is the only case that is localized: "follow system" is a
+        // concept whose wording differs per UI language, so it goes through the
+        // catalog. The concrete languages are asymmetric on purpose — they return
+        // their own endonym, shown identically in any UI language (like macOS's
+        // own language list), so they are intentionally NOT localized.
         case .system:   return NSLocalizedString("システム", comment: "Language: follow system")
-        case .japanese: return "日本語"
-        case .english:  return "English"
+        case .japanese: return "日本語"      // endonym — intentionally not localized (shown identically in any UI language)
+        case .english:  return "English"    // endonym — intentionally not localized (shown identically in any UI language)
         }
     }
 

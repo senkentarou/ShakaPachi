@@ -10,7 +10,8 @@ struct ContributionHeatmap: View {
     let firstUseDate: String?
 
     // soft green — matches the tray icon soft palette
-    private let activityGreen = Color(red: 0.42, green: 0.69, blue: 0.47)
+    // Shared constant defined next to the other appearance colours (Settings.swift).
+    private let activityGreen = AccentColor.heatmapActivityGreen
 
     // Heatmap geometry constants — all pixel values are final.
     private let totalColumns = 26          // ~half a year
