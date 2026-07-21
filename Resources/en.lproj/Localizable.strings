@@ -50,11 +50,13 @@
 "機能が有効な状態です。" = "The feature is active.";
 "設定画面を開いている状態です。開いている間はウィンドウの移動ができないことがあるため、機能を有効にするには一度設定を閉じてください。" = "The Settings window is open. Window switching may be unavailable while it is open, so close Settings to re-enable the feature.";
 "利用に必要な権限が足りない状態です。mac の設定から権限を追加してください。" = "Required permissions are missing. Add them in System Settings.";
-"ShakaPachi の利用を一時的に制限している状態です。mac 標準のアプリ切り替え機能にフォールバックします。" = "ShakaPachi is temporarily paused. Falling back to the standard macOS app switcher.";
+"ShakaPachi の利用を一時的に制限している状態です。mac 標準のアプリ切り替え機能にフォールバックします。メニューバーの「ウィンドウ切替を有効化」から再開できます。" = "ShakaPachi is temporarily paused. Falling back to the standard macOS app switcher. Re-enable it from \"Enable window switching\" in the menu bar.";
 "ShakaPachi — 権限が不足しています" = "ShakaPachi — Missing permissions";
 "ShakaPachi — 停止中" = "ShakaPachi — Paused";
 "ShakaPachi — 設定を開いています" = "ShakaPachi — Settings open";
 "ウィンドウ切替を有効化" = "Enable window switching";
+"ウィンドウ切替を無効化" = "Disable window switching";
+"⚠ ウィンドウ切替を有効化" = "⚠ Enable window switching";
 "設定…" = "Settings…";
 "⚠ 権限の状態…" = "⚠ Permission status…";
 "終了" = "Quit";

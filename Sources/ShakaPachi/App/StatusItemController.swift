@@ -86,6 +86,7 @@ final class StatusItemController {
             }
         }
 
+        refreshToggleItem()
         refreshIcon()
     }
 
@@ -93,7 +94,7 @@ final class StatusItemController {
     func updateTapState(enabled: Bool, reason: String?) {
         tapEnabled = enabled
         tapStopReason = reason
-        toggleItem?.state = enabled ? .on : .off
+        refreshToggleItem()
         refreshIcon()
     }
 
@@ -190,6 +191,25 @@ final class StatusItemController {
             ? NSLocalizedString("設定を閉じる", comment: "Menu item: close settings")
             : NSLocalizedString("設定…", comment: "Menu item: open settings")
         settingsMenuItem?.state = settingsOpen ? .on : .off
+    }
+
+    /// Update the tap-toggle menu item title and state based on tap-enable state and permissions.
+    /// Title logic (mirroring refreshSettingsMenuItem pattern):
+    /// - If tap is enabled: "Disable window switching"
+    /// - If tap is disabled and all permissions granted: "⚠ Enable window switching" (warning marker, off state)
+    /// - If permissions missing: "Enable window switching" (no marker; permissions item owns the warning)
+    private func refreshToggleItem() {
+        let allGranted = permissionManager.allPermissionsGranted()
+        if tapEnabled {
+            toggleItem?.title = NSLocalizedString("ウィンドウ切替を無効化", comment: "Menu item: disable window switching")
+            toggleItem?.state = .on
+        } else if allGranted {
+            toggleItem?.title = NSLocalizedString("⚠ ウィンドウ切替を有効化", comment: "Menu item: enable window switching (needs attention)")
+            toggleItem?.state = .off
+        } else {
+            toggleItem?.title = NSLocalizedString("ウィンドウ切替を有効化", comment: "Menu item: enable window switching")
+            toggleItem?.state = .off
+        }
     }
 
     // MARK: - Menu actions

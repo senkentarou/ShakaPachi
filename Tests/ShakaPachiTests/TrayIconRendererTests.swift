@@ -25,6 +25,11 @@ final class TrayIconRendererTests: XCTestCase {
         }
     }
 
+    func testRestrictedDetailContainsResolutionHint() {
+        let detail = TrayIconState.restricted.detail
+        XCTAssertTrue(detail.contains("ウィンドウ切替を有効化"), "Restricted detail must include enable-switch menu action for resolution")
+    }
+
     func testPreviewImageHasRequestedSize() {
         let img = TrayIconRenderer.previewImage(for: .normal, size: 32)
         XCTAssertEqual(img.size.width, 32, accuracy: 0.01)
