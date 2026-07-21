@@ -33,8 +33,12 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
     var isWindowOpen: Bool { window != nil }
 
     func show() {
-        if window != nil {
-            window?.makeKeyAndOrderFront(nil)
+        if let win = window {
+            // Re-triggering must reliably surface the window: activating and
+            // ordering front regardless is what makes it appear when the app is
+            // not frontmost or the window sits on another Space (otherwise the
+            // button looks like it did nothing).
+            raiseToFront(win)
             return
         }
 
@@ -50,11 +54,21 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
         // window from the Auto Layout fitting size so wrapped labels never clip.
         win.setContentSize(content.fittingSize)
         win.center()
-        win.makeKeyAndOrderFront(nil)
+        // Keep the onboarding window findable: float above other windows and
+        // follow the user onto whichever Space is active.
+        win.level = .floating
+        win.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         self.window = win
 
-        NSApp.activate(ignoringOtherApps: true)
+        raiseToFront(win)
         startPolling()
+    }
+
+    /// Bring the onboarding window to the absolute front on the active Space.
+    private func raiseToFront(_ win: NSWindow) {
+        NSApp.activate(ignoringOtherApps: true)
+        win.makeKeyAndOrderFront(nil)
+        win.orderFrontRegardless()
     }
 
     // MARK: - NSWindowDelegate

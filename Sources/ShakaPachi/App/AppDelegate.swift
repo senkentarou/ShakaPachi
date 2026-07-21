@@ -95,6 +95,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sc.onOpenSettings = { [weak self] in
             self?.openSettings()
         }
+        // Close the Settings window from the menu when it is open (tray toggle).
+        sc.onCloseSettings = { [weak self] in
+            self?.settingsWindow?.close()
+        }
 
         // §12 Live settings: observe all settings changes and apply immediately.
         // The observer closure is @Sendable, so it captures a Sendable weak box

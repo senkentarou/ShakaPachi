@@ -37,8 +37,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         NotificationCenter.default.post(
             name: .settingsWindowStateChanged, object: nil, userInfo: ["open": true])
         if let win = window {
-            win.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            raiseToFront(win)
             return
         }
 
@@ -49,12 +48,30 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let win = makeWindow()
         win.delegate = self
         win.contentViewController = makeSettingsRootController()
-        win.setContentSize(NSSize(width: 520, height: 420))
+        win.setContentSize(NSSize(width: 560, height: 660))
         win.center()
-        win.makeKeyAndOrderFront(nil)
+        // Keep the settings window findable: float above other windows and
+        // follow the user onto whichever Space is active, so it can't get lost
+        // behind other apps once opened.
+        win.level = .floating
+        win.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         self.window = win
 
+        raiseToFront(win)
+    }
+
+    /// Bring the settings window to the absolute front on the active Space.
+    private func raiseToFront(_ win: NSWindow) {
         NSApp.activate(ignoringOtherApps: true)
+        win.makeKeyAndOrderFront(nil)
+        win.orderFrontRegardless()
+    }
+
+    /// Close the Settings window programmatically (e.g. from the tray menu).
+    /// Triggers windowWillClose, which posts the state-change notification and
+    /// reverts the activation policy.
+    func close() {
+        window?.close()
     }
 
     // MARK: - NSWindowDelegate
@@ -77,14 +94,14 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     private func makeWindow() -> NSWindow {
         let win = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 560, height: 660),
+            styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
         win.title = "ShakaPachi 設定"
         win.isReleasedWhenClosed = false
-        win.minSize = NSSize(width: 400, height: 300)
+        win.minSize = NSSize(width: 460, height: 420)
         return win
     }
 
@@ -126,7 +143,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
         addTab("一般", GeneralSettingsView())
         addTab("外観", AppearanceSettingsView())
-        addTab("権限", PermissionsSettingsView())
+        addTab("状態", StatusSettingsView())
         addTab("統計", StatsSettingsView())
         addTab("クレジット", AboutSettingsView())
         return tvc
@@ -321,9 +338,9 @@ struct AppearanceSettingsView: View {
     }
 }
 
-// ─── 権限 tab ─────────────────────────────────────────────────────────────────
+// ─── 状態 tab ─────────────────────────────────────────────────────────────────
 
-struct PermissionsSettingsView: View {
+struct StatusSettingsView: View {
 
     @State private var accessibilityGranted: Bool = false
     @State private var screenRecordingGranted: Bool = false
@@ -332,6 +349,25 @@ struct PermissionsSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Form {
+                Section {
+                    ForEach(TrayIconState.allCases, id: \.self) { state in
+                        HStack(spacing: 12) {
+                            Image(nsImage: TrayIconRenderer.previewImage(for: state, size: 32))
+                                .frame(width: 32, height: 32)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(state.cardName)
+                                    .font(.body)
+                                Text(state.detail)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("アイコンの状態")
+                }
+
                 Section {
                     HStack {
                         Image(systemName: accessibilityGranted
