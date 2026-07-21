@@ -4,6 +4,7 @@
 // Settings.accentColor property defaults to .system and persists correctly.
 
 import XCTest
+
 @testable import ShakaPachi
 
 @MainActor

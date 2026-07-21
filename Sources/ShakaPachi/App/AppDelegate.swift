@@ -77,10 +77,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.iconCache = IconCache()
 
         #if DEBUG
-        // N5 timing measurement: run enumerate() 10 times and log min/median/max.
-        // This requires the app to be launched as a signed .app bundle so that
-        // screen recording TCC permission is active and kCGWindowName is populated.
-        measureWindowStoreN5()
+            // N5 timing measurement: run enumerate() 10 times and log min/median/max.
+            // This requires the app to be launched as a signed .app bundle so that
+            // screen recording TCC permission is active and kCGWindowName is populated.
+            measureWindowStoreN5()
         #endif
 
         let pm = PermissionManager()
@@ -143,10 +143,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Check permissions and show onboarding if any are missing.
         if !pm.allPermissionsGranted() {
             showOnboarding()
-            NSLog("[ShakaPachi] Permissions missing — showing onboarding. " +
-                  "Accessibility: %@  ScreenRecording: %@",
-                  pm.accessibilityStatus() == .granted ? "granted" : "denied",
-                  pm.screenRecordingStatus() == .granted ? "granted" : "denied")
+            NSLog(
+                "[ShakaPachi] Permissions missing — showing onboarding. " + "Accessibility: %@  ScreenRecording: %@",
+                pm.accessibilityStatus() == .granted ? "granted" : "denied",
+                pm.screenRecordingStatus() == .granted ? "granted" : "denied")
         } else {
             NSLog("[ShakaPachi] All permissions granted — normal startup.")
             startTapIfPossible()
@@ -161,8 +161,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 try LoginItemManager.setEnabled(true)
                 NSLog("[ShakaPachi] First-run: login item registered.")
             } catch {
-                NSLog("[ShakaPachi] First-run: login item registration failed: %@",
-                      error.localizedDescription)
+                NSLog(
+                    "[ShakaPachi] First-run: login item registration failed: %@",
+                    error.localizedDescription)
             }
             // Mark as initialized regardless of success so we don't retry every
             // launch (a failure likely means sandbox/location restrictions that
@@ -172,49 +173,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         #if DEBUG
-        // DEBUG self-check (§7 completion gate): simulate one trigger to get an
-        // N1 proxy without synthesising CGEvents. Do this after the tap is set
-        // up so the code path is realistic, but use a synthetic t0 = now.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-            guard let self, let panel = self.switcherPanel else { return }
-            let items = self.currentSwitcherItems()
-            guard !items.isEmpty else {
-                NSLog("[ShakaPachi] N1 self-check skipped: 0 windows")
-                return
+            // DEBUG self-check (§7 completion gate): simulate one trigger to get an
+            // N1 proxy without synthesising CGEvents. Do this after the tap is set
+            // up so the code path is realistic, but use a synthetic t0 = now.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                guard let self, let panel = self.switcherPanel else { return }
+                let items = self.currentSwitcherItems()
+                guard !items.isEmpty else {
+                    NSLog("[ShakaPachi] N1 self-check skipped: 0 windows")
+                    return
+                }
+                let syntheticT0 = CFAbsoluteTimeGetCurrent()
+                let debugPreviewEnabled =
+                    Settings.shared.showWindowPreview
+                    && (self.permissionManager?.screenRecordingStatus() == .granted)
+                panel.show(
+                    items: items,
+                    selectedIndex: self.initialSelection(count: items.count),
+                    previewEnabled: debugPreviewEnabled)
+                panel.displayIfNeeded()
+                let n1 = (CFAbsoluteTimeGetCurrent() - syntheticT0) * 1000.0
+                NSLog(
+                    "[ShakaPachi] N1: %.2fms (callback→display, %d windows) [DEBUG self-check]",
+                    n1, items.count)
+                if n1 > 50.0 {
+                    NSLog("[ShakaPachi] N1 GATE FAIL: %.2fms exceeds 50ms budget", n1)
+                } else {
+                    NSLog("[ShakaPachi] N1 GATE PASS: %.2fms within 50ms budget", n1)
+                }
+                // Hide after 0.5s so the developer can see the panel.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    self?.switcherPanel?.hide()
+                }
             }
-            let syntheticT0 = CFAbsoluteTimeGetCurrent()
-            let debugPreviewEnabled = Settings.shared.showWindowPreview
-                && (self.permissionManager?.screenRecordingStatus() == .granted)
-            panel.show(items: items,
-                       selectedIndex: self.initialSelection(count: items.count),
-                       previewEnabled: debugPreviewEnabled)
-            panel.displayIfNeeded()
-            let n1 = (CFAbsoluteTimeGetCurrent() - syntheticT0) * 1000.0
-            NSLog("[ShakaPachi] N1: %.2fms (callback→display, %d windows) [DEBUG self-check]",
-                  n1, items.count)
-            if n1 > 50.0 {
-                NSLog("[ShakaPachi] N1 GATE FAIL: %.2fms exceeds 50ms budget", n1)
-            } else {
-                NSLog("[ShakaPachi] N1 GATE PASS: %.2fms within 50ms budget", n1)
-            }
-            // Hide after 0.5s so the developer can see the panel.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.switcherPanel?.hide()
-            }
-        }
         #endif
     }
 
     @MainActor
     private func startTapIfPossible() {
         guard hotkeyTap == nil,
-              permissionManager?.allPermissionsGranted() == true else { return }
+            permissionManager?.allPermissionsGranted() == true
+        else { return }
         let tap = HotkeyTap()
 
         // Initialize the tap with the current settings values.
         let settings = Settings.shared
         tap.triggerModifierMask = settings.triggerModifier.eventFlagMask
-        tap.triggerKeyCode      = settings.triggerKey.keyCode
+        tap.triggerKeyCode = settings.triggerKey.keyCode
 
         tap.onStateChange = { [weak self] state in
             switch state {
@@ -256,10 +261,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // even if windows open/close between show and confirm (§15).
                 // Read Settings values (fast stored properties — §4.3 safe).
                 showDelay = Settings.shared.showDelayMs
-                let infos = self.windowStore?.enumerate(
-                    currentSpaceOnly: Settings.shared.currentSpaceOnly,
-                    sortMode: Settings.shared.sortMode
-                ) ?? []
+                let infos =
+                    self.windowStore?.enumerate(
+                        currentSpaceOnly: Settings.shared.currentSpaceOnly,
+                        sortMode: Settings.shared.sortMode
+                    ) ?? []
                 let icons = self.iconCache
                 self.lastWindowInfos = infos
                 self.lastSwitcherItems = infos.map { info in
@@ -289,7 +295,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard !items.isEmpty else { break }
                 // Gate the preview on the user's setting AND screen-recording
                 // permission. Both are fast stored-property / system-call reads.
-                let previewEnabled = Settings.shared.showWindowPreview
+                let previewEnabled =
+                    Settings.shared.showWindowPreview
                     && (self.permissionManager?.screenRecordingStatus() == .granted)
                 // §11.2 showDelayMs: delay the actual show by the configured
                 // number of milliseconds. Default 0 means no delay, so there
@@ -298,8 +305,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // so a non-zero delay is visible in the log.
                 let delayMs = showDelay
                 if delayMs <= 0 {
-                    panel.show(items: items, selectedIndex: initialIndex,
-                               previewEnabled: previewEnabled)
+                    panel.show(
+                        items: items, selectedIndex: initialIndex,
+                        previewEnabled: previewEnabled)
                     panel.displayIfNeeded()
                     let n1 = (CFAbsoluteTimeGetCurrent() - t0) * 1000.0
                     NSLog("[ShakaPachi] N1: %.2fms (callback→display, %d windows)", n1, items.count)
@@ -310,12 +318,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     let capturedPreview = previewEnabled
                     DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(delayMs)) { [weak self] in
                         guard let self, let panel = self.switcherPanel else { return }
-                        panel.show(items: capturedItems, selectedIndex: capturedIndex,
-                                   previewEnabled: capturedPreview)
+                        panel.show(
+                            items: capturedItems, selectedIndex: capturedIndex,
+                            previewEnabled: capturedPreview)
                         panel.displayIfNeeded()
                         let n1 = (CFAbsoluteTimeGetCurrent() - capturedT0) * 1000.0
-                        NSLog("[ShakaPachi] N1: %.2fms (callback→display incl %dms delay, %d windows)",
-                              n1, delayMs, capturedItems.count)
+                        NSLog(
+                            "[ShakaPachi] N1: %.2fms (callback→display incl %dms delay, %d windows)",
+                            n1, delayMs, capturedItems.count)
                     }
                 }
 
@@ -331,8 +341,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // have closed during the switcher session between show and confirm).
                 let infos = self.lastWindowInfos
                 if infos.indices.contains(index) {
-                    NSLog("[ShakaPachi] Confirm window index %d (pid %d, title: %@)",
-                          index, infos[index].pid, infos[index].title)
+                    NSLog(
+                        "[ShakaPachi] Confirm window index %d (pid %d, title: %@)",
+                        index, infos[index].pid, infos[index].title)
                     self.activator?.activate(infos[index])
                     // §5.5: record this activation so the next enumerate() puts
                     // this window at index 0 and the previously-active window
@@ -354,8 +365,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     // Out-of-range: log and do nothing more than hide; app
                     // activate already ran inside Activator.activate for the
                     // in-range case, so there is nothing safe to raise here.
-                    NSLog("[ShakaPachi] Confirm index %d out of range (count %d) — hide only",
-                          index, infos.count)
+                    NSLog(
+                        "[ShakaPachi] Confirm index %d out of range (count %d) — hide only",
+                        index, infos.count)
                 }
                 panel.hide()
 
@@ -431,7 +443,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // without calling into Settings/AppKit (§4.3 safe).
         if let tap = hotkeyTap {
             tap.triggerModifierMask = settings.triggerModifier.eventFlagMask
-            tap.triggerKeyCode      = settings.triggerKey.keyCode
+            tap.triggerKeyCode = settings.triggerKey.keyCode
         }
 
         // -- excludedBundleIDs → WindowStore (live update, MRU preserved) --
@@ -523,39 +535,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     #if DEBUG
-    // Measure WindowStore.enumerate() 10 times and log each result plus
-    // min/median/max so the N5 gate (≤5ms) can be verified from the system log.
-    @MainActor
-    private func measureWindowStoreN5() {
-        let store = WindowStore()
-        let runs = 10
-        var durations: [Double] = []
-        var windowCount = 0
-        for i in 1...runs {
-            let start = Date()
-            let windows = store.enumerate()
-            let elapsed = Date().timeIntervalSince(start) * 1000.0
-            durations.append(elapsed)
-            windowCount = windows.count
-            NSLog("[ShakaPachi] N5 run %d: %.2fms  windows=%d", i, elapsed, windows.count)
-        }
-        let sorted = durations.sorted()
-        let minMs = sorted.first ?? 0
-        let maxMs = sorted.last ?? 0
-        let medianMs: Double = {
-            let mid = sorted.count / 2
-            if sorted.count % 2 == 0 {
-                return (sorted[mid - 1] + sorted[mid]) / 2.0
+        // Measure WindowStore.enumerate() 10 times and log each result plus
+        // min/median/max so the N5 gate (≤5ms) can be verified from the system log.
+        @MainActor
+        private func measureWindowStoreN5() {
+            let store = WindowStore()
+            let runs = 10
+            var durations: [Double] = []
+            var windowCount = 0
+            for i in 1...runs {
+                let start = Date()
+                let windows = store.enumerate()
+                let elapsed = Date().timeIntervalSince(start) * 1000.0
+                durations.append(elapsed)
+                windowCount = windows.count
+                NSLog("[ShakaPachi] N5 run %d: %.2fms  windows=%d", i, elapsed, windows.count)
             }
-            return sorted[mid]
-        }()
-        NSLog("[ShakaPachi] N5 summary: min=%.2fms median=%.2fms max=%.2fms windows=%d",
-              minMs, medianMs, maxMs, windowCount)
-        if medianMs > 5.0 {
-            NSLog("[ShakaPachi] N5 GATE FAIL: median %.2fms exceeds 5ms budget", medianMs)
-        } else {
-            NSLog("[ShakaPachi] N5 GATE PASS: median %.2fms within 5ms budget", medianMs)
+            let sorted = durations.sorted()
+            let minMs = sorted.first ?? 0
+            let maxMs = sorted.last ?? 0
+            let medianMs: Double = {
+                let mid = sorted.count / 2
+                if sorted.count % 2 == 0 {
+                    return (sorted[mid - 1] + sorted[mid]) / 2.0
+                }
+                return sorted[mid]
+            }()
+            NSLog(
+                "[ShakaPachi] N5 summary: min=%.2fms median=%.2fms max=%.2fms windows=%d",
+                minMs, medianMs, maxMs, windowCount)
+            if medianMs > 5.0 {
+                NSLog("[ShakaPachi] N5 GATE FAIL: median %.2fms exceeds 5ms budget", medianMs)
+            } else {
+                NSLog("[ShakaPachi] N5 GATE PASS: median %.2fms within 5ms budget", medianMs)
+            }
         }
-    }
     #endif
 }

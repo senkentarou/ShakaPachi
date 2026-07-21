@@ -130,7 +130,8 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
 
         let srCard = PermissionCardView(
             name: NSLocalizedString("画面収録", comment: "Permission name: screen recording"),
-            benefit: NSLocalizedString("ウィンドウ名の取得だけに使います。画面の撮影・保存はしません。", comment: "Screen recording permission benefit"),
+            benefit: NSLocalizedString(
+                "ウィンドウ名の取得だけに使います。画面の撮影・保存はしません。", comment: "Screen recording permission benefit"),
             target: self,
             action: #selector(grantScreenRecording)
         )
@@ -176,7 +177,9 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
         let title = NSTextField(labelWithString: "ShakaPachi")
         title.font = .boldSystemFont(ofSize: 26)
 
-        let subtitle = NSTextField(labelWithString: NSLocalizedString("ウィンドウを切り替えるには 2 つの権限が必要です。", comment: "Onboarding subtitle: two permissions required"))
+        let subtitle = NSTextField(
+            labelWithString: NSLocalizedString(
+                "ウィンドウを切り替えるには 2 つの権限が必要です。", comment: "Onboarding subtitle: two permissions required"))
         subtitle.font = .systemFont(ofSize: 13)
         subtitle.textColor = .secondaryLabelColor
 
@@ -193,14 +196,18 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
     }
 
     private func makeFooter() -> NSView {
-        let helper = NSTextField(wrappingLabelWithString:
-            NSLocalizedString("「設定を開く」を押して ShakaPachi をオンにしてください。この画面は自動で更新されます。画面収録は再起動後に反映されます。", comment: "Onboarding footer helper text"))
+        let helper = NSTextField(
+            wrappingLabelWithString:
+                NSLocalizedString(
+                    "「設定を開く」を押して ShakaPachi をオンにしてください。この画面は自動で更新されます。画面収録は再起動後に反映されます。",
+                    comment: "Onboarding footer helper text"))
         helper.font = .systemFont(ofSize: 11)
         helper.textColor = .secondaryLabelColor
         helper.preferredMaxLayoutWidth = 240
         helper.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        let restartButton = NSButton(title: NSLocalizedString("再起動", comment: "Button: restart app"), target: self, action: #selector(relaunch))
+        let restartButton = NSButton(
+            title: NSLocalizedString("再起動", comment: "Button: restart app"), target: self, action: #selector(relaunch))
         restartButton.bezelStyle = .rounded
         restartButton.keyEquivalent = "\r"
 
@@ -271,7 +278,8 @@ private final class PermissionCardView: NSView {
     private var granted = false
 
     init(name: String, benefit: String, target: AnyObject, action: Selector) {
-        actionButton = NSButton(title: NSLocalizedString("設定を開く", comment: "Button: open system settings"), target: target, action: action)
+        actionButton = NSButton(
+            title: NSLocalizedString("設定を開く", comment: "Button: open system settings"), target: target, action: action)
         super.init(frame: .zero)
 
         wantsLayer = true

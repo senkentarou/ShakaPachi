@@ -3,6 +3,7 @@
 // No AppKit, no TCC, no CGWindowList — all tests are deterministic.
 
 import XCTest
+
 @testable import ShakaPachi
 
 final class WindowStoreMRUTests: XCTestCase {
@@ -161,13 +162,13 @@ final class WindowStoreMRUTests: XCTestCase {
 
         // Now enumerate returns [b, a, ...]; index 1 = a → press-once-release goes to A.
         let sorted1 = WindowStore.sortedByMRU(windowIDs: [a, b], mruOrder: order)
-        XCTAssertEqual(sorted1, [b, a])   // index 0=b (current), index 1=a (previous)
+        XCTAssertEqual(sorted1, [b, a])  // index 0=b (current), index 1=a (previous)
 
         // User activates A again
         order = WindowStore.movedToFront(a, in: order, cap: cap)
         XCTAssertEqual(order, [a, b])
 
         let sorted2 = WindowStore.sortedByMRU(windowIDs: [a, b], mruOrder: order)
-        XCTAssertEqual(sorted2, [a, b])   // index 0=a (current), index 1=b (previous)
+        XCTAssertEqual(sorted2, [a, b])  // index 0=a (current), index 1=b (previous)
     }
 }

@@ -8,7 +8,7 @@ import ApplicationServices
 
 // MARK: - Permission status
 
-public enum PermissionStatus: Equatable, Sendable {
+enum PermissionStatus: Equatable, Sendable {
     case granted
     case denied
 }
@@ -18,7 +18,7 @@ public enum PermissionStatus: Equatable, Sendable {
 /// Checks and requests macOS permissions required by ShakaPachi.
 /// All methods run on the main thread (@MainActor).
 @MainActor
-public final class PermissionManager {
+final class PermissionManager {
 
     // Deep links to System Settings panels.
     static let accessibilityURL = URL(
@@ -32,18 +32,18 @@ public final class PermissionManager {
 
     /// Returns the current accessibility permission status.
     /// Does NOT prompt — use requestAccessibility() for that.
-    public func accessibilityStatus() -> PermissionStatus {
+    func accessibilityStatus() -> PermissionStatus {
         AXIsProcessTrusted() ? .granted : .denied
     }
 
     /// Returns the current screen-recording permission status.
     /// Does NOT prompt — safe to call at any time.
-    public func screenRecordingStatus() -> PermissionStatus {
+    func screenRecordingStatus() -> PermissionStatus {
         CGPreflightScreenCaptureAccess() ? .granted : .denied
     }
 
     /// Returns true when both permissions are granted.
-    public func allPermissionsGranted() -> Bool {
+    func allPermissionsGranted() -> Bool {
         accessibilityStatus() == .granted && screenRecordingStatus() == .granted
     }
 
@@ -51,7 +51,7 @@ public final class PermissionManager {
 
     /// Prompts the user for accessibility permission.
     /// Only call in response to a direct user action (button tap), not at startup.
-    public func requestAccessibility() {
+    func requestAccessibility() {
         let options: NSDictionary = [
             kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true
         ]
@@ -60,17 +60,17 @@ public final class PermissionManager {
 
     /// Requests screen-recording permission.
     /// Note: takes effect only after process restart.
-    public func requestScreenRecording() {
+    func requestScreenRecording() {
         CGRequestScreenCaptureAccess()
     }
 
     // MARK: Open System Settings
 
-    public func openAccessibilitySettings() {
+    func openAccessibilitySettings() {
         NSWorkspace.shared.open(Self.accessibilityURL)
     }
 
-    public func openScreenRecordingSettings() {
+    func openScreenRecordingSettings() {
         NSWorkspace.shared.open(Self.screenRecordingURL)
     }
 
@@ -78,8 +78,9 @@ public final class PermissionManager {
 
     /// Re-launches the app so screen-recording permission takes effect.
     /// Opens a new instance via /usr/bin/open, then terminates self.
-    public func relaunchApp() {
-        guard let bundlePath = Bundle.main.bundlePath
+    func relaunchApp() {
+        guard
+            let bundlePath = Bundle.main.bundlePath
                 .addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
         else { return }
 

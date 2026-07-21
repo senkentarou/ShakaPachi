@@ -48,19 +48,19 @@ final class WindowPresentationCoordinator {
     /// Live singleton: delegates both side effects to NSApp.
     static let shared = WindowPresentationCoordinator(
         setPolicy: { NSApp.setActivationPolicy($0) },
-        activate:  { NSApp.activateFocused() }
+        activate: { NSApp.activateFocused() }
     )
 
     private var openCount = 0
     private let setPolicy: (NSApplication.ActivationPolicy) -> Void
-    private let activate:  () -> Void
+    private let activate: () -> Void
 
     init(
         setPolicy: @escaping (NSApplication.ActivationPolicy) -> Void,
-        activate:  @escaping () -> Void
+        activate: @escaping () -> Void
     ) {
         self.setPolicy = setPolicy
-        self.activate  = activate
+        self.activate = activate
     }
 
     /// Call when a managed window opens.

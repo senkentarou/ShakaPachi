@@ -64,12 +64,15 @@ final class WindowStore {
         // currentSpaceOnly == false: use .optionAll to capture all Spaces, then
         // refine with SpacesEnumerator (private SkyLight) if available. Falls back
         // to the raw .optionAll result if the private call is unavailable (§scope-2).
-        let option: CGWindowListOption = currentSpaceOnly
+        let option: CGWindowListOption =
+            currentSpaceOnly
             ? .optionOnScreenOnly
             : .optionAll
         // Single CGWindowListCopyWindowInfo call as per §5.1.
-        guard let rawList = CGWindowListCopyWindowInfo(option, kCGNullWindowID)
-                as? [[String: Any]] else {
+        guard
+            let rawList = CGWindowListCopyWindowInfo(option, kCGNullWindowID)
+                as? [[String: Any]]
+        else {
             return []
         }
         var filtered = WindowStore.filterAndBuild(
@@ -130,7 +133,7 @@ final class WindowStore {
         workspaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil,
-            queue: .main          // always main — safe to mutate mruOrder directly
+            queue: .main  // always main — safe to mutate mruOrder directly
         ) { [weak self] notification in
             // Use Task { @MainActor in … } to re-enter the MainActor-isolated
             // context from the NotificationCenter closure, which itself arrives
@@ -145,8 +148,10 @@ final class WindowStore {
     /// Handle a didActivateApplicationNotification: find the frontmost on-screen
     /// window for the newly activated app's pid and move it to the front of mruOrder.
     private func handleAppActivation(notification: Notification) {
-        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey]
-                as? NSRunningApplication else { return }
+        guard
+            let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey]
+                as? NSRunningApplication
+        else { return }
         let activatedPID = app.processIdentifier
 
         // Lightweight CGWindowList query to find the frontmost window of the
@@ -154,14 +159,17 @@ final class WindowStore {
         // reflects the visible stack.  Using a fresh query rather than the last
         // enumerate snapshot avoids stale data when the user switches apps
         // between switcher invocations.
-        guard let rawList = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID)
-                as? [[String: Any]] else { return }
+        guard
+            let rawList = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID)
+                as? [[String: Any]]
+        else { return }
 
         // The first entry whose ownerPID matches and that passes the basic
         // layer/alpha/size filters is the frontmost window.
         for dict in rawList {
             guard let pidNum = dict[kCGWindowOwnerPID as String] as? Int32,
-                  pid_t(pidNum) == activatedPID else { continue }
+                pid_t(pidNum) == activatedPID
+            else { continue }
             guard let layer = dict[kCGWindowLayer as String] as? Int, layer == 0 else { continue }
             guard let alpha = dict[kCGWindowAlpha as String] as? Double, alpha > 0 else { continue }
             guard let wid = dict[kCGWindowNumber as String] as? CGWindowID else { continue }
@@ -294,12 +302,14 @@ final class WindowStore {
         // duplicate suffixes are applied in phase 2).
         var candidates: [WindowInfo] = []
         for dict in rawList {
-            guard let info = windowInfo(
-                from: dict,
-                selfPID: selfPID,
-                excludedBundleIDs: excludedBundleIDs,
-                bundleIDResolver: bundleIDResolver
-            ) else { continue }
+            guard
+                let info = windowInfo(
+                    from: dict,
+                    selfPID: selfPID,
+                    excludedBundleIDs: excludedBundleIDs,
+                    bundleIDResolver: bundleIDResolver
+                )
+            else { continue }
             candidates.append(info)
         }
 
@@ -320,16 +330,19 @@ final class WindowStore {
 
         // §5.3-1: layer must be 0 (normal application windows only).
         guard let layer = dict[kCGWindowLayer as String] as? Int,
-              layer == 0 else { return nil }
+            layer == 0
+        else { return nil }
 
         // §5.3-2: window must be visible (alpha > 0).
         guard let alpha = dict[kCGWindowAlpha as String] as? Double,
-              alpha > 0 else { return nil }
+            alpha > 0
+        else { return nil }
 
         // §5.3-3: bounds must be at least 40×40.
         guard let boundsDict = dict[kCGWindowBounds as String] as? [String: CGFloat],
-              let bounds = CGRect(dictionaryRepresentation: boundsDict as CFDictionary),
-              bounds.width >= 40, bounds.height >= 40 else { return nil }
+            let bounds = CGRect(dictionaryRepresentation: boundsDict as CFDictionary),
+            bounds.width >= 40, bounds.height >= 40
+        else { return nil }
 
         // §5.3-4: exclude own process.
         guard let pidNum = dict[kCGWindowOwnerPID as String] as? Int32 else { return nil }
@@ -338,7 +351,8 @@ final class WindowStore {
 
         // §5.3-6: kCGWindowStoreType must be present and non-zero.
         guard let storeType = dict[kCGWindowStoreType as String] as? Int,
-              storeType != 0 else { return nil }
+            storeType != 0
+        else { return nil }
 
         // Resolve bundle ID (may be nil — not all processes have a bundle ID).
         let bundleID = bundleIDResolver(pid)

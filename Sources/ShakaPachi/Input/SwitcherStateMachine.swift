@@ -20,7 +20,7 @@ import Foundation
 
 /// Abstract input events delivered to SwitcherStateMachine.
 /// HotkeyTap translates concrete CGEvent/keycode data into these.
-public enum SwitcherInput: Equatable {
+enum SwitcherInput: Equatable {
     /// The trigger modifier key (Option in dev default) went down.
     case modifierDown
     /// The trigger modifier key was released.
@@ -43,7 +43,7 @@ public enum SwitcherInput: Equatable {
 
 /// Actions that the caller (AppDelegate) must execute in response to
 /// a state-machine transition. Equatable so tests can assert on them.
-public enum SwitcherAction: Equatable {
+enum SwitcherAction: Equatable {
     /// No action required (and may mean the event was not consumed).
     case none
     /// Show the panel with the given initial selection index.
@@ -81,13 +81,13 @@ private enum State: Equatable {
 /// the current index) when a `sameAppJump` input arrives in the ACTIVE state.
 /// It returns the next index for the same app, or nil if there is none.
 /// Keeping the resolver injectable makes the machine fully unit-testable.
-public final class SwitcherStateMachine {
+final class SwitcherStateMachine {
 
     // MARK: - Init
 
     /// - Parameter sameAppResolver: Called with the current index; returns the
     ///   next same-app index or nil when no other window of the same app exists.
-    public init(sameAppResolver: ((Int) -> Int?)? = nil) {
+    init(sameAppResolver: ((Int) -> Int?)? = nil) {
         self.sameAppResolver = sameAppResolver
     }
 
@@ -96,7 +96,7 @@ public final class SwitcherStateMachine {
     private var state: State = .idle
 
     /// Resolver for `sameAppJump` input. Injected so tests can control it.
-    public var sameAppResolver: ((Int) -> Int?)?
+    var sameAppResolver: ((Int) -> Int?)?
 
     // MARK: - Public API
 
@@ -109,7 +109,7 @@ public final class SwitcherStateMachine {
     /// - Returns: The action the caller should execute, and whether the
     ///   underlying key event should be consumed (returned nil to the system).
     @discardableResult
-    public func handle(_ input: SwitcherInput, itemCount: Int = 0) -> (action: SwitcherAction, consumed: Bool) {
+    func handle(_ input: SwitcherInput, itemCount: Int = 0) -> (action: SwitcherAction, consumed: Bool) {
         switch state {
 
         // ── IDLE ──────────────────────────────────────────────────────────
@@ -210,19 +210,19 @@ public final class SwitcherStateMachine {
     }
 
     /// Reset to idle (e.g. when the tap is disabled externally).
-    public func reset() {
+    func reset() {
         state = .idle
     }
 
     /// Read-only current state description for debugging.
-    public var isIdle: Bool { state == .idle }
-    public var isModifierHeld: Bool { state == .modifierHeld }
-    public var isActive: Bool {
+    var isIdle: Bool { state == .idle }
+    var isModifierHeld: Bool { state == .modifierHeld }
+    var isActive: Bool {
         if case .active = state { return true }
         return false
     }
     /// The current selection index when active, or nil otherwise.
-    public var activeIndex: Int? {
+    var activeIndex: Int? {
         if case .active(let idx, _) = state { return idx }
         return nil
     }

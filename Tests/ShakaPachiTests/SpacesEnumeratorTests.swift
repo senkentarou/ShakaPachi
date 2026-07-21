@@ -10,6 +10,7 @@
 // and can be exhaustively tested without any system resources.
 
 import XCTest
+
 @testable import ShakaPachi
 
 final class SpacesEnumeratorTests: XCTestCase {
@@ -40,7 +41,8 @@ final class SpacesEnumeratorTests: XCTestCase {
     func testFilter_emptyAllowedIDs_returnsEmpty() {
         let windows = [makeWindow(windowID: 1), makeWindow(windowID: 2)]
         let result = SpacesEnumerator.filterToAllowedIDs(windows, allowedIDs: [])
-        XCTAssertTrue(result.isEmpty,
+        XCTAssertTrue(
+            result.isEmpty,
             "Empty allowedIDs must reject all windows")
     }
 
@@ -64,7 +66,8 @@ final class SpacesEnumeratorTests: XCTestCase {
         XCTAssertEqual(result.count, 2)
         XCTAssertTrue(result.contains { $0.windowID == 1 })
         XCTAssertTrue(result.contains { $0.windowID == 2 })
-        XCTAssertFalse(result.contains { $0.windowID == 3 },
+        XCTAssertFalse(
+            result.contains { $0.windowID == 3 },
             "Window not in allowedIDs must be excluded")
     }
 
@@ -74,7 +77,8 @@ final class SpacesEnumeratorTests: XCTestCase {
             makeWindow(windowID: 200),
         ]
         let result = SpacesEnumerator.filterToAllowedIDs(windows, allowedIDs: [999])
-        XCTAssertTrue(result.isEmpty,
+        XCTAssertTrue(
+            result.isEmpty,
             "No overlap between window IDs and allowedIDs must yield empty result")
     }
 
@@ -87,7 +91,8 @@ final class SpacesEnumeratorTests: XCTestCase {
             makeWindow(windowID: 20, title: "Second"),
         ]
         let result = SpacesEnumerator.filterToAllowedIDs(windows, allowedIDs: [10, 20, 30])
-        XCTAssertEqual(result.map { $0.windowID }, [30, 10, 20],
+        XCTAssertEqual(
+            result.map { $0.windowID }, [30, 10, 20],
             "filterToAllowedIDs must preserve the input order")
     }
 

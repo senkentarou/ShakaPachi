@@ -10,13 +10,14 @@ struct ContributionHeatmap: View {
     let firstUseDate: String?
 
     // soft green — matches the tray icon soft palette
-    private let activityGreen = Color(red: 0.42, green: 0.69, blue: 0.47)
+    // Shared constant defined next to the other appearance colours (Settings.swift).
+    private let activityGreen = AccentColor.heatmapActivityGreen
 
     // Heatmap geometry constants — all pixel values are final.
-    private let totalColumns = 26          // ~half a year
+    private let totalColumns = 26  // ~half a year
     private let daysPerColumn = 7
     private let gap: CGFloat = 3
-    private let squareSize: CGFloat = 13   // unified edge for grid cells AND legend swatches
+    private let squareSize: CGFloat = 13  // unified edge for grid cells AND legend swatches
 
     // Shared opacity ramp for cells and legend swatches — single source of truth.
     private let levelOpacities: [Double] = [0.35, 0.55, 0.78, 1.0]
@@ -36,7 +37,7 @@ struct ContributionHeatmap: View {
                 legendRow()
             }
             .frame(width: gridWidth, alignment: .leading)
-            Spacer(minLength: 0)   // symmetric spacers center the compact heatmap within the section
+            Spacer(minLength: 0)  // symmetric spacers center the compact heatmap within the section
         }
     }
 
@@ -46,7 +47,7 @@ struct ContributionHeatmap: View {
         let dateString: String?  // nil = padding cell (before first use or future)
         let count: Int
         let level: Int
-        let isInRange: Bool      // false = before firstUseDate or in the future
+        let isInRange: Bool  // false = before firstUseDate or in the future
         let colIndex: Int
         let rowIndex: Int
     }
@@ -58,16 +59,19 @@ struct ContributionHeatmap: View {
 
         // Find the Sunday (or week-start) of the week containing today → that's the rightmost column.
         let weekday = cal.component(.weekday, from: today)  // 1=Sun ... 7=Sat
-        let firstWeekday = cal.firstWeekday                  // 1=Sun or 2=Mon
+        let firstWeekday = cal.firstWeekday  // 1=Sun or 2=Mon
         // Days to go back to reach the start of the current week.
         let daysToWeekStart = (weekday - firstWeekday + 7) % 7
-        guard let thisWeekStart = cal.date(byAdding: .day, value: -daysToWeekStart, to: cal.startOfDay(for: today)) else { return [] }
+        guard let thisWeekStart = cal.date(byAdding: .day, value: -daysToWeekStart, to: cal.startOfDay(for: today))
+        else { return [] }
 
         // Grid start = 25 weeks before thisWeekStart (26 columns total).
-        guard let gridStart = cal.date(byAdding: .weekOfYear, value: -(totalColumns - 1), to: thisWeekStart) else { return [] }
+        guard let gridStart = cal.date(byAdding: .weekOfYear, value: -(totalColumns - 1), to: thisWeekStart) else {
+            return []
+        }
 
         // Compute thresholds from counts within the grid range.
-        let allCounts = (0 ..< totalColumns * daysPerColumn).compactMap { offset -> Int? in
+        let allCounts = (0..<totalColumns * daysPerColumn).compactMap { offset -> Int? in
             guard let d = cal.date(byAdding: .day, value: offset, to: gridStart) else { return nil }
             let s = StreakStats.stringFromDate(d)
             return dailyCounts[s]
@@ -79,9 +83,9 @@ struct ContributionHeatmap: View {
 
         // Build column-major grid (26 columns of 7 days each).
         var columns: [[DayCell]] = []
-        for col in 0 ..< totalColumns {
+        for col in 0..<totalColumns {
             var column: [DayCell] = []
-            for row in 0 ..< daysPerColumn {
+            for row in 0..<daysPerColumn {
                 let offset = col * daysPerColumn + row
                 guard let cellDate = cal.date(byAdding: .day, value: offset, to: gridStart) else { continue }
                 let cellStr = StreakStats.stringFromDate(cellDate)
@@ -90,14 +94,15 @@ struct ContributionHeatmap: View {
                 let inRange = !isFuture && !isBeforeFirst
                 let count = inRange ? (dailyCounts[cellStr] ?? 0) : 0
                 let lv = inRange ? StreakStats.level(for: count, thresholds: t) : 0
-                column.append(DayCell(
-                    dateString: cellStr,
-                    count: count,
-                    level: lv,
-                    isInRange: inRange,
-                    colIndex: col,
-                    rowIndex: row
-                ))
+                column.append(
+                    DayCell(
+                        dateString: cellStr,
+                        count: count,
+                        level: lv,
+                        isInRange: inRange,
+                        colIndex: col,
+                        rowIndex: row
+                    ))
             }
             columns.append(column)
         }
@@ -108,13 +113,14 @@ struct ContributionHeatmap: View {
 
     private func monthLabelsRow(gridData: [[DayCell]]) -> some View {
         HStack(alignment: .top, spacing: gap) {
-            ForEach(0 ..< gridData.count, id: \.self) { col in
+            ForEach(0..<gridData.count, id: \.self) { col in
                 let cell = gridData[col].first
                 let showLabel = shouldShowMonthLabel(col: col, gridData: gridData)
                 ZStack(alignment: .leading) {
                     Color.clear.frame(width: squareSize, height: 12)
                     if showLabel, let cell = cell, let dateStr = cell.dateString,
-                       let date = StreakStats.dateFromString(dateStr) {
+                        let date = StreakStats.dateFromString(dateStr)
+                    {
                         let month = Calendar.current.component(.month, from: date)
                         Text(Calendar.current.shortMonthSymbols[month - 1])
                             .font(.caption2)
@@ -133,25 +139,27 @@ struct ContributionHeatmap: View {
 
     private func shouldShowMonthLabel(col: Int, gridData: [[DayCell]]) -> Bool {
         guard col < gridData.count, let cell = gridData[col].first,
-              let dateStr = cell.dateString,
-              let date = StreakStats.dateFromString(dateStr) else { return false }
+            let dateStr = cell.dateString,
+            let date = StreakStats.dateFromString(dateStr)
+        else { return false }
         let cal = Calendar.current
         let month = cal.component(.month, from: date)
         // Skip column 0's label: it's a partial first week, so its month label
         // would crowd against the next month's label at the left edge.
         if col == 0 { return false }
         guard let prevCell = gridData[col - 1].first,
-              let prevStr = prevCell.dateString,
-              let prevDate = StreakStats.dateFromString(prevStr) else { return false }
+            let prevStr = prevCell.dateString,
+            let prevDate = StreakStats.dateFromString(prevStr)
+        else { return false }
         let prevMonth = cal.component(.month, from: prevDate)
         return month != prevMonth
     }
 
     private func gridBody(gridData: [[DayCell]]) -> some View {
         HStack(alignment: .top, spacing: gap) {
-            ForEach(0 ..< gridData.count, id: \.self) { col in
+            ForEach(0..<gridData.count, id: \.self) { col in
                 VStack(spacing: gap) {
-                    ForEach(0 ..< gridData[col].count, id: \.self) { row in
+                    ForEach(0..<gridData[col].count, id: \.self) { row in
                         cellView(cell: gridData[col][row])
                     }
                 }
@@ -184,7 +192,7 @@ struct ContributionHeatmap: View {
             Text("少ない")
                 .font(.caption2)
                 .foregroundColor(.secondary)
-            ForEach(0 ..< levelOpacities.count, id: \.self) { idx in
+            ForEach(0..<levelOpacities.count, id: \.self) { idx in
                 RoundedRectangle(cornerRadius: 2)
                     .fill(activityGreen.opacity(levelOpacities[idx]))
                     .frame(width: squareSize, height: squareSize)
@@ -212,7 +220,8 @@ struct ContributionHeatmap: View {
     // Format firstUseDate for the legend row; returns "—" when absent.
     private func formattedStartDate() -> String {
         guard let s = firstUseDate, let d = StreakStats.dateFromString(s) else { return "—" }
-        return String(format: NSLocalizedString("開始 %@", comment: "Heatmap start date"),
-                      Self.startDateFormatter.string(from: d))
+        return String(
+            format: NSLocalizedString("開始 %@", comment: "Heatmap start date"),
+            Self.startDateFormatter.string(from: d))
     }
 }

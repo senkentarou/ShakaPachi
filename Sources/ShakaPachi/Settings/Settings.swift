@@ -13,6 +13,7 @@
 import AppKit
 import Combine
 import CoreGraphics
+import SwiftUI
 
 // MARK: - Notification
 
@@ -34,7 +35,7 @@ public enum TriggerModifier: String, CaseIterable, Sendable {
     public var eventFlagMask: UInt64 {
         switch self {
         case .control: return 0x0000000000040000  // ModifierFlag.control
-        case .option:  return 0x0000000000080000  // ModifierFlag.option
+        case .option: return 0x0000000000080000  // ModifierFlag.option
         case .command: return 0x0000000000100000  // ModifierFlag.command
         }
     }
@@ -43,7 +44,7 @@ public enum TriggerModifier: String, CaseIterable, Sendable {
     public var displayName: String {
         switch self {
         case .command: return "Command (⌘)"
-        case .option:  return "Option (⌥)"
+        case .option: return "Option (⌥)"
         case .control: return "Control (^)"
         }
     }
@@ -57,7 +58,7 @@ public enum TriggerKey: String, CaseIterable, Sendable {
     /// The CGKeyCode for this key.
     public var keyCode: UInt16 {
         switch self {
-        case .tab:   return 48
+        case .tab: return 48
         case .grave: return 50
         }
     }
@@ -65,7 +66,7 @@ public enum TriggerKey: String, CaseIterable, Sendable {
     /// Human-readable label for UI display.
     public var displayName: String {
         switch self {
-        case .tab:   return "Tab"
+        case .tab: return "Tab"
         case .grave: return "Grave (`)"
         }
     }
@@ -84,9 +85,9 @@ public enum SortMode: String, CaseIterable, Sendable {
     /// Human-readable label for UI display.
     public var displayName: String {
         switch self {
-        case .mru:    return NSLocalizedString("最近使った順 (MRU)", comment: "Sort mode: most recently used")
+        case .mru: return NSLocalizedString("最近使った順 (MRU)", comment: "Sort mode: most recently used")
         case .zOrder: return NSLocalizedString("Z オーダー", comment: "Sort mode: Z-order")
-        case .byApp:  return NSLocalizedString("アプリ別", comment: "Sort mode: by app")
+        case .byApp: return NSLocalizedString("アプリ別", comment: "Sort mode: by app")
         }
     }
 }
@@ -100,8 +101,8 @@ public enum Theme: String, CaseIterable, Sendable {
     /// Human-readable label for UI display.
     public var displayName: String {
         switch self {
-        case .light:  return NSLocalizedString("ライト", comment: "Theme: light")
-        case .dark:   return NSLocalizedString("ダーク", comment: "Theme: dark")
+        case .light: return NSLocalizedString("ライト", comment: "Theme: light")
+        case .dark: return NSLocalizedString("ダーク", comment: "Theme: dark")
         case .system: return NSLocalizedString("システム", comment: "Theme: system")
         }
     }
@@ -109,8 +110,8 @@ public enum Theme: String, CaseIterable, Sendable {
     /// The NSAppearance to apply, or nil for system (inherit).
     public var nsAppearance: NSAppearance? {
         switch self {
-        case .light:  return NSAppearance(named: .aqua)
-        case .dark:   return NSAppearance(named: .darkAqua)
+        case .light: return NSAppearance(named: .aqua)
+        case .dark: return NSAppearance(named: .darkAqua)
         case .system: return nil
         }
     }
@@ -128,12 +129,12 @@ public enum AccentColor: String, CaseIterable, Sendable {
     /// Human-readable label for UI display.
     public var displayName: String {
         switch self {
-        case .system:   return NSLocalizedString("システム", comment: "Accent color: system")
-        case .blue:     return NSLocalizedString("ブルー", comment: "Accent color: blue")
+        case .system: return NSLocalizedString("システム", comment: "Accent color: system")
+        case .blue: return NSLocalizedString("ブルー", comment: "Accent color: blue")
         case .graphite: return NSLocalizedString("グラファイト", comment: "Accent color: graphite")
-        case .teal:     return NSLocalizedString("ティール", comment: "Accent color: teal")
-        case .sand:     return NSLocalizedString("サンド", comment: "Accent color: sand")
-        case .plum:     return NSLocalizedString("プラム", comment: "Accent color: plum")
+        case .teal: return NSLocalizedString("ティール", comment: "Accent color: teal")
+        case .sand: return NSLocalizedString("サンド", comment: "Accent color: sand")
+        case .plum: return NSLocalizedString("プラム", comment: "Accent color: plum")
         }
     }
 
@@ -147,6 +148,12 @@ public enum AccentColor: String, CaseIterable, Sendable {
     /// Alpha for the 1px glass rim border on the switcher panel.
     /// Shared by SwitcherPanel (CALayer borderColor) and AppearancePreviewView (SwiftUI strokeBorder).
     public static let glassBorderAlpha: CGFloat = 0.18
+
+    /// Soft green used by the contribution heatmap cells and legend swatches.
+    /// Matches the tray icon soft palette. Kept here alongside the other shared
+    /// appearance constants so the heatmap and any future consumer never drift.
+    /// SwiftUI `Color` (not `NSColor`) because the heatmap is a SwiftUI view.
+    public static let heatmapActivityGreen = Color(red: 0.42, green: 0.69, blue: 0.47)
 
     /// The NSColor for this accent. Muted / desaturated — this is a work app.
     public var nsColor: NSColor {
@@ -185,18 +192,23 @@ public enum AppLanguage: String, CaseIterable, Sendable {
     /// their own endonyms (shown identically in any locale, like macOS does).
     public var displayName: String {
         switch self {
-        case .system:   return NSLocalizedString("システム", comment: "Language: follow system")
-        case .japanese: return "日本語"
-        case .english:  return "English"
+        // `.system` is the only case that is localized: "follow system" is a
+        // concept whose wording differs per UI language, so it goes through the
+        // catalog. The concrete languages are asymmetric on purpose — they return
+        // their own endonym, shown identically in any UI language (like macOS's
+        // own language list), so they are intentionally NOT localized.
+        case .system: return NSLocalizedString("システム", comment: "Language: follow system")
+        case .japanese: return "日本語"  // endonym — intentionally not localized (shown identically in any UI language)
+        case .english: return "English"  // endonym — intentionally not localized (shown identically in any UI language)
         }
     }
 
     /// Value written to `AppleLanguages`, or nil for `.system` (removes override).
     var appleLanguagesValue: [String]? {
         switch self {
-        case .system:   return nil
+        case .system: return nil
         case .japanese: return ["ja"]
-        case .english:  return ["en"]
+        case .english: return ["en"]
         }
     }
 }
@@ -214,7 +226,8 @@ struct DefaultsEnum<T: RawRepresentable> where T.RawValue == String {
     var wrappedValue: T {
         get {
             guard let raw = defaults.string(forKey: key),
-                  let value = T(rawValue: raw) else { return defaultValue }
+                let value = T(rawValue: raw)
+            else { return defaultValue }
             return value
         }
         // nonmutating: the setter writes to `defaults` (a reference type), never
@@ -323,21 +336,21 @@ final class Settings: ObservableObject {
     // MARK: - UserDefaults keys
 
     private enum Key {
-        static let triggerModifier  = "triggerModifier"
-        static let triggerKey       = "triggerKey"
-        static let sortMode         = "sortMode"
-        static let theme            = "theme"
-        static let maxRows          = "maxRows"
-        static let showDelayMs      = "showDelayMs"
-        static let panelWidth       = "panelWidth"
+        static let triggerModifier = "triggerModifier"
+        static let triggerKey = "triggerKey"
+        static let sortMode = "sortMode"
+        static let theme = "theme"
+        static let maxRows = "maxRows"
+        static let showDelayMs = "showDelayMs"
+        static let panelWidth = "panelWidth"
         static let currentSpaceOnly = "currentSpaceOnly"
-        static let launchAtLogin    = "launchAtLogin"
+        static let launchAtLogin = "launchAtLogin"
         static let excludedBundleIDs = "excludedBundleIDs"
-        static let accentColor      = "accentColor"
+        static let accentColor = "accentColor"
         static let showWindowPreview = "showWindowPreview"
-        static let appLanguage      = "appLanguage"
+        static let appLanguage = "appLanguage"
         // Apple-defined global key that overrides the bundle's resolved language.
-        static let appleLanguages   = "AppleLanguages"
+        static let appleLanguages = "AppleLanguages"
     }
 
     // MARK: Init
@@ -348,18 +361,18 @@ final class Settings: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         _triggerModifier = DefaultsEnum(key: Key.triggerModifier, defaultValue: .command, defaults: defaults)
-        _triggerKey      = DefaultsEnum(key: Key.triggerKey,      defaultValue: .tab,     defaults: defaults)
-        _sortMode        = DefaultsEnum(key: Key.sortMode,        defaultValue: .mru,     defaults: defaults)
-        _theme           = DefaultsEnum(key: Key.theme,           defaultValue: .system,  defaults: defaults)
-        _maxRows         = DefaultsInt (key: Key.maxRows,         defaultValue: 20,       defaults: defaults)
-        _showDelayMs     = DefaultsInt (key: Key.showDelayMs,     defaultValue: 0,        defaults: defaults)
-        _panelWidth      = DefaultsInt (key: Key.panelWidth,      defaultValue: 480,      defaults: defaults)
-        _currentSpaceOnly   = DefaultsBool(key: Key.currentSpaceOnly,   defaultValue: true,  defaults: defaults)
-        _launchAtLogin      = DefaultsBool(key: Key.launchAtLogin,      defaultValue: true,  defaults: defaults)
-        _excludedBundleIDs  = DefaultsStringArray(key: Key.excludedBundleIDs, defaultValue: [], defaults: defaults)
-        _accentColor        = DefaultsEnum(key: Key.accentColor,        defaultValue: .system, defaults: defaults)
-        _showWindowPreview  = DefaultsBool(key: Key.showWindowPreview,  defaultValue: true,  defaults: defaults)
-        _appLanguage        = DefaultsEnum(key: Key.appLanguage,        defaultValue: .system, defaults: defaults)
+        _triggerKey = DefaultsEnum(key: Key.triggerKey, defaultValue: .tab, defaults: defaults)
+        _sortMode = DefaultsEnum(key: Key.sortMode, defaultValue: .mru, defaults: defaults)
+        _theme = DefaultsEnum(key: Key.theme, defaultValue: .system, defaults: defaults)
+        _maxRows = DefaultsInt(key: Key.maxRows, defaultValue: 20, defaults: defaults)
+        _showDelayMs = DefaultsInt(key: Key.showDelayMs, defaultValue: 0, defaults: defaults)
+        _panelWidth = DefaultsInt(key: Key.panelWidth, defaultValue: 480, defaults: defaults)
+        _currentSpaceOnly = DefaultsBool(key: Key.currentSpaceOnly, defaultValue: true, defaults: defaults)
+        _launchAtLogin = DefaultsBool(key: Key.launchAtLogin, defaultValue: true, defaults: defaults)
+        _excludedBundleIDs = DefaultsStringArray(key: Key.excludedBundleIDs, defaultValue: [], defaults: defaults)
+        _accentColor = DefaultsEnum(key: Key.accentColor, defaultValue: .system, defaults: defaults)
+        _showWindowPreview = DefaultsBool(key: Key.showWindowPreview, defaultValue: true, defaults: defaults)
+        _appLanguage = DefaultsEnum(key: Key.appLanguage, defaultValue: .system, defaults: defaults)
 
         // Drive `objectWillChange` from the SAME synchronous `.settingsDidChange`
         // post that every setter already emits, rather than from `@Published`
@@ -521,7 +534,7 @@ final class Settings: ObservableObject {
     var appLanguage: AppLanguage {
         get { _appLanguage.wrappedValue }
         set {
-            _appLanguage.wrappedValue = newValue   // persists + posts .settingsDidChange
+            _appLanguage.wrappedValue = newValue  // persists + posts .settingsDidChange
             if let langs = newValue.appleLanguagesValue {
                 defaults.set(langs, forKey: Key.appleLanguages)
             } else {
@@ -533,7 +546,6 @@ final class Settings: ObservableObject {
     /// The language selected when the process launched, captured once by
     /// AppDelegate at startup so Settings can show a "restart to apply" prompt.
     @MainActor static var launchLanguage: AppLanguage = .system
-
 
     // -- Panel width (advisory in v1 — see note below) --
 

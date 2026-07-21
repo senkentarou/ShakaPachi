@@ -150,8 +150,9 @@ final class WindowPreviewCache {
             CGWindowImageOption.boundsIgnoreFraming
         )
         guard let cg = cgImage else { return nil }
-        return NSImage(cgImage: cg,
-                       size: NSSize(width: cg.width, height: cg.height))
+        return NSImage(
+            cgImage: cg,
+            size: NSSize(width: cg.width, height: cg.height))
     }
 
     // MARK: - Private helpers
@@ -163,7 +164,8 @@ final class WindowPreviewCache {
             // New entry: append to LRU order and evict if over cap.
             lruOrder.append(id)
             if lruOrder.count > Self.maxEntries,
-               let oldest = lruOrder.first {
+                let oldest = lruOrder.first
+            {
                 lruOrder.removeFirst()
                 cache.removeValue(forKey: oldest)
             }

@@ -6,6 +6,7 @@
 // other and from UserDefaults.standard.
 
 import XCTest
+
 @testable import ShakaPachi
 
 @MainActor
@@ -29,7 +30,8 @@ final class SettingsTests: XCTestCase {
 
     func testDefault_triggerModifier_isCommand() {
         let (_, settings) = makeSuite()
-        XCTAssertEqual(settings.triggerModifier, .command,
+        XCTAssertEqual(
+            settings.triggerModifier, .command,
             "Default triggerModifier is .command — the shipping default (§13-2)")
     }
 

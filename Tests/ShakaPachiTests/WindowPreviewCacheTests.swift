@@ -7,6 +7,7 @@
 // assertions can be made immediately after prefetch() returns without expectations.
 
 import XCTest
+
 @testable import ShakaPachi
 
 @MainActor
@@ -33,7 +34,7 @@ final class WindowPreviewCacheTests: XCTestCase {
                 box.value.append(id)
                 return id == returnsImageForID ? img : nil
             },
-            schedule: { work in work() }   // synchronous: runs work() inline
+            schedule: { work in work() }  // synchronous: runs work() inline
         )
         // Write back so the caller sees the mutations.
         // (The box holds a reference — mutations are visible through it.)
@@ -108,7 +109,10 @@ final class WindowPreviewCacheTests: XCTestCase {
         var pendingWork: (() -> Void)? = nil
 
         let cache = WindowPreviewCache(
-            capture: { _ in captureCount += 1; return img },
+            capture: { _ in
+                captureCount += 1
+                return img
+            },
             schedule: { work in
                 // Defer execution — simulate an async scheduler.
                 pendingWork = work
@@ -125,7 +129,8 @@ final class WindowPreviewCacheTests: XCTestCase {
         // Now flush the deferred work (simulates scheduler completing).
         pendingWork?()
 
-        XCTAssertEqual(captureCount, 1,
+        XCTAssertEqual(
+            captureCount, 1,
             "Capture must be called exactly once — the in-flight dedup must block the second call")
     }
 
@@ -135,11 +140,14 @@ final class WindowPreviewCacheTests: XCTestCase {
         var captureCount = 0
         let img = stubImage()
         let cache = WindowPreviewCache(
-            capture: { _ in captureCount += 1; return img },
+            capture: { _ in
+                captureCount += 1
+                return img
+            },
             schedule: { work in work() }
         )
 
-        cache.prefetch(3, force: true)   // populate
+        cache.prefetch(3, force: true)  // populate
         XCTAssertEqual(captureCount, 1)
 
         cache.prefetch(3, force: false)  // should skip — already cached
@@ -150,7 +158,10 @@ final class WindowPreviewCacheTests: XCTestCase {
         var captureCount = 0
         let img = stubImage()
         let cache = WindowPreviewCache(
-            capture: { _ in captureCount += 1; return img },
+            capture: { _ in
+                captureCount += 1
+                return img
+            },
             schedule: { work in work() }
         )
 
@@ -163,7 +174,7 @@ final class WindowPreviewCacheTests: XCTestCase {
 
     func testLRUEviction_dropsOldestPastCap() {
         let img = stubImage()
-        let cap = 48   // WindowPreviewCache.maxEntries
+        let cap = 48  // WindowPreviewCache.maxEntries
 
         let cache = WindowPreviewCache(
             capture: { _ in img },
@@ -179,10 +190,12 @@ final class WindowPreviewCacheTests: XCTestCase {
 
         // Add one more to exceed the cap — ID 1 (oldest) should be evicted.
         cache.prefetch(CGWindowID(cap + 1), force: true)
-        XCTAssertNil(cache.cachedImage(for: 1),
-                     "Oldest entry must be evicted when the cap is exceeded")
-        XCTAssertNotNil(cache.cachedImage(for: 2),
-                        "Second-oldest entry must still be present after one eviction")
+        XCTAssertNil(
+            cache.cachedImage(for: 1),
+            "Oldest entry must be evicted when the cap is exceeded")
+        XCTAssertNotNil(
+            cache.cachedImage(for: 2),
+            "Second-oldest entry must still be present after one eviction")
     }
 }
 

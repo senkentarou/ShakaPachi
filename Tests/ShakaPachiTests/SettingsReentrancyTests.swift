@@ -10,6 +10,7 @@
 // the assertion here.
 
 import XCTest
+
 @testable import ShakaPachi
 
 @MainActor
@@ -41,11 +42,12 @@ final class SettingsReentrancyTests: XCTestCase {
         }
         defer { NotificationCenter.default.removeObserver(token) }
 
-        settings.triggerModifier = .option   // would SIGABRT before the fix
+        settings.triggerModifier = .option  // would SIGABRT before the fix
 
         XCTAssertEqual(settings.triggerModifier, .option)
-        XCTAssertEqual(observed, .option,
-                       "the synchronous observer must see the freshly-set value")
+        XCTAssertEqual(
+            observed, .option,
+            "the synchronous observer must see the freshly-set value")
     }
 
     // Int wrapper (DefaultsInt) — lock the fix across wrapper kinds.

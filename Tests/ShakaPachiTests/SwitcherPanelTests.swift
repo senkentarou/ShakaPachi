@@ -4,6 +4,7 @@
 // stateless computations on plain values.
 
 import XCTest
+
 @testable import ShakaPachi
 
 final class SwitcherPanelTests: XCTestCase {
@@ -12,32 +13,37 @@ final class SwitcherPanelTests: XCTestCase {
 
     func testPanelSize_oneItem() {
         let size = SwitcherLayout.panelSize(itemCount: 1)
-        XCTAssertEqual(size.width,
-                       SwitcherLayout.horizontalMargin * 2 + SwitcherLayout.tileSize)
-        XCTAssertEqual(size.height,
-                       SwitcherLayout.topPadding + SwitcherLayout.tileSize
-                       + SwitcherLayout.titleGap + SwitcherLayout.titleHeight
-                       + SwitcherLayout.bottomPadding)
+        XCTAssertEqual(
+            size.width,
+            SwitcherLayout.horizontalMargin * 2 + SwitcherLayout.tileSize)
+        XCTAssertEqual(
+            size.height,
+            SwitcherLayout.topPadding + SwitcherLayout.tileSize
+                + SwitcherLayout.titleGap + SwitcherLayout.titleHeight
+                + SwitcherLayout.bottomPadding)
     }
 
     func testPanelSize_zeroItems_treatedAsOne() {
         // An empty list never shows the panel, but the math must not break.
-        XCTAssertEqual(SwitcherLayout.panelSize(itemCount: 0),
-                       SwitcherLayout.panelSize(itemCount: 1))
+        XCTAssertEqual(
+            SwitcherLayout.panelSize(itemCount: 0),
+            SwitcherLayout.panelSize(itemCount: 1))
     }
 
     func testPanelSize_widthGrowsPerItem() {
         let one = SwitcherLayout.panelSize(itemCount: 1)
         let two = SwitcherLayout.panelSize(itemCount: 2)
-        XCTAssertEqual(two.width - one.width,
-                       SwitcherLayout.tileSize + SwitcherLayout.tileSpacing,
-                       "Each additional window adds one tile plus one gap")
+        XCTAssertEqual(
+            two.width - one.width,
+            SwitcherLayout.tileSize + SwitcherLayout.tileSpacing,
+            "Each additional window adds one tile plus one gap")
     }
 
     func testPanelSize_heightIndependentOfCount() {
-        XCTAssertEqual(SwitcherLayout.panelSize(itemCount: 1).height,
-                       SwitcherLayout.panelSize(itemCount: 30).height,
-                       "A single-row layout has constant height")
+        XCTAssertEqual(
+            SwitcherLayout.panelSize(itemCount: 1).height,
+            SwitcherLayout.panelSize(itemCount: 30).height,
+            "A single-row layout has constant height")
     }
 
     // MARK: - tileRect
@@ -46,15 +52,19 @@ final class SwitcherPanelTests: XCTestCase {
         let rect = SwitcherLayout.tileRect(index: 0)
         XCTAssertEqual(rect.origin.x, SwitcherLayout.horizontalMargin)
         XCTAssertEqual(rect.origin.y, SwitcherLayout.topPadding)
-        XCTAssertEqual(rect.size, NSSize(width: SwitcherLayout.tileSize,
-                                         height: SwitcherLayout.tileSize))
+        XCTAssertEqual(
+            rect.size,
+            NSSize(
+                width: SwitcherLayout.tileSize,
+                height: SwitcherLayout.tileSize))
     }
 
     func testTileRect_advancesByTileAndSpacing() {
         let r0 = SwitcherLayout.tileRect(index: 0)
         let r1 = SwitcherLayout.tileRect(index: 1)
-        XCTAssertEqual(r1.origin.x - r0.origin.x,
-                       SwitcherLayout.tileSize + SwitcherLayout.tileSpacing)
+        XCTAssertEqual(
+            r1.origin.x - r0.origin.x,
+            SwitcherLayout.tileSize + SwitcherLayout.tileSpacing)
         XCTAssertEqual(r0.origin.y, r1.origin.y, "Single row: same y for all tiles")
     }
 
@@ -62,8 +72,9 @@ final class SwitcherPanelTests: XCTestCase {
         let count = 8
         let last = SwitcherLayout.tileRect(index: count - 1)
         let size = SwitcherLayout.panelSize(itemCount: count)
-        XCTAssertEqual(last.maxX + SwitcherLayout.horizontalMargin, size.width,
-                       "Panel width must exactly wrap the last tile plus margin")
+        XCTAssertEqual(
+            last.maxX + SwitcherLayout.horizontalMargin, size.width,
+            "Panel width must exactly wrap the last tile plus margin")
     }
 
     // MARK: - advanceIndex (wrap-around)
@@ -74,17 +85,20 @@ final class SwitcherPanelTests: XCTestCase {
     }
 
     func testAdvanceIndex_wrapsAround() {
-        XCTAssertEqual(SwitcherLayout.advanceIndex(4, count: 5), 0,
+        XCTAssertEqual(
+            SwitcherLayout.advanceIndex(4, count: 5), 0,
             "Advancing past the last item must wrap to 0")
     }
 
     func testAdvanceIndex_singleItem_staysAtZero() {
-        XCTAssertEqual(SwitcherLayout.advanceIndex(0, count: 1), 0,
+        XCTAssertEqual(
+            SwitcherLayout.advanceIndex(0, count: 1), 0,
             "Single-item list must always return 0")
     }
 
     func testAdvanceIndex_zeroCount_returnsZero() {
-        XCTAssertEqual(SwitcherLayout.advanceIndex(0, count: 0), 0,
+        XCTAssertEqual(
+            SwitcherLayout.advanceIndex(0, count: 0), 0,
             "Empty list must return 0 without crashing")
     }
 
@@ -97,13 +111,15 @@ final class SwitcherPanelTests: XCTestCase {
 
     func testIndicesToRedraw_differentIndices_returnsBoth() {
         let set = SwitcherLayout.indicesToRedraw(old: 1, new: 3)
-        XCTAssertEqual(set, IndexSet([1, 3]),
+        XCTAssertEqual(
+            set, IndexSet([1, 3]),
             "Both old and new indices must be included")
     }
 
     func testIndicesToRedraw_sameIndex_returnsSingleTile() {
         let set = SwitcherLayout.indicesToRedraw(old: 2, new: 2)
-        XCTAssertEqual(set, IndexSet(integer: 2),
+        XCTAssertEqual(
+            set, IndexSet(integer: 2),
             "When old == new the set should contain exactly one index")
     }
 
@@ -148,14 +164,16 @@ final class SwitcherPanelTests: XCTestCase {
         // Only meaningful when we didn't hit the floor.
         if tile > SwitcherLayout.minTileSize {
             let width = SwitcherLayout.panelSize(itemCount: count, effectiveTile: tile).width
-            XCTAssertLessThanOrEqual(width, available + 0.5,
+            XCTAssertLessThanOrEqual(
+                width, available + 0.5,
                 "Shrunk tiles must fit within the available width")
         }
     }
 
     func testEffectiveTileSize_zeroItems_returnsNominal() {
-        XCTAssertEqual(SwitcherLayout.effectiveTileSize(itemCount: 0, availableWidth: 500),
-                       SwitcherLayout.tileSize)
+        XCTAssertEqual(
+            SwitcherLayout.effectiveTileSize(itemCount: 0, availableWidth: 500),
+            SwitcherLayout.tileSize)
     }
 
     func testEffectiveIconSize_keepsProportion() {
@@ -170,9 +188,10 @@ final class SwitcherPanelTests: XCTestCase {
         let count = 6
         let tile: CGFloat = 50
         let size = SwitcherLayout.panelSize(itemCount: count, effectiveTile: tile)
-        let expectedWidth = SwitcherLayout.horizontalMargin * 2
-                          + CGFloat(count) * tile
-                          + CGFloat(count - 1) * SwitcherLayout.tileSpacing
+        let expectedWidth =
+            SwitcherLayout.horizontalMargin * 2
+            + CGFloat(count) * tile
+            + CGFloat(count - 1) * SwitcherLayout.tileSpacing
         XCTAssertEqual(size.width, expectedWidth)
     }
 }
