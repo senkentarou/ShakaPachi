@@ -55,7 +55,7 @@
 "ShakaPachi — 停止中" = "ShakaPachi — Paused";
 "ShakaPachi — 設定を開いています" = "ShakaPachi — Settings open";
 "ウィンドウ切替を有効化" = "Enable window switching";
-"ウィンドウ切替を無効化" = "Disable window switching";
+"ウィンドウ切替を一時的に無効化" = "Temporarily disable window switching";
 "⚠ ウィンドウ切替を有効化" = "⚠ Enable window switching";
 "設定…" = "Settings…";
 "⚠ 権限の状態…" = "⚠ Permission status…";

@@ -205,7 +205,7 @@ final class StatusItemController {
     private func refreshToggleItem() {
         let allGranted = permissionManager.allPermissionsGranted()
         if tapEnabled {
-            toggleItem?.title = NSLocalizedString("ウィンドウ切替を無効化", comment: "Menu item: disable window switching")
+            toggleItem?.title = NSLocalizedString("ウィンドウ切替を一時的に無効化", comment: "Menu item: temporarily disable window switching")
         } else if allGranted {
             toggleItem?.title = NSLocalizedString("⚠ ウィンドウ切替を有効化", comment: "Menu item: enable window switching (needs attention)")
         } else {
