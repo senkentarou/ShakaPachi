@@ -48,7 +48,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let win = makeWindow()
         win.delegate = self
         win.contentViewController = makeSettingsRootController()
-        win.setContentSize(NSSize(width: 520, height: 420))
+        win.setContentSize(NSSize(width: 560, height: 660))
         win.center()
         // Keep the settings window findable: float above other windows and
         // follow the user onto whichever Space is active, so it can't get lost
@@ -94,14 +94,14 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     private func makeWindow() -> NSWindow {
         let win = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 560, height: 660),
+            styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
         win.title = "ShakaPachi 設定"
         win.isReleasedWhenClosed = false
-        win.minSize = NSSize(width: 400, height: 300)
+        win.minSize = NSSize(width: 460, height: 420)
         return win
     }
 
