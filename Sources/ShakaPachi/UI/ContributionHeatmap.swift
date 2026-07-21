@@ -20,7 +20,7 @@ struct ContributionHeatmap: View {
     private let squareSize: CGFloat = 13  // unified edge for grid cells AND legend swatches
 
     // Shared opacity ramp for cells and legend swatches — single source of truth.
-    private let levelOpacities: [Double] = [0.35, 0.55, 0.78, 1.0]
+    private let levelOpacities: [Double] = [0.5, 0.67, 0.83, 1.0]
 
     // Fixed total grid width derived from constants.
     private var gridWidth: CGFloat {
