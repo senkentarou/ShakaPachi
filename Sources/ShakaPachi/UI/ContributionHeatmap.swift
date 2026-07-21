@@ -20,7 +20,7 @@ struct ContributionHeatmap: View {
     private let squareSize: CGFloat = 13  // unified edge for grid cells AND legend swatches
 
     // Shared opacity ramp for cells and legend swatches — single source of truth.
-    private let levelOpacities: [Double] = [0.35, 0.55, 0.78, 1.0]
+    private let levelOpacities: [Double] = [0.5, 0.67, 0.83, 1.0]
 
     // Fixed total grid width derived from constants.
     private var gridWidth: CGFloat {
@@ -48,6 +48,7 @@ struct ContributionHeatmap: View {
         let count: Int
         let level: Int
         let isInRange: Bool  // false = before firstUseDate or in the future
+        let isToday: Bool  // true = this cell is the current local day
         let colIndex: Int
         let rowIndex: Int
     }
@@ -100,6 +101,7 @@ struct ContributionHeatmap: View {
                         count: count,
                         level: lv,
                         isInRange: inRange,
+                        isToday: cellStr == todayStr,
                         colIndex: col,
                         rowIndex: row
                     ))
@@ -172,6 +174,17 @@ struct ContributionHeatmap: View {
         RoundedRectangle(cornerRadius: 2)
             .fill(cellColor(cell: cell))
             .frame(width: squareSize, height: squareSize)
+            .overlay(todayRing(for: cell))
+    }
+
+    // A thin high-contrast ring marks the current local day so it's always
+    // identifiable even when today has no activity (level 0).
+    @ViewBuilder
+    private func todayRing(for cell: DayCell) -> some View {
+        if cell.isToday {
+            RoundedRectangle(cornerRadius: 2)
+                .strokeBorder(Color.primary.opacity(0.7), lineWidth: 1.5)
+        }
     }
 
     private func cellColor(cell: DayCell) -> Color {
