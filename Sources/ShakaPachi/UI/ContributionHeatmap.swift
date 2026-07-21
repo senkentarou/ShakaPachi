@@ -8,7 +8,9 @@ struct ContributionHeatmap: View {
 
     let dailyCounts: [String: Int]
     let firstUseDate: String?
-    let accent: Color
+
+    // soft green — matches the tray icon soft palette
+    private let activityGreen = Color(red: 0.42, green: 0.69, blue: 0.47)
 
     // Heatmap geometry constants — all pixel values are final.
     private let totalColumns = 26          // ~half a year
@@ -170,10 +172,10 @@ struct ContributionHeatmap: View {
         }
         switch cell.level {
         case 0: return Color.secondary.opacity(0.10)
-        case 1: return accent.opacity(levelOpacities[0])
-        case 2: return accent.opacity(levelOpacities[1])
-        case 3: return accent.opacity(levelOpacities[2])
-        default: return accent.opacity(levelOpacities[3])
+        case 1: return activityGreen.opacity(levelOpacities[0])
+        case 2: return activityGreen.opacity(levelOpacities[1])
+        case 3: return activityGreen.opacity(levelOpacities[2])
+        default: return activityGreen.opacity(levelOpacities[3])
         }
     }
 
@@ -184,7 +186,7 @@ struct ContributionHeatmap: View {
                 .foregroundColor(.secondary)
             ForEach(0 ..< levelOpacities.count, id: \.self) { idx in
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(accent.opacity(levelOpacities[idx]))
+                    .fill(activityGreen.opacity(levelOpacities[idx]))
                     .frame(width: squareSize, height: squareSize)
             }
             Text("多い")

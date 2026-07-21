@@ -518,8 +518,7 @@ struct StatsSettingsView: View {
 
                     ContributionHeatmap(
                         dailyCounts: dailyCounts,
-                        firstUseDate: firstUseDate,
-                        accent: Color(nsColor: Settings.shared.accentColor.nsColor)
+                        firstUseDate: firstUseDate
                     )
                     .padding(.vertical, 4)
                 } header: {
