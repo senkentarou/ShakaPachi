@@ -11,30 +11,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var onboardingWindow: OnboardingWindow?
     private var hotkeyTap: HotkeyTap?
 
-    // §6.2: state machine owns the switcher logic; wired in startTapIfPossible().
-    private var switcherMachine: SwitcherStateMachine?
+    // Orchestrates the switch cycle (trigger → panel → move → confirm/cancel).
+    // Created and wired in startTapIfPossible(); see SwitchCoordinator.swift.
+    private var switchCoordinator: SwitchCoordinator?
 
-    // §7.2: panel created once at startup, retained forever.
+    // Panel created once at startup, retained forever.
     private var switcherPanel: SwitcherPanel?
 
-    // Real window data source (§5) and pre-scaled icon cache (§8).
+    // Real window data source and pre-scaled icon cache.
     private var windowStore: WindowStore?
     private var iconCache: IconCache?
 
-    // §Step10: Activator created once at launch in applicationDidFinishLaunching
-    // and retained for the lifetime of the app. Optional only to avoid calling
-    // the @MainActor init from a non-isolated stored-property context (Swift 6).
+    // Activator created once at launch in applicationDidFinishLaunching and
+    // retained for the lifetime of the app. Optional only to avoid calling the
+    // @MainActor init from a non-isolated stored-property context (Swift 6).
     private var activator: Activator?
 
-    // Canonical snapshot of WindowInfo taken at panel-show time (source of truth).
-    // Deliverable 2: replace the icon-only lastSwitcherItems snapshot with the
-    // full WindowInfo snapshot so confirmSelection can call Activator.activate(_:)
-    // with the exact window, and nextSameAppIndex uses the SAME list (no re-enum).
-    private var lastWindowInfos: [WindowInfo] = []
-    // Derived from lastWindowInfos at show time; kept for the panel API.
-    private var lastSwitcherItems: [SwitcherItem] = []
-
-    // §Step12: Settings window controller — retained here because NSWindow.delegate
+    // Settings window controller — retained here because NSWindow.delegate
     // is weak; a local would dealloc and leave activation policy stuck at .regular.
     private var settingsWindow: SettingsWindow?
 
@@ -60,18 +53,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Run as a menu-bar accessory: no Dock icon, no activation on launch.
         NSApp.setActivationPolicy(.accessory)
 
-        // §Step10: create Activator on main actor (must be done here, not at
+        // Create Activator on main actor (must be done here, not at
         // stored-property init time, because of @MainActor isolation).
         self.activator = Activator()
 
-        // §7.2: create the panel once here; never destroy it.
+        // Create the panel once here; never destroy it.
         let panel = SwitcherPanel()
         self.switcherPanel = panel
 
         // Apply the saved theme immediately at launch.
         applyTheme(Settings.shared.theme)
 
-        // Real data source + icon cache, created once and retained (§5, §8).
+        // Real data source + icon cache, created once and retained.
         let settings = Settings.shared
         self.windowStore = WindowStore(excludedBundleIDs: Set(settings.excludedBundleIDs))
         self.iconCache = IconCache()
@@ -100,7 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // §12 Settings menu item: open the settings window with Cmd+,
+        // Settings menu item: open the settings window with Cmd+,
         sc.onOpenSettings = { [weak self] in
             self?.openSettings()
         }
@@ -109,7 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.settingsWindow?.close()
         }
 
-        // §12 Live settings: observe all settings changes and apply immediately.
+        // Live settings: observe all settings changes and apply immediately.
         // The observer closure is @Sendable, so it captures a Sendable weak box
         // rather than `self` (a non-Sendable @MainActor NSObject) directly. The
         // .main queue guarantees the body runs on the main thread.
@@ -173,12 +166,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         #if DEBUG
-            // DEBUG self-check (§7 completion gate): simulate one trigger to get an
+            // DEBUG self-check (completion gate): simulate one trigger to get an
             // N1 proxy without synthesising CGEvents. Do this after the tap is set
             // up so the code path is realistic, but use a synthetic t0 = now.
+            // Runs whenever the panel exists (independent of the tap/permissions),
+            // so it computes its own item list from windowStore/iconCache rather
+            // than reaching through the coordinator, which may not be wired yet.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
                 guard let self, let panel = self.switcherPanel else { return }
-                let items = self.currentSwitcherItems()
+                let items = self.debugCurrentSwitcherItems()
                 guard !items.isEmpty else {
                     NSLog("[ShakaPachi] N1 self-check skipped: 0 windows")
                     return
@@ -187,9 +183,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let debugPreviewEnabled =
                     Settings.shared.showWindowPreview
                     && (self.permissionManager?.screenRecordingStatus() == .granted)
+                // Initial selection: previous window (index 1) when there are two
+                // or more, otherwise the only window (index 0) — same rule the
+                // coordinator applies at show time.
+                let debugInitialIndex = items.count >= 2 ? 1 : 0
                 panel.show(
                     items: items,
-                    selectedIndex: self.initialSelection(count: items.count),
+                    selectedIndex: debugInitialIndex,
                     previewEnabled: debugPreviewEnabled)
                 panel.displayIfNeeded()
                 let n1 = (CFAbsoluteTimeGetCurrent() - syntheticT0) * 1000.0
@@ -230,207 +230,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // §6.2 / Step 9: route all switcher inputs through the state machine.
-        // The machine is pure logic; we execute its returned action here.
-        // §4.3: the callback runs on the main run loop, and onSwitcherInput
-        // is called synchronously within the tap callback (no async hop needed
-        // for the consume decision). Panel/UI work is cheap enough to do inline
-        // because it only posts display requests — no blocking I/O.
-        let machine = SwitcherStateMachine(sameAppResolver: { [weak self] currentIndex in
-            // Resolve the next window index that belongs to the same app as
-            // the currently selected window. This requires the WindowStore's
-            // last-enumerated list, which AppDelegate caches during showPanel.
-            self?.nextSameAppIndex(from: currentIndex)
-        })
-        self.switcherMachine = machine
+        // Route all switcher inputs through the SwitchCoordinator, which owns the
+        // state machine and executes each returned action. The callback runs on
+        // the main run loop and is invoked synchronously within the tap callback
+        // (no async hop needed for the consume decision), so the coordinator does
+        // only cheap, non-blocking work and returns the consume boolean directly.
+        // Requires windowStore/iconCache/activator, all created in
+        // applicationDidFinishLaunching before this method can run.
+        guard let windowStore = self.windowStore,
+            let iconCache = self.iconCache,
+            let switcherPanel = self.switcherPanel,
+            let activator = self.activator
+        else { return }
+        let coordinator = SwitchCoordinator(
+            windowStore: windowStore,
+            iconCache: iconCache,
+            switcherPanel: switcherPanel,
+            activator: activator,
+            permissionManager: permissionManager)
+        self.switchCoordinator = coordinator
 
-        tap.onSwitcherInput = { [weak self] input, t0 in
-            guard let self, let panel = self.switcherPanel else { return false }
-
-            // Supply the current item count only when showing the panel
-            // (MODIFIER_HELD + trigger transition). For all other inputs
-            // the machine ignores itemCount, so 0 is a safe sentinel.
-            // Read showDelayMs at trigger time so showPanel can use it.
-            let showDelay: Int
-            let itemCount: Int
-            if case .trigger = input, !panel.isVisible {
-                // "Show" transition: enumerate once and snapshot BOTH the full
-                // WindowInfo list and the derived SwitcherItems.  The snapshot
-                // is the source of truth for confirmSelection and sameAppResolver
-                // throughout this switcher session, so they see a stable list
-                // even if windows open/close between show and confirm (§15).
-                // Read Settings values (fast stored properties — §4.3 safe).
-                showDelay = Settings.shared.showDelayMs
-                let infos =
-                    self.windowStore?.enumerate(
-                        currentSpaceOnly: Settings.shared.currentSpaceOnly,
-                        sortMode: Settings.shared.sortMode
-                    ) ?? []
-                let icons = self.iconCache
-                self.lastWindowInfos = infos
-                self.lastSwitcherItems = infos.map { info in
-                    SwitcherItem(
-                        icon: icons?.icon(for: info.pid, bundleID: info.bundleID),
-                        title: info.title,
-                        windowID: info.windowID
-                    )
-                }
-                itemCount = infos.count
-            } else {
-                showDelay = 0  // Not a show transition; delay not used.
-                itemCount = panel.itemCount
-            }
-
-            let (action, consumed) = machine.handle(input, itemCount: itemCount)
-
-            switch action {
-            case .none:
-                break
-
-            case .showPanel(let initialIndex):
-                // §15 edge case: 0 windows — the machine already returned
-                // .none in that case (itemCount == 0 guard inside machine),
-                // but be defensive here too.
-                let items = self.lastSwitcherItems
-                guard !items.isEmpty else { break }
-                // Gate the preview on the user's setting AND screen-recording
-                // permission. Both are fast stored-property / system-call reads.
-                let previewEnabled =
-                    Settings.shared.showWindowPreview
-                    && (self.permissionManager?.screenRecordingStatus() == .granted)
-                // §11.2 showDelayMs: delay the actual show by the configured
-                // number of milliseconds. Default 0 means no delay, so there
-                // is no behavior change for users who haven't set this. The N1
-                // measurement still reflects wall time from the tap entry (t0),
-                // so a non-zero delay is visible in the log.
-                let delayMs = showDelay
-                if delayMs <= 0 {
-                    panel.show(
-                        items: items, selectedIndex: initialIndex,
-                        previewEnabled: previewEnabled)
-                    panel.displayIfNeeded()
-                    let n1 = (CFAbsoluteTimeGetCurrent() - t0) * 1000.0
-                    NSLog("[ShakaPachi] N1: %.2fms (callback→display, %d windows)", n1, items.count)
-                } else {
-                    let capturedItems = items
-                    let capturedIndex = initialIndex
-                    let capturedT0 = t0
-                    let capturedPreview = previewEnabled
-                    DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(delayMs)) { [weak self] in
-                        guard let self, let panel = self.switcherPanel else { return }
-                        panel.show(
-                            items: capturedItems, selectedIndex: capturedIndex,
-                            previewEnabled: capturedPreview)
-                        panel.displayIfNeeded()
-                        let n1 = (CFAbsoluteTimeGetCurrent() - capturedT0) * 1000.0
-                        NSLog(
-                            "[ShakaPachi] N1: %.2fms (callback→display incl %dms delay, %d windows)",
-                            n1, delayMs, capturedItems.count)
-                    }
-                }
-
-            case .moveSelection(let newIndex):
-                let t2start = CFAbsoluteTimeGetCurrent()
-                panel.updateSelection(to: newIndex)
-                panel.displayIfNeeded()
-                let n2 = (CFAbsoluteTimeGetCurrent() - t2start) * 1000.0
-                NSLog("[ShakaPachi] N2 redraw: %.2fms", n2)
-
-            case .confirmSelection(let index):
-                // §15 edge case: guard against out-of-range index (window may
-                // have closed during the switcher session between show and confirm).
-                let infos = self.lastWindowInfos
-                if infos.indices.contains(index) {
-                    NSLog(
-                        "[ShakaPachi] Confirm window index %d (pid %d, title: %@)",
-                        index, infos[index].pid, infos[index].title)
-                    self.activator?.activate(infos[index])
-                    // §5.5: record this activation so the next enumerate() puts
-                    // this window at index 0 and the previously-active window
-                    // (the one we just came from) stays at index 1.  This makes
-                    // "press once, release" reliably return to the previous window.
-                    self.windowStore?.recordActivation(infos[index].windowID)
-                    // Count confirmed switches only (not cancel or out-of-range).
-                    StatsStore.shared.recordSwitch()
-                    // When the Settings/onboarding window is open, ShakaPachi is a
-                    // .regular foreground app and would otherwise stay in front of
-                    // the window we just raised, so the selected window would not
-                    // actually come forward. Yield active status so the target wins.
-                    // In normal use ShakaPachi is .accessory and never active, so
-                    // isActive is false and this is a no-op.
-                    if NSApp.isActive {
-                        NSApp.deactivate()
-                    }
-                } else {
-                    // Out-of-range: log and do nothing more than hide; app
-                    // activate already ran inside Activator.activate for the
-                    // in-range case, so there is nothing safe to raise here.
-                    NSLog(
-                        "[ShakaPachi] Confirm index %d out of range (count %d) — hide only",
-                        index, infos.count)
-                }
-                panel.hide()
-
-            case .cancel:
-                panel.hide()
-            }
-
-            return consumed
+        // [weak coordinator]: the tap is torn down before the delegate, but the
+        // coordinator is delegate-owned, so hold it weakly and fall back to the
+        // non-consuming default if it has been released.
+        tap.onSwitcherInput = { [weak coordinator] input, t0 in
+            coordinator?.handleInput(input, t0: t0) ?? false
         }
 
         hotkeyTap = tap
         tap.enable()
     }
 
-    /// Enumerate the current windows (§5) and map them to switcher items,
-    /// resolving each app icon through the pre-scaled cache (§8).
-    @MainActor
-    private func currentSwitcherItems() -> [SwitcherItem] {
-        guard let windowStore, let iconCache else { return [] }
-        let settings = Settings.shared
-        return windowStore.enumerate(
-            currentSpaceOnly: settings.currentSpaceOnly,
-            sortMode: settings.sortMode
-        ).map { info in
-            SwitcherItem(
-                icon: iconCache.icon(for: info.pid, bundleID: info.bundleID),
-                title: info.title,
-                windowID: info.windowID
-            )
-        }
-    }
-
-    /// Initial selection index (§6.2): the previous window (index 1) when there
-    /// are two or more, otherwise the only window (index 0).
-    private func initialSelection(count: Int) -> Int {
-        count >= 2 ? 1 : 0
-    }
-
-    /// Return the next index that belongs to the same app as `currentIndex`
-    /// in the last-shown snapshot, or nil if there is no other window of
-    /// the same app. Used by the state machine's sameAppResolver closure.
-    ///
-    /// Uses `lastWindowInfos` (the snapshot taken at show time) rather than
-    /// re-enumerating WindowStore. This fixes the fragile bug where the live
-    /// window list can shift between the show transition and the grave-key press,
-    /// causing index mismatches on the snapshot the panel is still displaying.
-    @MainActor
-    private func nextSameAppIndex(from currentIndex: Int) -> Int? {
-        let windows = lastWindowInfos
-        guard windows.indices.contains(currentIndex) else { return nil }
-        let currentPID = windows[currentIndex].pid
-        // Search forward (wrapping) for the next window with the same PID.
-        let count = windows.count
-        for offset in 1..<count {
-            let candidate = (currentIndex + offset) % count
-            if windows[candidate].pid == currentPID {
-                return candidate
+    #if DEBUG
+        /// Enumerate the current windows and map them to switcher items for the
+        /// DEBUG N1 self-check. Kept on AppDelegate (rather than reusing the
+        /// coordinator's copy) because the self-check runs whenever the panel
+        /// exists, even before the tap and coordinator are wired.
+        @MainActor
+        private func debugCurrentSwitcherItems() -> [SwitcherItem] {
+            guard let windowStore, let iconCache else { return [] }
+            let settings = Settings.shared
+            return windowStore.enumerate(
+                currentSpaceOnly: settings.currentSpaceOnly,
+                sortMode: settings.sortMode
+            ).map { info in
+                SwitcherItem(
+                    icon: iconCache.icon(for: info.pid, bundleID: info.bundleID),
+                    title: info.title,
+                    windowID: info.windowID
+                )
             }
         }
-        return nil
-    }
+    #endif
 
-    // MARK: - §12 Settings live-wire
+    // MARK: - Settings live-wire
 
     /// Apply all settings that take effect immediately when they change.
     /// Called via NotificationCenter whenever any Settings value is set.
@@ -440,7 +293,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // -- triggerModifier / triggerKey → HotkeyTap --
         // Update the stored plain values; the tap reads them inside the callback
-        // without calling into Settings/AppKit (§4.3 safe).
+        // without calling into Settings/AppKit (hot-path safe).
         if let tap = hotkeyTap {
             tap.triggerModifierMask = settings.triggerModifier.eventFlagMask
             tap.triggerKeyCode = settings.triggerKey.keyCode
@@ -463,9 +316,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.appearance = theme.nsAppearance
     }
 
-    // MARK: - §12 Settings window
+    // MARK: - Settings window
 
-    /// Open the settings window (§11.3). Creates it if it doesn't exist yet.
+    /// Open the settings window. Creates it if it doesn't exist yet.
     @MainActor
     func openSettings() {
         if settingsWindow == nil {
@@ -510,8 +363,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor
     func applicationWillTerminate(_ notification: Notification) {
-        // §4.6: tear the tap down so modifier keys are not left in a stuck
-        // state after the process exits.
+        // Tear the tap down so modifier keys are not left in a stuck state
+        // after the process exits.
         hotkeyTap?.disable(reason: "app terminating")
 
         // Remove notification observers to avoid delivering to a deallocated delegate.
