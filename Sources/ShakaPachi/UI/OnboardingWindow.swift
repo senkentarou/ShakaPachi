@@ -38,13 +38,12 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
             // ordering front regardless is what makes it appear when the app is
             // not frontmost or the window sits on another Space (otherwise the
             // button looks like it did nothing).
-            raiseToFront(win)
+            win.raiseToFront()
             return
         }
 
         // Bring app to front so the window is visible (§11.3).
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        WindowPresentationCoordinator.shared.windowDidOpen()
 
         let win = makeWindow()
         win.delegate = self
@@ -60,15 +59,8 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
         win.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         self.window = win
 
-        raiseToFront(win)
+        win.raiseToFront()
         startPolling()
-    }
-
-    /// Bring the onboarding window to the absolute front on the active Space.
-    private func raiseToFront(_ win: NSWindow) {
-        NSApp.activate(ignoringOtherApps: true)
-        win.makeKeyAndOrderFront(nil)
-        win.orderFrontRegardless()
     }
 
     // MARK: - NSWindowDelegate
@@ -76,8 +68,10 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         pollTimer?.invalidate()
         pollTimer = nil
-        // Revert to accessory so we disappear from the app switcher.
-        NSApp.setActivationPolicy(.accessory)
+        // Revert to .accessory only when no other presentation-managed window
+        // is open. WindowPresentationCoordinator tracks the shared count so
+        // closing this window while Settings is open does not revert the policy.
+        WindowPresentationCoordinator.shared.windowDidClose()
         window = nil
     }
 
