@@ -194,4 +194,52 @@ final class SwitcherPanelTests: XCTestCase {
             + CGFloat(count - 1) * SwitcherLayout.tileSpacing
         XCTAssertEqual(size.width, expectedWidth)
     }
+
+    // MARK: - baseTile parameter (configurable icon size)
+
+    func testPanelSize_baseTile_usesProvidedEdge() {
+        // panelSize with a custom baseTile must use that edge, not the constant.
+        let size = SwitcherLayout.panelSize(itemCount: 1, baseTile: 152)
+        XCTAssertEqual(
+            size.width,
+            SwitcherLayout.horizontalMargin * 2 + 152,
+            "Width must use the provided baseTile, not tileSize constant")
+    }
+
+    func testPanelSize_baseTile_default_matchesNominalConstant() {
+        // Default baseTile must produce the same result as the old zero-argument form.
+        XCTAssertEqual(
+            SwitcherLayout.panelSize(itemCount: 1, baseTile: SwitcherLayout.tileSize),
+            SwitcherLayout.panelSize(itemCount: 1))
+    }
+
+    func testEffectiveTileSize_baseTile_fitsAtFullSize_returnsBaseTile() {
+        // Wide screen: no shrink — must return the provided baseTile, not tileSize.
+        let result = SwitcherLayout.effectiveTileSize(
+            itemCount: 1, availableWidth: 10_000, baseTile: 152)
+        XCTAssertEqual(result, 152)
+    }
+
+    func testEffectiveTileSize_baseTile_default_matchesNominal() {
+        // Without explicit baseTile the behavior is byte-identical to the old API.
+        let withDefault = SwitcherLayout.effectiveTileSize(
+            itemCount: 5, availableWidth: 2000, baseTile: SwitcherLayout.tileSize)
+        let oldCall = SwitcherLayout.effectiveTileSize(itemCount: 5, availableWidth: 2000)
+        XCTAssertEqual(withDefault, oldCall)
+    }
+
+    func testNominalTile_forIconSize60_is76() {
+        // The canonical ratio: icon 60, tile 76 → nominalTile(60) == 76.
+        XCTAssertEqual(
+            SwitcherLayout.nominalTile(forIconSize: 60),
+            SwitcherLayout.tileSize,
+            accuracy: 0.001)
+    }
+
+    func testNominalTile_roundTripsWithEffectiveIconSize() {
+        // effectiveIconSize(for: nominalTile(forIconSize: 60)) must recover 60.
+        let tile = SwitcherLayout.nominalTile(forIconSize: 60)
+        let icon = SwitcherLayout.effectiveIconSize(for: tile)
+        XCTAssertEqual(icon, 60, accuracy: 0.001)
+    }
 }

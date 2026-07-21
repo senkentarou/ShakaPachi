@@ -200,4 +200,100 @@ final class SwitcherLayoutPreviewTests: XCTestCase {
             shifted.height, base.height, accuracy: 0.001,
             "height must be unchanged")
     }
+
+    // MARK: - Configurable preview pane size
+
+    func testPanelSize_customPreviewPane_widensAndHeightens() {
+        // panelSize with a wider/taller pane must reflect the custom dimensions.
+        let tile = SwitcherLayout.tileSize
+        let defaultSize = SwitcherLayout.panelSize(
+            itemCount: 1, effectiveTile: tile, previewEnabled: true)
+        let customSize = SwitcherLayout.panelSize(
+            itemCount: 1, effectiveTile: tile, previewEnabled: true,
+            previewPaneWidth: 480, previewPaneHeight: 300)
+        XCTAssertGreaterThan(
+            customSize.width, defaultSize.width,
+            "Wider pane must produce a wider panel")
+        XCTAssertGreaterThan(
+            customSize.height, defaultSize.height,
+            "Taller pane must produce a taller panel")
+    }
+
+    func testPanelSize_customPreviewPane_heightMatchesCustomPane() {
+        let tile = SwitcherLayout.tileSize
+        let baseSize = SwitcherLayout.panelSize(
+            itemCount: 5, effectiveTile: tile, previewEnabled: false)
+        let customSize = SwitcherLayout.panelSize(
+            itemCount: 5, effectiveTile: tile, previewEnabled: true,
+            previewPaneWidth: 480, previewPaneHeight: 300)
+        XCTAssertEqual(
+            customSize.height,
+            baseSize.height + SwitcherLayout.previewTopGap + 300,
+            accuracy: 0.001,
+            "Height delta must be previewTopGap + custom paneHeight")
+    }
+
+    func testPreviewRect_customPane_hasCorrectSizeAndCenter() {
+        let panelWidth: CGFloat = 600
+        let tile = SwitcherLayout.tileSize
+        let rect = SwitcherLayout.previewRect(
+            inBoundsWidth: panelWidth, effectiveTile: tile,
+            previewPaneWidth: 480, previewPaneHeight: 300)
+        XCTAssertEqual(
+            rect.width, 480, accuracy: 0.001,
+            "Rect width must equal custom previewPaneWidth")
+        XCTAssertEqual(
+            rect.height, 300, accuracy: 0.001,
+            "Rect height must equal custom previewPaneHeight")
+        let expectedX = (panelWidth - 480) / 2
+        XCTAssertEqual(
+            rect.origin.x, expectedX, accuracy: 0.001,
+            "Rect must be centered horizontally")
+    }
+
+    func testPreviewPaneSize_default_is320x200() {
+        let size = SwitcherLayout.previewPaneSize(forWidth: 320)
+        XCTAssertEqual(size.width, 320, accuracy: 0.001)
+        XCTAssertEqual(
+            size.height, 200, accuracy: 0.001,
+            "previewPaneSize(320) must return 320×200 (the default constants)")
+    }
+
+    func testPreviewPaneSize_480_is480x300() {
+        let size = SwitcherLayout.previewPaneSize(forWidth: 480)
+        XCTAssertEqual(size.width, 480, accuracy: 0.001)
+        XCTAssertEqual(
+            size.height, 300, accuracy: 0.001,
+            "previewPaneSize(480) must return 480×300 (16:10 ratio)")
+    }
+
+    func testPanelSize_defaultArgs_equalExistingDefaultCalls() {
+        // Regression guard: default-arg calls must be byte-identical to the
+        // pre-configurable-pane three-argument form.
+        let tile = SwitcherLayout.tileSize
+        let count = 5
+        let legacy = SwitcherLayout.panelSize(
+            itemCount: count, effectiveTile: tile, previewEnabled: true)
+        let explicit = SwitcherLayout.panelSize(
+            itemCount: count, effectiveTile: tile, previewEnabled: true,
+            previewPaneWidth: SwitcherLayout.previewWidth,
+            previewPaneHeight: SwitcherLayout.previewHeight)
+        XCTAssertEqual(
+            legacy, explicit,
+            "Default-arg call must equal the explicit-constant call (regression guard)")
+    }
+
+    func testPreviewRect_defaultArgs_equalExistingDefaultCalls() {
+        // Regression guard for previewRect default args.
+        let width: CGFloat = 500
+        let tile = SwitcherLayout.tileSize
+        let legacy = SwitcherLayout.previewRect(inBoundsWidth: width, effectiveTile: tile)
+        let explicit = SwitcherLayout.previewRect(
+            inBoundsWidth: width, effectiveTile: tile,
+            previewPaneWidth: SwitcherLayout.previewWidth,
+            previewPaneHeight: SwitcherLayout.previewHeight)
+        XCTAssertEqual(
+            legacy, explicit,
+            "Default-arg previewRect must equal the explicit-constant call (regression guard)")
+    }
 }

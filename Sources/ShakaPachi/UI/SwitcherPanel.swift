@@ -41,7 +41,9 @@ final class SwitcherPanel {
     @MainActor
     init() {
         // Panel configuration: nonactivating, borderless, floating.
-        let initialSize = SwitcherLayout.panelSize(itemCount: 1)
+        let initialBaseTile = SwitcherLayout.nominalTile(
+            forIconSize: CGFloat(Settings.shared.switcherIconSize))
+        let initialSize = SwitcherLayout.panelSize(itemCount: 1, baseTile: initialBaseTile)
         let initialRect = NSRect(origin: .zero, size: initialSize)
 
         let p = NSPanel(
@@ -161,17 +163,28 @@ final class SwitcherPanel {
         // inside setItems already sees the correct flag.
         listView.previewEnabled = previewEnabled
 
+        // Compute preview pane size from settings and push it to the list view.
+        let paneSize = SwitcherLayout.previewPaneSize(
+            forWidth: CGFloat(Settings.shared.windowPreviewWidth))
+        listView.previewPaneWidth = paneSize.width
+        listView.previewPaneHeight = paneSize.height
+
         let screenFrame = targetScreenFrame()
         let availableWidth = screenFrame.width - Self.screenEdgeInset * 2
-        listView.setItems(items, selectedIndex: selectedIndex, availableWidth: availableWidth)
+        let baseTile = SwitcherLayout.nominalTile(
+            forIconSize: CGFloat(Settings.shared.switcherIconSize))
+        listView.setItems(
+            items, selectedIndex: selectedIndex, availableWidth: availableWidth, baseTile: baseTile)
 
         let effectiveTile = SwitcherLayout.effectiveTileSize(
-            itemCount: items.count, availableWidth: availableWidth)
+            itemCount: items.count, availableWidth: availableWidth, baseTile: baseTile)
         repositionPanel(
             itemCount: items.count,
             effectiveTile: effectiveTile,
             screenFrame: screenFrame,
-            previewEnabled: previewEnabled)
+            previewEnabled: previewEnabled,
+            previewPaneWidth: paneSize.width,
+            previewPaneHeight: paneSize.height)
         panel.orderFrontRegardless()
     }
 
@@ -208,12 +221,16 @@ final class SwitcherPanel {
         itemCount: Int,
         effectiveTile: CGFloat,
         screenFrame: NSRect,
-        previewEnabled: Bool = false
+        previewEnabled: Bool = false,
+        previewPaneWidth: CGFloat = SwitcherLayout.previewWidth,
+        previewPaneHeight: CGFloat = SwitcherLayout.previewHeight
     ) {
         let size = SwitcherLayout.panelSize(
             itemCount: itemCount,
             effectiveTile: effectiveTile,
-            previewEnabled: previewEnabled)
+            previewEnabled: previewEnabled,
+            previewPaneWidth: previewPaneWidth,
+            previewPaneHeight: previewPaneHeight)
         // Tiles are shrunk to fit; if the count is so large they hit the 40pt
         // floor, the panel is still capped to the screen and the overflow
         // clips at the panel edge (acceptable, rare edge case).

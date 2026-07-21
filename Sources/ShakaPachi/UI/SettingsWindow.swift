@@ -1,5 +1,5 @@
 // SettingsWindow.swift
-// Settings window: NSWindow + NSTabView with four tabs.
+// Settings window: NSWindow + NSTabView with five tabs.
 // SwiftUI is embedded via NSHostingView for the control-heavy tabs — the
 // settings screen has no speed requirements so embedding SwiftUI is fine.
 //
@@ -41,7 +41,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let win = makeWindow()
         win.delegate = self
         win.contentViewController = makeSettingsRootController()
-        win.setContentSize(NSSize(width: 560, height: 660))
+        win.setContentSize(NSSize(width: 560, height: 600))
         win.center()
         // Keep the settings window findable: float above other windows and
         // follow the user onto whichever Space is active, so it can't get lost
@@ -76,7 +76,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     private func makeWindow() -> NSWindow {
         let win = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 560, height: 660),
+            contentRect: NSRect(x: 0, y: 0, width: 560, height: 600),
             styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
@@ -126,7 +126,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             tvc.addTabViewItem(item)
         }
 
-        addTab("一般", GeneralSettingsView())
+        addTab("動作", BehaviorSettingsView())
         addTab("外観", AppearanceSettingsView())
         addTab("状態", StatusSettingsView())
         addTab("統計", StatsSettingsView())
@@ -143,9 +143,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 // which persists the value, posts `.settingsDidChange`, and fires
 // `objectWillChange` so the view re-renders. One store, one write path.
 
-// ─── General tab ──────────────────────────────────────────────────────────────
+// ─── Behavior tab ─────────────────────────────────────────────────────────────
 
-struct GeneralSettingsView: View {
+struct BehaviorSettingsView: View {
 
     @ObservedObject private var settings = Settings.shared
 
@@ -176,61 +176,6 @@ struct GeneralSettingsView: View {
                         }
                     }
                 }
-            } header: {
-                Text("言語")
-            }
-
-            Section {
-                // Modifier-only picker: the trigger key is fixed to Tab.
-                // On set, both modifier and key are written so any previously-
-                // stored .grave value is normalized to .tab on first save.
-                Picker(
-                    "トリガー",
-                    selection: Binding(
-                        get: { settings.triggerModifier },
-                        set: { modifier in
-                            Settings.shared.triggerModifier = modifier
-                            Settings.shared.triggerKey = .tab
-                        }
-                    )
-                ) {
-                    ForEach(TriggerModifier.allCases, id: \.self) { modifier in
-                        Text("\(modifier.displayName) + Tab").tag(modifier)
-                    }
-                }
-                .pickerStyle(.menu)
-            } header: {
-                Text("トリガー")
-            }
-
-            Section {
-                // .zOrder is intentionally excluded from the picker; the enum
-                // case is kept for internal WindowStore use but is not exposed
-                // as a user-selectable option.
-                Picker(
-                    "並び順",
-                    selection: Binding(
-                        get: { settings.sortMode },
-                        set: { Settings.shared.sortMode = $0 }
-                    )
-                ) {
-                    ForEach([SortMode.mru, .byApp], id: \.self) { mode in
-                        Text(mode.displayName).tag(mode)
-                    }
-                }
-                .pickerStyle(.menu)
-
-                // Show live window preview below the title line.
-                // Actual capture is gated on screen-recording permission at show time;
-                // turning this off avoids any CGWindowListCreateImage call entirely.
-                Toggle(
-                    "ウィンドウプレビューを表示",
-                    isOn: Binding(
-                        get: { settings.showWindowPreview },
-                        set: { Settings.shared.showWindowPreview = $0 }
-                    ))
-            } header: {
-                Text("動作")
             }
 
             Section {
@@ -257,8 +202,41 @@ struct GeneralSettingsView: View {
                             }
                         }
                     ))
-            } header: {
-                Text("システム")
+
+                // Modifier-only picker: the trigger key is fixed to Tab.
+                // On set, both modifier and key are written so any previously-
+                // stored .grave value is normalized to .tab on first save.
+                Picker(
+                    "トリガー",
+                    selection: Binding(
+                        get: { settings.triggerModifier },
+                        set: { modifier in
+                            Settings.shared.triggerModifier = modifier
+                            Settings.shared.triggerKey = .tab
+                        }
+                    )
+                ) {
+                    ForEach(TriggerModifier.allCases, id: \.self) { modifier in
+                        Text("\(modifier.displayName) + Tab").tag(modifier)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                // .zOrder is intentionally excluded from the picker; the enum
+                // case is kept for internal WindowStore use but is not exposed
+                // as a user-selectable option.
+                Picker(
+                    "並び順",
+                    selection: Binding(
+                        get: { settings.sortMode },
+                        set: { Settings.shared.sortMode = $0 }
+                    )
+                ) {
+                    ForEach([SortMode.mru, .byApp], id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.menu)
             }
         }
         .formStyle(.grouped)
@@ -315,12 +293,58 @@ struct AppearanceSettingsView: View {
                     }
                 }
                 .pickerStyle(.menu)
-            } header: {
-                Text("外観")
+
+                HStack(spacing: 12) {
+                    Text("アイコンサイズ")
+                        .frame(width: 140, alignment: .leading)
+                    Slider(
+                        value: Binding(
+                            get: { Double(settings.switcherIconSize) },
+                            set: { settings.switcherIconSize = Int($0.rounded()) }
+                        ),
+                        in: 60...96
+                    )
+                    Text("\(settings.switcherIconSize)px")
+                        .foregroundColor(.secondary)
+                        .monospacedDigit()
+                        .frame(minWidth: 44, alignment: .trailing)
+                }
+
+                // Show live window preview below the title line.
+                // Actual capture is gated on screen-recording permission at show time;
+                // turning this off avoids any CGWindowListCreateImage call entirely.
+                Toggle(
+                    "ウィンドウプレビューを表示",
+                    isOn: Binding(
+                        get: { settings.showWindowPreview },
+                        set: { Settings.shared.showWindowPreview = $0 }
+                    ))
+
+                HStack(spacing: 12) {
+                    Text("ウィンドウプレビュー")
+                        .frame(width: 140, alignment: .leading)
+                    Slider(
+                        value: Binding(
+                            get: { Double(settings.windowPreviewWidth) },
+                            set: { settings.windowPreviewWidth = Int($0.rounded()) }
+                        ),
+                        in: 240...480
+                    )
+                    Text("\(settings.windowPreviewWidth)px")
+                        .foregroundColor(.secondary)
+                        .monospacedDigit()
+                        .frame(minWidth: 44, alignment: .trailing)
+                }
+                .disabled(!settings.showWindowPreview)
             }
 
             Section {
-                AppearancePreviewView(theme: settings.theme, accent: settings.accentColor)
+                AppearancePreviewView(
+                    theme: settings.theme,
+                    accent: settings.accentColor,
+                    iconSize: settings.switcherIconSize,
+                    windowPreviewWidth: settings.windowPreviewWidth,
+                    showWindowPreview: settings.showWindowPreview)
             } header: {
                 Text("プレビュー")
             }
