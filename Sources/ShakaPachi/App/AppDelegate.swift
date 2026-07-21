@@ -40,6 +40,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // Settings change observer token (NotificationCenter).
     private var settingsObserver: (any NSObjectProtocol)?
+    // Observer tokens for one-shot notification subscriptions registered in
+    // applicationDidFinishLaunching. Retained here so they can be removed on
+    // applicationWillTerminate and do not outlive the delegate.
+    private var onboardingObserver: (any NSObjectProtocol)?
+    private var relaunchObserver: (any NSObjectProtocol)?
 
     // Key for the first-run login-item flag: written once after the initial
     // SMAppService registration so a subsequent user toggle to OFF is not
@@ -118,7 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Observer for the onboarding window trigger from the permissions tab.
-        NotificationCenter.default.addObserver(
+        onboardingObserver = NotificationCenter.default.addObserver(
             forName: .showOnboardingWindow, object: nil, queue: .main
         ) { _ in
             MainActor.assumeIsolated {
@@ -127,7 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Observer for the relaunch request (e.g. after a language change).
-        NotificationCenter.default.addObserver(
+        relaunchObserver = NotificationCenter.default.addObserver(
             forName: .relaunchApp, object: nil, queue: .main
         ) { _ in
             MainActor.assumeIsolated {
@@ -474,9 +479,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Relaunch the app. Delegates to PermissionManager.relaunchApp() which
     /// opens a new instance via NSWorkspace and then terminates self.
+    /// permissionManager is always non-nil after applicationDidFinishLaunching,
+    /// and this observer is only registered there, so the guard is always satisfied.
     @MainActor
     private func relaunchApp() {
-        (permissionManager ?? PermissionManager()).relaunchApp()
+        guard let pm = permissionManager else { return }
+        pm.relaunchApp()
     }
 
     // MARK: - Prevent spurious quit
@@ -493,6 +501,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // §4.6: tear the tap down so modifier keys are not left in a stuck
         // state after the process exits.
         hotkeyTap?.disable(reason: "app terminating")
+
+        // Remove notification observers to avoid delivering to a deallocated delegate.
+        if let token = settingsObserver {
+            NotificationCenter.default.removeObserver(token)
+        }
+        if let token = onboardingObserver {
+            NotificationCenter.default.removeObserver(token)
+        }
+        if let token = relaunchObserver {
+            NotificationCenter.default.removeObserver(token)
+        }
     }
 
     /// Sendable weak wrapper so @Sendable NotificationCenter closures can hold a

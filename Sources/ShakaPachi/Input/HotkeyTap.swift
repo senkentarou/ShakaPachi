@@ -64,6 +64,20 @@ final class HotkeyTap {
 
     // MARK: - Lifecycle
 
+    deinit {
+        // Remove the run-loop source before the port is invalidated so the
+        // run loop does not hold a dangling reference.
+        if let source = runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+        }
+        // Disable and invalidate the tap so no further events are delivered
+        // after this object is deallocated.
+        if let tap = eventTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            CFMachPortInvalidate(tap)
+        }
+    }
+
     /// Creates (if needed) and enables the tap. Returns false when the tap
     /// cannot be created — typically missing accessibility permission.
     @discardableResult
