@@ -351,6 +351,8 @@ final class Settings: ObservableObject {
         static let appLanguage = "appLanguage"
         // Apple-defined global key that overrides the bundle's resolved language.
         static let appleLanguages = "AppleLanguages"
+        static let switcherIconSize = "switcherIconSize"
+        static let windowPreviewWidth = "windowPreviewWidth"
     }
 
     // MARK: Init
@@ -373,6 +375,8 @@ final class Settings: ObservableObject {
         _accentColor = DefaultsEnum(key: Key.accentColor, defaultValue: .system, defaults: defaults)
         _showWindowPreview = DefaultsBool(key: Key.showWindowPreview, defaultValue: true, defaults: defaults)
         _appLanguage = DefaultsEnum(key: Key.appLanguage, defaultValue: .system, defaults: defaults)
+        _switcherIconSize = DefaultsInt(key: Key.switcherIconSize, defaultValue: 60, defaults: defaults)
+        _windowPreviewWidth = DefaultsInt(key: Key.windowPreviewWidth, defaultValue: 320, defaults: defaults)
 
         // Drive `objectWillChange` from the SAME synchronous `.settingsDidChange`
         // post that every setter already emits, rather than from `@Published`
@@ -545,6 +549,26 @@ final class Settings: ObservableObject {
     /// The language selected when the process launched, captured once by
     /// AppDelegate at startup so Settings can show a "restart to apply" prompt.
     @MainActor static var launchLanguage: AppLanguage = .system
+
+    // -- Switcher icon size --
+
+    /// Icon edge in points for switcher tiles. Default 60 (the historical constant).
+    /// Effective range 60–96; the tile scales proportionally with the icon.
+    private var _switcherIconSize: DefaultsInt
+    var switcherIconSize: Int {
+        get { _switcherIconSize.wrappedValue }
+        set { _switcherIconSize.wrappedValue = newValue }
+    }
+
+    // -- Window preview pane size --
+
+    /// Preview pane WIDTH in points; height is derived at 16:10 (width * 200/320).
+    /// Default 320; range 240–480.
+    private var _windowPreviewWidth: DefaultsInt
+    var windowPreviewWidth: Int {
+        get { _windowPreviewWidth.wrappedValue }
+        set { _windowPreviewWidth.wrappedValue = newValue }
+    }
 
     // -- Panel width (advisory in v1 — see note below) --
 

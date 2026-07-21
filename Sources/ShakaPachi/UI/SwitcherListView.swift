@@ -73,11 +73,13 @@ enum SwitcherLayout {
     ///
     /// Below minTileSize the tiles are allowed to clip off-screen (acceptable,
     /// rare edge case per spec).
-    static func effectiveTileSize(itemCount: Int, availableWidth: CGFloat) -> CGFloat {
-        guard itemCount > 0 else { return tileSize }
-        let natural = panelSize(itemCount: itemCount).width
+    static func effectiveTileSize(
+        itemCount: Int, availableWidth: CGFloat, baseTile: CGFloat = tileSize
+    ) -> CGFloat {
+        guard itemCount > 0 else { return baseTile }
+        let natural = panelSize(itemCount: itemCount, baseTile: baseTile).width
         if natural <= availableWidth {
-            return tileSize  // fits at full size — no shrink needed
+            return baseTile  // fits at full size — no shrink needed
         }
         // Largest t such that: margin*2 + count*t + (count-1)*spacing ≤ availableWidth
         //   t ≤ (availableWidth - margin*2 - (count-1)*spacing) / count
@@ -95,16 +97,24 @@ enum SwitcherLayout {
         return effectiveTile * ratio
     }
 
-    /// Total panel size for a given window count, using nominal tile size.
+    /// Total panel size for a given window count.
+    /// Pass `baseTile` to use a non-nominal tile edge (default = `tileSize` = 76).
     /// Use `panelSize(itemCount:effectiveTile:)` when shrinking is active.
-    static func panelSize(itemCount: Int) -> NSSize {
+    static func panelSize(itemCount: Int, baseTile: CGFloat = tileSize) -> NSSize {
         let count = max(itemCount, 1)
         let width =
             horizontalMargin * 2
-            + CGFloat(count) * tileSize
+            + CGFloat(count) * baseTile
             + CGFloat(count - 1) * tileSpacing
-        let height = topPadding + tileSize + titleGap + titleHeight + bottomPadding
+        let height = topPadding + baseTile + titleGap + titleHeight + bottomPadding
         return NSSize(width: width, height: height)
+    }
+
+    /// Converts a user-chosen icon-size (in points) to the corresponding nominal
+    /// tile edge, preserving the canonical icon/tile ratio (60/76 ≈ 0.789).
+    /// Example: nominalTile(forIconSize: 60) == 76.
+    static func nominalTile(forIconSize iconPoints: CGFloat) -> CGFloat {
+        iconPoints * tileSize / iconSize  // 60 → 76
     }
 
     /// Total panel size using the given effective tile edge (used when tiles are
@@ -117,16 +127,20 @@ enum SwitcherLayout {
     /// preview pane below the title.
     ///
     /// When `previewEnabled` is true:
-    ///   - Width is widened to at least (previewWidth + horizontalMargin*2) so
+    ///   - Width is widened to at least (previewPaneWidth + horizontalMargin*2) so
     ///     the preview box always fits without clipping.
-    ///   - Height gains `previewTopGap + previewHeight` below the title.
+    ///   - Height gains `previewTopGap + previewPaneHeight` below the title.
     ///
     /// The two-argument overload without `previewEnabled` forwards here with
     /// `false` so all existing callers and tests remain source-compatible.
+    /// `previewPaneWidth`/`previewPaneHeight` default to the static constants so
+    /// zero-arg and existing callers remain byte-identical.
     static func panelSize(
         itemCount: Int,
         effectiveTile: CGFloat,
-        previewEnabled: Bool
+        previewEnabled: Bool,
+        previewPaneWidth: CGFloat = previewWidth,
+        previewPaneHeight: CGFloat = previewHeight
     ) -> NSSize {
         let count = max(itemCount, 1)
         let tileRowWidth =
@@ -135,10 +149,10 @@ enum SwitcherLayout {
             + CGFloat(count - 1) * tileSpacing
         let baseHeight = topPadding + effectiveTile + titleGap + titleHeight + bottomPadding
         if previewEnabled {
-            let minPreviewPanelWidth = previewWidth + horizontalMargin * 2
+            let minPreviewPanelWidth = previewPaneWidth + horizontalMargin * 2
             return NSSize(
                 width: max(tileRowWidth, minPreviewPanelWidth),
-                height: baseHeight + previewTopGap + previewHeight
+                height: baseHeight + previewTopGap + previewPaneHeight
             )
         }
         return NSSize(width: tileRowWidth, height: baseHeight)
@@ -150,13 +164,23 @@ enum SwitcherLayout {
     /// - Parameters:
     ///   - width: The total panel width (used to center the pane horizontally).
     ///   - effectiveTile: The effective tile edge currently in use.
+    ///   - previewPaneWidth: Width of the preview pane (default: `previewWidth` constant).
+    ///   - previewPaneHeight: Height of the preview pane (default: `previewHeight` constant).
     static func previewRect(
         inBoundsWidth width: CGFloat,
-        effectiveTile: CGFloat
+        effectiveTile: CGFloat,
+        previewPaneWidth: CGFloat = previewWidth,
+        previewPaneHeight: CGFloat = previewHeight
     ) -> NSRect {
-        let x = (width - previewWidth) / 2
+        let x = (width - previewPaneWidth) / 2
         let y = topPadding + effectiveTile + titleGap + titleHeight + previewTopGap
-        return NSRect(x: x, y: y, width: previewWidth, height: previewHeight)
+        return NSRect(x: x, y: y, width: previewPaneWidth, height: previewPaneHeight)
+    }
+
+    /// Returns the preview pane size for a given width, maintaining 16:10 aspect ratio.
+    /// Example: previewPaneSize(forWidth: 320) == 320×200, previewPaneSize(forWidth: 480) == 480×300.
+    static func previewPaneSize(forWidth w: CGFloat) -> NSSize {
+        NSSize(width: w, height: w * previewHeight / previewWidth)
     }
 
     /// Tile rect for the given index using the nominal tile size, in flipped
@@ -246,6 +270,11 @@ final class SwitcherListView: NSView {
     // Pushed by the panel on each show(); never changes during a session.
     var previewEnabled: Bool = false
 
+    // Preview pane dimensions — pushed by the panel on each show() from Settings.
+    // Defaults match the static constants so a zero-push scenario draws identically.
+    var previewPaneWidth: CGFloat = SwitcherLayout.previewWidth
+    var previewPaneHeight: CGFloat = SwitcherLayout.previewHeight
+
     // Owned by the panel; injected once in SwitcherPanel.init().
     // Weak to avoid a retain cycle: panel → cache ← listView.
     weak var previewCache: WindowPreviewCache?
@@ -261,14 +290,20 @@ final class SwitcherListView: NSView {
     /// Replace the full item list and select the given index.
     /// Pass the available panel width so the shrink-to-fit tile size can be
     /// computed; when zero the nominal tile size is used.
-    func setItems(_ items: [SwitcherItem], selectedIndex: Int, availableWidth: CGFloat = 0) {
+    /// Pass `baseTile` when the user has configured a non-default icon size.
+    func setItems(
+        _ items: [SwitcherItem],
+        selectedIndex: Int,
+        availableWidth: CGFloat = 0,
+        baseTile: CGFloat = SwitcherLayout.tileSize
+    ) {
         self.items = items
         self.selectedIndex = clamp(selectedIndex, count: items.count)
         if availableWidth > 0 {
             effectiveTile = SwitcherLayout.effectiveTileSize(
-                itemCount: items.count, availableWidth: availableWidth)
+                itemCount: items.count, availableWidth: availableWidth, baseTile: baseTile)
         } else {
-            effectiveTile = SwitcherLayout.tileSize
+            effectiveTile = baseTile
         }
         needsDisplay = true
         if previewEnabled { requestPreviews() }
@@ -450,7 +485,11 @@ final class SwitcherListView: NSView {
 
     /// Preview rect in flipped (top-left origin) coordinates.
     private var previewRect: NSRect {
-        SwitcherLayout.previewRect(inBoundsWidth: bounds.width, effectiveTile: effectiveTile)
+        SwitcherLayout.previewRect(
+            inBoundsWidth: bounds.width,
+            effectiveTile: effectiveTile,
+            previewPaneWidth: previewPaneWidth,
+            previewPaneHeight: previewPaneHeight)
     }
 
     /// Kick off (or refresh) captures for the selected window and its neighbors.

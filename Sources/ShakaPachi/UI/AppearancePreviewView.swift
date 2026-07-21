@@ -56,6 +56,12 @@ struct AppearancePreviewView: View {
 
     let theme: Theme
     let accent: AccentColor
+    /// The switcher icon size in points (60 = default). Tiles scale proportionally.
+    var iconSize: Int = 60
+    /// The window preview pane width in points (320 = default). Mock scales proportionally.
+    var windowPreviewWidth: Int = 320
+    /// Whether to show a window preview placeholder below the title.
+    var showWindowPreview: Bool = true
 
     // Used to resolve Theme.system to light or dark base color.
     @Environment(\.colorScheme) private var colorScheme
@@ -65,6 +71,7 @@ struct AppearancePreviewView: View {
         let base = AppearancePreview.backgroundBaseColor(theme: theme, systemIsDark: systemIsDark)
         let tint = AppearancePreview.tintColor(accent: accent)
         let selection = AppearancePreview.selectionColor(accent: accent)
+        let scale = CGFloat(iconSize) / 60
 
         // Resolve the preview's own color scheme from the chosen theme so the
         // foreground semantic colors (.secondary icon/title) flip to match the
@@ -95,19 +102,30 @@ struct AppearancePreviewView: View {
                         .strokeBorder(Color.white.opacity(AccentColor.glassBorderAlpha), lineWidth: 1)
                 )
 
-            // Content: icon row + title line
+            // Content: icon row + title line + optional preview pane
             VStack(spacing: 6) {
                 HStack(spacing: 8) {
                     ForEach(0..<3, id: \.self) { index in
-                        TileView(isSelected: index == 1, selectionColor: selection)
+                        TileView(isSelected: index == 1, selectionColor: selection, scale: scale)
                     }
                 }
                 Text("ウィンドウ名")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                if showWindowPreview {
+                    // Scaled placeholder representing the window screenshot pane.
+                    // Base size is 120×75 (16:10) at the 320-point default;
+                    // scales linearly with the configured preview width.
+                    let previewScale = CGFloat(windowPreviewWidth) / 320
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.secondary.opacity(0.25))
+                        .frame(width: 120 * previewScale, height: 75 * previewScale)
+                }
             }
+            .padding(.vertical, 20)
+            .padding(.horizontal, 16)
         }
-        .frame(height: 100)
+        .frame(minHeight: 120)
         .environment(\.colorScheme, resolvedScheme)
     }
 }
@@ -119,20 +137,24 @@ private struct TileView: View {
 
     let isSelected: Bool
     let selectionColor: NSColor
+    /// Scale factor derived from the user's icon-size setting (1.0 = 60pt default).
+    var scale: CGFloat = 1.0
 
     var body: some View {
+        let tileEdge = 44 * scale
+        let cornerRadius = 10 * scale
         ZStack {
             if isSelected {
                 // Highlight fill matching SwitcherListView's selection draw path.
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: cornerRadius)
                     .fill(Color(nsColor: selectionColor))
             }
             // Placeholder icon — uses a semantic color so it stays legible on
             // both light and dark base colors without forcing a colorScheme override.
             Image(systemName: "macwindow")
-                .font(.system(size: 22))
+                .font(.system(size: 22 * scale))
                 .foregroundColor(.secondary)
         }
-        .frame(width: 44, height: 44)
+        .frame(width: tileEdge, height: tileEdge)
     }
 }

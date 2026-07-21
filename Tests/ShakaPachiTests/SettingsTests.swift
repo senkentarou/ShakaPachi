@@ -263,6 +263,34 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(TriggerKey.grave.keyCode, 50)
     }
 
+    // MARK: - windowPreviewWidth
+
+    func testWindowPreviewWidthDefaultAndRoundTrip() {
+        let (defaults, settings) = makeSuite()
+        // Default is 320 (the historical constant).
+        XCTAssertEqual(settings.windowPreviewWidth, 320)
+        // Write and verify it persists.
+        settings.windowPreviewWidth = 400
+        XCTAssertEqual(settings.windowPreviewWidth, 400)
+        // Re-open the SAME suite (simulates re-launch) and confirm it survived.
+        let settings2 = Settings(defaults: defaults)
+        XCTAssertEqual(settings2.windowPreviewWidth, 400)
+    }
+
+    // MARK: - switcherIconSize
+
+    func testSwitcherIconSizeDefaultAndRoundTrip() {
+        let (defaults, settings) = makeSuite()
+        // Default is 60 — byte-for-byte identical to the historic constant.
+        XCTAssertEqual(settings.switcherIconSize, 60)
+        // Write and verify it persists.
+        settings.switcherIconSize = 84
+        XCTAssertEqual(settings.switcherIconSize, 84)
+        // Re-open the SAME suite (simulates re-launch) and confirm it survived.
+        let settings2 = Settings(defaults: defaults)
+        XCTAssertEqual(settings2.switcherIconSize, 84)
+    }
+
     // MARK: - NotificationCenter change notification
 
     func testNotification_postedOnChange() {
