@@ -136,87 +136,23 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
 // MARK: - SwiftUI Settings Views
 
-// ─── Observable bridge ────────────────────────────────────────────────────────
-// NSHostingView hosts SwiftUI views. To make settings changes propagate live
-// to the SwiftUI layer we use an ObservableObject that wraps Settings.shared
-// and listens to .settingsDidChange. All SwiftUI views read from this object.
-
-@MainActor
-final class SettingsStore: ObservableObject {
-
-    static let shared = SettingsStore()
-
-    // Re-published properties (SwiftUI reads these for bindings).
-    @Published var triggerModifier: TriggerModifier
-    @Published var triggerKey: TriggerKey
-    @Published var showDelayMs: Int
-    @Published var currentSpaceOnly: Bool
-    @Published var sortMode: SortMode
-    @Published var excludedBundleIDs: [String]
-    @Published var theme: Theme
-    @Published var launchAtLogin: Bool
-    @Published var accentColor: AccentColor
-    @Published var showWindowPreview: Bool
-    @Published var appLanguage: AppLanguage
-
-    private var observer: (any NSObjectProtocol)?
-
-    init() {
-        let s = Settings.shared
-        triggerModifier   = s.triggerModifier
-        triggerKey        = s.triggerKey
-        showDelayMs       = s.showDelayMs
-        currentSpaceOnly  = s.currentSpaceOnly
-        sortMode          = s.sortMode
-        excludedBundleIDs = s.excludedBundleIDs
-        theme             = s.theme
-        accentColor       = s.accentColor
-        showWindowPreview = s.showWindowPreview
-        appLanguage       = s.appLanguage
-        // The real login-item state lives in SMAppService, not the cached bool;
-        // read it so the toggle reflects reality (and heal a stale mirror).
-        launchAtLogin    = LoginItemManager.isEnabled
-        if s.launchAtLogin != launchAtLogin { s.launchAtLogin = launchAtLogin }
-
-        // Reflect changes that originate elsewhere (e.g. from code) back into
-        // the Published properties so the SwiftUI view stays consistent.
-        observer = NotificationCenter.default.addObserver(
-            forName: .settingsDidChange, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.refresh()
-            }
-        }
-    }
-
-    private func refresh() {
-        let s = Settings.shared
-        // Only assign when the value actually changed to avoid SwiftUI churn.
-        if triggerModifier  != s.triggerModifier  { triggerModifier  = s.triggerModifier  }
-        if triggerKey       != s.triggerKey       { triggerKey       = s.triggerKey       }
-        if showDelayMs      != s.showDelayMs      { showDelayMs      = s.showDelayMs      }
-        if currentSpaceOnly != s.currentSpaceOnly { currentSpaceOnly = s.currentSpaceOnly }
-        if sortMode         != s.sortMode         { sortMode         = s.sortMode         }
-        if excludedBundleIDs != s.excludedBundleIDs { excludedBundleIDs = s.excludedBundleIDs }
-        if theme             != s.theme             { theme             = s.theme             }
-        if accentColor       != s.accentColor       { accentColor       = s.accentColor       }
-        if launchAtLogin     != s.launchAtLogin     { launchAtLogin     = s.launchAtLogin     }
-        if showWindowPreview != s.showWindowPreview { showWindowPreview = s.showWindowPreview }
-        if appLanguage       != s.appLanguage       { appLanguage       = s.appLanguage       }
-    }
-}
+// NSHostingView hosts these SwiftUI views. They bind directly to the shared
+// `Settings` ObservableObject (there is no separate mirror store): reads go
+// through `@ObservedObject`, and every write assigns `Settings.shared.xxx`,
+// which persists the value, posts `.settingsDidChange`, and fires
+// `objectWillChange` so the view re-renders. One store, one write path.
 
 // ─── General tab ──────────────────────────────────────────────────────────────
 
 struct GeneralSettingsView: View {
 
-    @ObservedObject private var store = SettingsStore.shared
+    @ObservedObject private var settings = Settings.shared
 
     var body: some View {
         Form {
             Section {
                 Picker("言語", selection: Binding(
-                    get: { store.appLanguage },
+                    get: { settings.appLanguage },
                     set: { Settings.shared.appLanguage = $0 }
                 )) {
                     ForEach(AppLanguage.allCases, id: \.self) { lang in
@@ -225,7 +161,7 @@ struct GeneralSettingsView: View {
                 }
                 .pickerStyle(.menu)
 
-                if store.appLanguage != Settings.launchLanguage {
+                if settings.appLanguage != Settings.launchLanguage {
                     HStack {
                         Text("言語の変更は再起動後に反映されます。")
                             .font(.caption)
@@ -245,7 +181,7 @@ struct GeneralSettingsView: View {
                 // On set, both modifier and key are written so any previously-
                 // stored .grave value is normalized to .tab on first save.
                 Picker("トリガー", selection: Binding(
-                    get: { store.triggerModifier },
+                    get: { settings.triggerModifier },
                     set: { modifier in
                         Settings.shared.triggerModifier = modifier
                         Settings.shared.triggerKey      = .tab
@@ -265,7 +201,7 @@ struct GeneralSettingsView: View {
                 // case is kept for internal WindowStore use but is not exposed
                 // as a user-selectable option.
                 Picker("並び順", selection: Binding(
-                    get: { store.sortMode },
+                    get: { settings.sortMode },
                     set: { Settings.shared.sortMode = $0 }
                 )) {
                     ForEach([SortMode.mru, .byApp], id: \.self) { mode in
@@ -278,7 +214,7 @@ struct GeneralSettingsView: View {
                 // Actual capture is gated on screen-recording permission at show time;
                 // turning this off avoids any CGWindowListCreateImage call entirely.
                 Toggle("ウィンドウプレビューを表示", isOn: Binding(
-                    get: { store.showWindowPreview },
+                    get: { settings.showWindowPreview },
                     set: { Settings.shared.showWindowPreview = $0 }
                 ))
             } header: {
@@ -288,8 +224,11 @@ struct GeneralSettingsView: View {
             Section {
                 // §11.4: launch-at-login via SMAppService. The system status is
                 // the source of truth; the Settings bool mirrors it for the UI.
+                // Read the live SMAppService status directly (not the cached
+                // mirror) so the toggle always reflects reality; the mirror is
+                // healed on appear (see .onAppear below) and after every write.
                 Toggle("ログイン時に起動", isOn: Binding(
-                    get: { store.launchAtLogin },
+                    get: { LoginItemManager.isEnabled },
                     set: { newValue in
                         do {
                             try LoginItemManager.setEnabled(newValue)
@@ -316,6 +255,13 @@ struct GeneralSettingsView: View {
             if Settings.shared.sortMode == .zOrder {
                 Settings.shared.sortMode = .mru
             }
+            // The real login-item state lives in SMAppService, not the cached
+            // bool; heal a stale mirror so the persisted value matches reality.
+            // (Previously done in SettingsStore.init, before this view existed.)
+            let realLaunchAtLogin = LoginItemManager.isEnabled
+            if Settings.shared.launchAtLogin != realLaunchAtLogin {
+                Settings.shared.launchAtLogin = realLaunchAtLogin
+            }
         }
     }
 }
@@ -324,13 +270,13 @@ struct GeneralSettingsView: View {
 
 struct AppearanceSettingsView: View {
 
-    @ObservedObject private var store = SettingsStore.shared
+    @ObservedObject private var settings = Settings.shared
 
     var body: some View {
         Form {
             Section {
                 Picker("テーマ", selection: Binding(
-                    get: { store.theme },
+                    get: { settings.theme },
                     set: { Settings.shared.theme = $0 }
                 )) {
                     ForEach(Theme.allCases, id: \.self) { t in
@@ -340,7 +286,7 @@ struct AppearanceSettingsView: View {
                 .pickerStyle(.menu)
 
                 Picker("アクセントカラー", selection: Binding(
-                    get: { store.accentColor },
+                    get: { settings.accentColor },
                     set: { Settings.shared.accentColor = $0 }
                 )) {
                     ForEach(AccentColor.allCases, id: \.self) { c in
@@ -353,7 +299,7 @@ struct AppearanceSettingsView: View {
             }
 
             Section {
-                AppearancePreviewView(theme: store.theme, accent: store.accentColor)
+                AppearancePreviewView(theme: settings.theme, accent: settings.accentColor)
             } header: {
                 Text("プレビュー")
             }

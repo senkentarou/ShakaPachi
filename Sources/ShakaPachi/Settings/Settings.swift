@@ -11,6 +11,7 @@
 // - Settings.shared uses UserDefaults.standard (the real app domain).
 
 import AppKit
+import Combine
 import CoreGraphics
 
 // MARK: - Notification
@@ -219,11 +220,12 @@ struct DefaultsEnum<T: RawRepresentable> where T.RawValue == String {
         // nonmutating: the setter writes to `defaults` (a reference type), never
         // to this struct's own storage, so it needs no exclusive (mutating) access
         // to the wrapper. This matters because .settingsDidChange is delivered
-        // synchronously and an observer (SettingsStore.refresh) reads the SAME
-        // property while this setter is still on the stack; a mutating set would
-        // overlap a write with that read and trip Swift's exclusive-access check
-        // (SIGABRT). Writing to defaults is logically non-mutating, so this is
-        // also the semantically correct annotation.
+        // synchronously and an observer (Settings' own objectWillChange bridge,
+        // and any external subscriber) reads the SAME property while this setter
+        // is still on the stack; a mutating set would overlap a write with that
+        // read and trip Swift's exclusive-access check (SIGABRT). Writing to
+        // defaults is logically non-mutating, so this is also the semantically
+        // correct annotation.
         nonmutating set {
             defaults.set(newValue.rawValue, forKey: key)
             NotificationCenter.default.post(name: .settingsDidChange, object: nil)
@@ -305,8 +307,14 @@ struct DefaultsStringArray {
 /// Use `Settings.shared` in production code.
 /// Inject a custom `UserDefaults(suiteName:)` in unit tests so they don't
 /// pollute UserDefaults.standard.
+///
+/// `ObservableObject` conformance lets SwiftUI views bind to `Settings.shared`
+/// directly (there is no separate mirror object). `objectWillChange` is fired
+/// from `.settingsDidChange` — see the `init(defaults:)` observer below — so it
+/// rides the SAME synchronous, `self`-non-mutating path as every setter and
+/// preserves the reentrancy contract (details there).
 @MainActor
-final class Settings {
+final class Settings: ObservableObject {
 
     // MARK: Shared instance
 
@@ -352,11 +360,47 @@ final class Settings {
         _accentColor        = DefaultsEnum(key: Key.accentColor,        defaultValue: .system, defaults: defaults)
         _showWindowPreview  = DefaultsBool(key: Key.showWindowPreview,  defaultValue: true,  defaults: defaults)
         _appLanguage        = DefaultsEnum(key: Key.appLanguage,        defaultValue: .system, defaults: defaults)
+
+        // Drive `objectWillChange` from the SAME synchronous `.settingsDidChange`
+        // post that every setter already emits, rather than from `@Published`
+        // storage. This is deliberate and load-bearing:
+        //
+        //   * The Defaults* wrappers use `nonmutating set`, so a setter writes
+        //     only to `defaults` and never mutates `self`. That is what lets a
+        //     synchronous observer read the same property while the setter is
+        //     still on the stack without tripping Swift's exclusive-access check
+        //     (see DefaultsEnum). `@Published` would mutate Combine storage on
+        //     `self` and break that contract.
+        //   * `objectWillChange.send()` reads `self` but does NOT mutate it, so
+        //     firing it from inside the notification callback is a harmless
+        //     shared read — the reentrancy invariant holds.
+        //
+        // Firing on `.settingsDidChange` (posted AFTER the value is written)
+        // means the "willChange" fires post-write, exactly as the old
+        // SettingsStore.refresh did; SwiftUI re-reads the fresh value on its next
+        // evaluation, so behaviour is unchanged.
+        observer = NotificationCenter.default.addObserver(
+            forName: .settingsDidChange, object: nil, queue: nil
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.objectWillChange.send()
+            }
+        }
+    }
+
+    deinit {
+        if let observer {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     // MARK: Backing store
 
     private let defaults: UserDefaults
+
+    /// Token for the `.settingsDidChange` self-observer that drives
+    /// `objectWillChange` (see `init`). Held so it can be removed on `deinit`.
+    private var observer: (any NSObjectProtocol)?
 
     // MARK: §11.2 Settings
 
