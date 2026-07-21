@@ -1,16 +1,16 @@
 // Activator.swift
-// §9: Raise a specific window via the Accessibility API.
+// Raise a specific window via the Accessibility API.
 //
 // The CGWindowID↔AXUIElement mapping is inherently ambiguous (no public
 // direct-lookup API exists). The matching logic tries title first, then bounds
 // within a 2-point tolerance, and falls back to app-only activation when
 // neither produces a single confident match.
 //
-// Threading (§9.4): AX calls are synchronous IPC. They must not run inside the
-// event-tap callback (§4.3). The state machine wires the confirm action through
+// Threading: AX calls are synchronous IPC. They must not run inside the
+// event-tap callback. The state machine wires the confirm action through
 // the main queue (onSwitcherInput runs on the main run loop), so activate() is
 // effectively always called on the main thread. The mandatory 50ms messaging
-// timeout (§9.3) bounds the worst-case block to ~50ms per AX call, which is
+// timeout bounds the worst-case block to ~50ms per AX call, which is
 // acceptable for v1 on the main thread. A dedicated background serial queue
 // would avoid any main-thread delay but would require marshalling the
 // panel.hide() back to main, complicating the control flow without a
@@ -20,14 +20,13 @@ import AppKit
 import ApplicationServices
 
 // Private ApplicationServices symbol that maps an AXUIElement directly to its
-// CGWindowID — the definitive AX↔CGWindow correlation the public API omits
-// (§9.2). This is the same private API AltTab/Hammerspoon/yabai rely on. It is
-// an Apple framework symbol (not a third-party dependency, so §0's "Apple
-// frameworks only" still holds) but is undocumented and could change across
-// macOS releases, so title/bounds matching remains as a fallback. Using it does
-// not cost App Store eligibility: this app already cannot be sandboxed (it needs
-// an unsandboxed session-level CGEventTap to intercept Cmd+Tab), so the App
-// Store was never viable regardless.
+// CGWindowID — the definitive AX↔CGWindow correlation the public API omits.
+// This is the same private API AltTab/Hammerspoon/yabai rely on. It is
+// an Apple framework symbol (not a third-party dependency) but is undocumented
+// and could change across macOS releases, so title/bounds matching remains as
+// a fallback. Using it does not cost App Store eligibility: this app already
+// cannot be sandboxed (it needs an unsandboxed session-level CGEventTap to
+// intercept Cmd+Tab), so the App Store was never viable regardless.
 @_silgen_name("_AXUIElementGetWindow")
 private func _AXUIElementGetWindow(
     _ element: AXUIElement,
@@ -39,26 +38,25 @@ final class Activator {
 
     // MARK: - Public entry point
 
-    /// Raise `window` to the front using the Accessibility API (§9.1).
+    /// Raise `window` to the front using the Accessibility API.
     func activate(_ window: WindowInfo) {
         let pid = window.pid
 
-        // Step 1 (§9.1): activate the app first so it is at least frontmost
-        // even if the specific-window raise below falls back to app-only.
+        // Activate the app first so it is at least frontmost even if the
+        // specific-window raise below falls back to app-only.
         // Why not activate(from:options:) (the macOS 14 replacement):
         // cooperative activation expects the yielding app to be active, which
         // a non-activating switcher panel never is — keep the legacy call
         // until the new path is verified to transfer focus on macOS 14+.
         NSRunningApplication(processIdentifier: pid)?.activate()
 
-        // Step 2 (§9.1): create an AX element for the app.
         let appElement = AXUIElementCreateApplication(pid)
 
-        // Step 3 (§9.3): set the messaging timeout BEFORE any attribute read.
+        // Set the messaging timeout BEFORE any attribute read.
         // This prevents an unresponsive app from freezing the switcher UI.
         AXUIElementSetMessagingTimeout(appElement, 0.05)
 
-        // Step 4 (§9.1): copy the array of window AX elements.
+        // Copy the array of window AX elements.
         var rawValue: CFTypeRef?
         let attrResult = AXUIElementCopyAttributeValue(
             appElement, kAXWindowsAttribute as CFString, &rawValue)
@@ -89,7 +87,7 @@ final class Activator {
         }
 
         // Fallback path: if the private API produced no match, fall back to the
-        // pure title/bounds matcher (§9.2). Match against the RAW window name
+        // pure title/bounds matcher. Match against the RAW window name
         // (no "(2)" suffix, no app-name fallback) since AX titles carry neither.
         if targetWin == nil {
             var candidates: [(title: String, bounds: CGRect)] = []
@@ -108,12 +106,11 @@ final class Activator {
         }
 
         guard let targetWin else {
-            // Step 5c fallback (§9.2): app activation already done in step 1.
+            // Fallback: app activation already done above; no specific window matched.
             NSLog("[ShakaPachi] Activate: fallback – app activate only " + "(ambiguous or no match, pid %d)", pid)
             return
         }
 
-        // Step 5 (§9.1): raise and make main.
         AXUIElementPerformAction(targetWin, kAXRaiseAction as CFString)
         AXUIElementSetAttributeValue(
             targetWin,
@@ -123,11 +120,11 @@ final class Activator {
         NSLog("[ShakaPachi] Activate: raised window by %@ (pid %d)", matchStrategy, pid)
     }
 
-    // MARK: - Pure decision (§9.2, testable)
+    // MARK: - Pure decision (testable)
 
     /// Identify the best candidate index from a list of (title, bounds) pairs.
     ///
-    /// Matching priority (§9.2, extended for real-world AX titles):
+    /// Matching priority (extended for real-world AX titles):
     /// 1. Exactly one candidate whose title EXACTLY equals `title`.
     /// 2. Exactly one candidate whose title is prefix-compatible with `title` —
     ///    the AX title starts with the target, or vice versa. This handles apps
@@ -142,7 +139,7 @@ final class Activator {
     /// alone cannot disambiguate them — the prefix step is what resolves them.
     ///
     /// This function is deliberately pure (no AX / AppKit calls) so it can be
-    /// exhaustively unit-tested without TCC permissions (§0 UI/logic separation).
+    /// exhaustively unit-tested without TCC permissions.
     ///
     /// - Parameters:
     ///   - title: The raw window name to match (no "(2)" suffix; may be empty).
@@ -165,18 +162,18 @@ final class Activator {
         }
 
         if !title.isEmpty {
-            // Step 5a: exact title match.
+            // Exact title match.
             let exact = candidates.indices.filter { candidates[$0].title == title }
             if exact.count == 1 { return exact[0] }
 
-            // Step 5b: prefix-compatible match (ignoring empty AX titles).
+            // Prefix-compatible match (ignoring empty AX titles).
             let prefix = candidates.indices.filter { i in
                 let c = candidates[i].title
                 return !c.isEmpty && (c.hasPrefix(title) || title.hasPrefix(c))
             }
             if prefix.count == 1 { return prefix[0] }
 
-            // Step 5c: multiple prefix matches — disambiguate by bounds.
+            // Multiple prefix matches — disambiguate by bounds.
             if prefix.count > 1 {
                 let narrowed = prefix.filter(boundsMatches)
                 if narrowed.count == 1 { return narrowed[0] }
@@ -184,7 +181,7 @@ final class Activator {
             // Fall through to pure bounds when title didn't resolve.
         }
 
-        // Step 5d: pure bounds match within 2pt tolerance.
+        // Pure bounds match within 2pt tolerance.
         // AX kAXPosition reports the top-left corner in global screen coordinates,
         // which matches CGWindowList bounds — both use the same coordinate origin.
         let boundsOnly = candidates.indices.filter(boundsMatches)
@@ -192,7 +189,7 @@ final class Activator {
             return boundsOnly[0]
         }
 
-        // Step 5e: ambiguous or no match — return nil for fallback.
+        // Ambiguous or no match — return nil for fallback.
         return nil
     }
 
@@ -238,8 +235,7 @@ final class Activator {
         var size = CGSize.zero
 
         // Verify the CF type before casting: a misbehaving app could return a
-        // non-AXValue for these attributes, and Step 10's whole point is that no
-        // window can crash or hang the switcher. `as?` won't help — the compiler
+        // non-AXValue for these attributes. `as?` won't help — the compiler
         // treats any downcast to the CF type AXValue as always-succeeding — so we
         // check the runtime type id explicitly, then the force cast is genuinely
         // safe. On a bad value we fall back to .zero, which just makes this

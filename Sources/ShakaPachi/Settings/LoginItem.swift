@@ -1,6 +1,7 @@
 // LoginItem.swift
-// §11.4: register/unregister the app as a Login Item via SMAppService (macOS 13+).
-// We deliberately do NOT hand-write a LaunchAgent plist (§11.4).
+// Register/unregister the app as a Login Item via SMAppService (macOS 13+).
+// SMAppService is used deliberately rather than a hand-written LaunchAgent plist
+// — the system manages the registration lifecycle and handles permission changes.
 //
 // SMAppService.mainApp.status is the authoritative source of truth for whether
 // the app launches at login — the Settings bool is only a cached mirror for the

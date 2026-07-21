@@ -3,7 +3,7 @@ import CoreGraphics
 import Foundation
 
 // WindowStore enumerates on-screen windows via a single CGWindowListCopyWindowInfo
-// call and applies the filters specified in §5.3 of the kickoff spec.
+// call and applies filters for layer, visibility, size, process, and store type.
 //
 // Testability: the heavy lifting (raw dict array → [WindowInfo]) lives in the
 // static `filterAndBuild` method which accepts [[String: Any]] so unit tests
@@ -27,7 +27,7 @@ final class WindowStore {
     // lookups across consecutive enumerate() calls.
     private var bundleIDCache: [pid_t: String?] = [:]
 
-    // §5.5: persistent MRU ordering for the lifetime of the process.
+    // Persistent MRU ordering for the lifetime of the process.
     // Index 0 = most recently used window.
     // Never exceeds mruCap entries; tail entries are evicted when the cap is hit.
     private var mruOrder: [CGWindowID] = []
@@ -63,12 +63,12 @@ final class WindowStore {
         // current Space via .optionOnScreenOnly — zero private-API cost.
         // currentSpaceOnly == false: use .optionAll to capture all Spaces, then
         // refine with SpacesEnumerator (private SkyLight) if available. Falls back
-        // to the raw .optionAll result if the private call is unavailable (§scope-2).
+        // to the raw .optionAll result if the private call is unavailable.
         let option: CGWindowListOption =
             currentSpaceOnly
             ? .optionOnScreenOnly
             : .optionAll
-        // Single CGWindowListCopyWindowInfo call as per §5.1.
+        // Single CGWindowListCopyWindowInfo call.
         guard
             let rawList = CGWindowListCopyWindowInfo(option, kCGNullWindowID)
                 as? [[String: Any]]
@@ -93,7 +93,7 @@ final class WindowStore {
 
         switch sortMode {
         case .mru:
-            // §5.5: sort by mruOrder; unknowns appended in z-order at the end.
+            // Sort by mruOrder; unknowns appended in z-order at the end.
             let sortedIDs = WindowStore.sortedByMRU(
                 windowIDs: filtered.map { $0.windowID },
                 mruOrder: mruOrder
@@ -119,13 +119,13 @@ final class WindowStore {
     }
 
     /// Record that `windowID` was just activated (switcher confirmed).
-    /// Moves the ID to the front of `mruOrder` (§5.5).
+    /// Moves the ID to the front of `mruOrder`.
     /// Call this immediately after `Activator.activate()` on `.confirmSelection`.
     func recordActivation(_ windowID: CGWindowID) {
         mruOrder = WindowStore.movedToFront(windowID, in: mruOrder, cap: mruCap)
     }
 
-    // MARK: - NSWorkspace activation observation (§5.5)
+    // MARK: - NSWorkspace activation observation
 
     /// Subscribe to NSWorkspace app-activation events so that windows brought
     /// to the front by means other than the switcher are also tracked.
@@ -286,7 +286,7 @@ final class WindowStore {
     ///
     /// - Parameters:
     ///   - rawList: The array returned by CGWindowListCopyWindowInfo.
-    ///   - selfPID: The PID of the current process (filter §5.3-4).
+    ///   - selfPID: The PID of the current process (own-process exclusion filter).
     ///   - excludedBundleIDs: Bundle IDs that should be omitted.
     ///   - bundleIDResolver: Closure that maps a pid_t to an optional bundle ID.
     ///     Injected so tests can provide a pure lookup without NSRunningApplication.
@@ -313,14 +313,14 @@ final class WindowStore {
             candidates.append(info)
         }
 
-        // Phase 2: apply duplicate-title suffixes in enumeration order (§5.4).
+        // Phase 2: apply duplicate-title suffixes in enumeration order.
         return applyDuplicateSuffixes(to: candidates)
     }
 
     // MARK: - Internal helpers
 
     /// Attempt to build a WindowInfo from a single CGWindowList dictionary,
-    /// returning nil if any filter condition (§5.3) rejects it.
+    /// returning nil if any filter condition rejects it.
     nonisolated private static func windowInfo(
         from dict: [String: Any],
         selfPID: pid_t,
@@ -328,28 +328,28 @@ final class WindowStore {
         bundleIDResolver: (pid_t) -> String?
     ) -> WindowInfo? {
 
-        // §5.3-1: layer must be 0 (normal application windows only).
+        // Layer must be 0 (normal application windows only).
         guard let layer = dict[kCGWindowLayer as String] as? Int,
             layer == 0
         else { return nil }
 
-        // §5.3-2: window must be visible (alpha > 0).
+        // Window must be visible (alpha > 0).
         guard let alpha = dict[kCGWindowAlpha as String] as? Double,
             alpha > 0
         else { return nil }
 
-        // §5.3-3: bounds must be at least 40×40.
+        // Bounds must be at least 40×40.
         guard let boundsDict = dict[kCGWindowBounds as String] as? [String: CGFloat],
             let bounds = CGRect(dictionaryRepresentation: boundsDict as CFDictionary),
             bounds.width >= 40, bounds.height >= 40
         else { return nil }
 
-        // §5.3-4: exclude own process.
+        // Exclude own process.
         guard let pidNum = dict[kCGWindowOwnerPID as String] as? Int32 else { return nil }
         let pid = pid_t(pidNum)
         guard pid != selfPID else { return nil }
 
-        // §5.3-6: kCGWindowStoreType must be present and non-zero.
+        // kCGWindowStoreType must be present and non-zero.
         guard let storeType = dict[kCGWindowStoreType as String] as? Int,
             storeType != 0
         else { return nil }
@@ -357,7 +357,7 @@ final class WindowStore {
         // Resolve bundle ID (may be nil — not all processes have a bundle ID).
         let bundleID = bundleIDResolver(pid)
 
-        // §5.3-5: exclude explicitly listed bundle IDs.
+        // Exclude explicitly listed bundle IDs.
         if let bid = bundleID, excludedBundleIDs.contains(bid) { return nil }
 
         // Window ID.
@@ -366,7 +366,7 @@ final class WindowStore {
         // App name (owner name).
         let appName = dict[kCGWindowOwnerName as String] as? String ?? "Unknown"
 
-        // §5.4: title fallback — use kCGWindowName if non-empty, else app name.
+        // Title fallback — use kCGWindowName if non-empty, else app name.
         let rawTitle = dict[kCGWindowName as String] as? String ?? ""
         let title = rawTitle.isEmpty ? appName : rawTitle
 
@@ -384,7 +384,7 @@ final class WindowStore {
     /// Apply duplicate-title suffixes to a list of WindowInfo values.
     ///
     /// Windows that share the same title string receive " (2)", " (3)", … suffixes
-    /// in enumeration order (§5.4).  The first occurrence keeps the original title.
+    /// in enumeration order.  The first occurrence keeps the original title.
     nonisolated static func applyDuplicateSuffixes(to windows: [WindowInfo]) -> [WindowInfo] {
         // Count how many times each title has already been emitted.
         var seen: [String: Int] = [:]

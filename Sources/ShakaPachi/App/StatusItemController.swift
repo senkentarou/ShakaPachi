@@ -95,7 +95,7 @@ final class StatusItemController {
         refreshIcon()
     }
 
-    /// Reflect the event-tap state on the toggle item and status icon (§10).
+    /// Reflect the event-tap state on the toggle item and status icon.
     func updateTapState(enabled: Bool, reason: String?) {
         tapEnabled = enabled
         tapStopReason = reason
@@ -142,7 +142,7 @@ final class StatusItemController {
         // Required for Fix #3 (gray out toggle when permissions missing).
         menu.autoenablesItems = false
 
-        // Tap enable/disable toggle (§10) — also the recovery path after an
+        // Tap enable/disable toggle — also the recovery path after an
         // emergency stop or deadman fire without relaunching the app.
         let toggle = NSMenuItem(
             title: NSLocalizedString("ウィンドウ切替を有効化", comment: "Menu item: enable window switching"),
@@ -155,7 +155,7 @@ final class StatusItemController {
 
         menu.addItem(.separator())
 
-        // §10 / §11.3: Settings… with Cmd+, shortcut
+        // Settings… with Cmd+, shortcut
         let settingsItem = NSMenuItem(
             title: NSLocalizedString("設定…", comment: "Menu item: open settings"),
             action: #selector(openSettings),

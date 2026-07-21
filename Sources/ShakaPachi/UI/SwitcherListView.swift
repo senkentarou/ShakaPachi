@@ -1,11 +1,10 @@
 // SwitcherListView.swift
-// §7.3 (amended by user decision): native App-Switcher-style horizontal
-// icon-tile row instead of the spec's vertical list. Each tile is ONE WINDOW
-// (not an app) — windows of the same app repeat the app icon, AltTab-style —
-// and the selected window's title is drawn beneath the row.
-// Custom draw(_:) implementation (§7.3's fallback path): tiles plus a single
-// title line, so a full pass is trivial and §7.5 selective redraw reduces to
-// invalidating two tile rects plus the title strip.
+// Native App-Switcher-style horizontal icon-tile row (user decision). Each tile
+// is ONE WINDOW (not an app) — windows of the same app repeat the app icon,
+// AltTab-style — and the selected window's title is drawn beneath the row.
+// Custom draw(_:) implementation: tiles plus a single title line, so a full
+// pass is trivial and selective redraw reduces to invalidating two tile rects
+// plus the title strip.
 
 import AppKit
 import CoreGraphics
@@ -13,7 +12,6 @@ import CoreGraphics
 // MARK: - SwitcherItem
 
 /// Lightweight value type carrying display data for one row.
-/// Step 7 uses dummy data; Step 8 wires this to real WindowInfo.
 struct SwitcherItem: Equatable {
     let icon: NSImage?
     let title: String
@@ -33,11 +31,11 @@ struct SwitcherItem: Equatable {
 /// Shared layout constants used by both the tile row and the panel.
 /// All geometry functions are pure — unit-testable.
 enum SwitcherLayout {
-    /// Square highlight tile per window (§7.4 amended) — the nominal (maximum) size.
+    /// Square highlight tile per window — the nominal (maximum) size.
     static let tileSize: CGFloat = 76
     /// App icon drawn centered inside the nominal tile.
     static let iconSize: CGFloat = 60
-    /// Minimum tile edge when shrink-to-fit kicks in (Step 8).
+    /// Minimum tile edge when shrink-to-fit kicks in.
     static let minTileSize: CGFloat = 40
     /// Gap between adjacent tiles.
     static let tileSpacing: CGFloat = 8
@@ -61,7 +59,7 @@ enum SwitcherLayout {
     /// Gap between the title line and the top of the preview pane.
     static let previewTopGap: CGFloat = 10
 
-    // MARK: - Shrink-to-fit (Step 8)
+    // MARK: - Shrink-to-fit
 
     /// Return the effective tile edge so that all `itemCount` tiles fit inside
     /// `availableWidth`.  The result is clamped to [minTileSize, tileSize].
@@ -177,13 +175,13 @@ enum SwitcherLayout {
         )
     }
 
-    /// Advance the selection index by +1 with wrap-around (§6.2).
+    /// Advance the selection index by +1 with wrap-around.
     static func advanceIndex(_ current: Int, count: Int) -> Int {
         guard count > 0 else { return 0 }
         return (current + 1) % count
     }
 
-    /// The tile indices needing redraw when the selection moves (§7.5).
+    /// The tile indices needing redraw when the selection moves.
     static func indicesToRedraw(old: Int, new: Int) -> IndexSet {
         var set = IndexSet()
         set.insert(old)
@@ -243,7 +241,7 @@ final class SwitcherListView: NSView {
     }
 
     /// Move the selection highlight, invalidating only the two affected tiles
-    /// and the title strip (§7.5).
+    /// and the title strip.
     func moveSelection(to newIndex: Int) {
         let old = selectedIndex
         let new = clamp(newIndex, count: items.count)
@@ -298,7 +296,7 @@ final class SwitcherListView: NSView {
         if titleRect.intersects(dirtyRect), items.indices.contains(selectedIndex) {
             let paragraph = NSMutableParagraphStyle()
             paragraph.alignment = .center
-            paragraph.lineBreakMode = .byTruncatingMiddle  // §7.4 middle truncation
+            paragraph.lineBreakMode = .byTruncatingMiddle  // middle-truncate long titles
             let attributes: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: 13),
                 .foregroundColor: NSColor.labelColor,

@@ -1,10 +1,9 @@
 // HotkeyTap.swift
-// CGEventTap lifecycle (§6.1) wired to the §4 safety mechanisms.
-// Step 5 scope: capture Option+Tab, log, consume. No switcher UI yet.
+// CGEventTap lifecycle wired to the safety mechanisms.
 //
-// Callback absolute rules (§4.3): no blocking work, no unbounded loops,
-// return within 1ms. Logging and UI updates are deferred to the main queue;
-// only tapEnable() calls happen synchronously inside the callback.
+// Callback absolute rules: no blocking work, no unbounded loops, return within
+// 1ms. Logging and UI updates are deferred to the main queue; only tapEnable()
+// calls happen synchronously inside the callback.
 //
 // All methods must be called on the main thread. The tap's run-loop source
 // is attached to the main run loop, so the callback also runs there.
@@ -39,12 +38,11 @@ final class HotkeyTap {
     /// t0 is the tap-entry timestamp so callers can measure N1 on the first trigger.
     var onSwitcherInput: ((SwitcherInput, CFAbsoluteTime) -> Bool)?
 
-    // MARK: - Configurable trigger (§12 Settings live-wire)
+    // MARK: - Configurable trigger
     //
     // AppDelegate updates these plain stored values from Settings.shared whenever
     // the user changes triggerModifier or triggerKey. Reading them inside the
-    // tap callback is safe and fast — no AppKit/Settings calls in the hot path
-    // (§4.3 callback absolute rules).
+    // tap callback is safe and fast — no AppKit/Settings calls in the hot path.
 
     /// The CGEventFlags mask for the configured trigger modifier.
     /// Updated by AppDelegate when Settings.triggerModifier changes.
@@ -90,7 +88,7 @@ final class HotkeyTap {
             guard
                 let tap = CGEvent.tapCreate(
                     tap: .cgSessionEventTap,
-                    place: .headInsertEventTap,  // ahead of the system App Switcher (§6.1)
+                    place: .headInsertEventTap,  // ahead of the system App Switcher
                     options: .defaultTap,  // must consume, listenOnly is not enough
                     eventsOfInterest: mask,
                     callback: hotkeyTapCallback,
@@ -128,7 +126,7 @@ final class HotkeyTap {
         onStateChange?(.stopped(reason: reason))
     }
 
-    // MARK: - Deadman switch (§4.2, DEBUG only)
+    // MARK: - Deadman switch (DEBUG only)
 
     private func armDeadman() {
         #if DEBUG
@@ -157,7 +155,7 @@ final class HotkeyTap {
     // MARK: - Event handling (called from the tap callback)
 
     fileprivate func handleEvent(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        // §4.3 / N1: record entry time before any other work.
+        // N1: record entry time before any other work.
         let t0 = CFAbsoluteTimeGetCurrent()
 
         let eventType: KeyEvent.EventType
@@ -182,7 +180,7 @@ final class HotkeyTap {
             isSecureInputEnabled: IsSecureEventInputEnabled()
         ) {
         case .emergencyStop:
-            // §4.1: disable synchronously, never consume the combo itself.
+            // Disable synchronously; never consume the emergency-stop combo itself.
             if let tap = eventTap {
                 CGEvent.tapEnable(tap: tap, enable: false)
             }
@@ -195,11 +193,11 @@ final class HotkeyTap {
             return Unmanaged.passUnretained(event)
 
         case .reenableTap:
-            // §4.4 recovers from SYSTEM-initiated disables (timeout, input
-            // safety). Intentional disables (emergency stop, deadman, menu)
-            // also surface here as tapDisabledByUserInput — isEnabled is
-            // already false then, and re-enabling would defeat the kill
-            // switches, so recover only while we intend to be running.
+            // Recovers from SYSTEM-initiated disables (timeout, input safety).
+            // Intentional disables (emergency stop, deadman, menu) also surface
+            // here as tapDisabledByUserInput — isEnabled is already false then,
+            // and re-enabling would defeat the kill switches, so recover only
+            // while we intend to be running.
             if isEnabled, let tap = eventTap {
                 CGEvent.tapEnable(tap: tap, enable: true)
                 DispatchQueue.main.async {
@@ -217,10 +215,10 @@ final class HotkeyTap {
             break
         }
 
-        // Step 9 / Step 12: translate the abstract KeyEvent into a SwitcherInput
-        // and forward it to the state machine via onSwitcherInput.
-        // §4.3: no blocking work here — all panel/UI work is deferred to the
-        // main queue inside onSwitcherInput's implementation in AppDelegate.
+        // Translate the abstract KeyEvent into a SwitcherInput and forward it
+        // to the state machine via onSwitcherInput. The tap callback must return
+        // quickly — all panel/UI work is deferred to the main queue inside
+        // onSwitcherInput's implementation in AppDelegate.
         //
         // The trigger modifier and key are read from stored plain values
         // (triggerModifierMask, triggerKeyCode) which AppDelegate keeps in sync
@@ -271,7 +269,7 @@ final class HotkeyTap {
             return Unmanaged.passUnretained(event)
         }
 
-        // §4.3: the machine call itself is pure and cheap (no I/O).
+        // The machine call itself is pure and cheap (no I/O).
         // Capture what we need before the async hop so we avoid races.
         let capturedT0 = t0
         let capturedInput = input

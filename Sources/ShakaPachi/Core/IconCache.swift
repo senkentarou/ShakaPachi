@@ -1,11 +1,11 @@
 // IconCache.swift
-// §8: Cache app icons, resized once at store-time so draw() never pays for
+// Cache app icons, resized once at store-time so draw() never pays for
 // scaling at runtime.
 //
-// Deviation from spec: the spec says resize to 20×20 for 28pt rows.  The
-// design was changed in Step 7 to a horizontal tile layout with 76pt tiles and
-// 60pt icons (SwitcherLayout.iconSize).  Icons are therefore cached at 60×60
-// instead of 20×20 so the stored image matches the drawn size exactly.
+// Note: the original spec called for 20×20 icons for 28pt rows. The design
+// uses a horizontal tile layout with 76pt tiles and 60pt icons
+// (SwitcherLayout.iconSize), so icons are cached at 60×60 instead — the stored
+// image matches the drawn size exactly.
 
 import AppKit
 import Foundation
