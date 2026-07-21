@@ -185,31 +185,33 @@ final class StatusItemController {
     }
 
     /// Reflect the Settings-window open state on the settings menu item: while
-    /// open it reads "Close settings" (「設定を閉じる」) with a check, and selecting it closes the window.
+    /// open it reads "Close settings" (「設定を閉じる」), and selecting it closes the window.
+    /// The verb title conveys the state, so no check mark is used — a check next to
+    /// an action verb ("Close settings ✓") reads as if the action were already applied.
     private func refreshSettingsMenuItem() {
         settingsMenuItem?.title = settingsOpen
             ? NSLocalizedString("設定を閉じる", comment: "Menu item: close settings")
             : NSLocalizedString("設定…", comment: "Menu item: open settings")
-        settingsMenuItem?.state = settingsOpen ? .on : .off
+        settingsMenuItem?.state = .off
     }
 
-    /// Update the tap-toggle menu item title and state based on tap-enable state and permissions.
-    /// Title logic (mirroring refreshSettingsMenuItem pattern):
+    /// Update the tap-toggle menu item title based on tap-enable state and permissions.
+    /// The title names the action a click performs (mirroring refreshSettingsMenuItem):
     /// - If tap is enabled: "Disable window switching"
-    /// - If tap is disabled and all permissions granted: "⚠ Enable window switching" (warning marker, off state)
+    /// - If tap is disabled and all permissions granted: "⚠ Enable window switching" (warning marker)
     /// - If permissions missing: "Enable window switching" (no marker; permissions item owns the warning)
+    /// No check mark is used: the verb title already conveys state, so a check next to
+    /// "Disable window switching" would misread as the disabled action being active.
     private func refreshToggleItem() {
         let allGranted = permissionManager.allPermissionsGranted()
         if tapEnabled {
             toggleItem?.title = NSLocalizedString("ウィンドウ切替を無効化", comment: "Menu item: disable window switching")
-            toggleItem?.state = .on
         } else if allGranted {
             toggleItem?.title = NSLocalizedString("⚠ ウィンドウ切替を有効化", comment: "Menu item: enable window switching (needs attention)")
-            toggleItem?.state = .off
         } else {
             toggleItem?.title = NSLocalizedString("ウィンドウ切替を有効化", comment: "Menu item: enable window switching")
-            toggleItem?.state = .off
         }
+        toggleItem?.state = .off
     }
 
     // MARK: - Menu actions
