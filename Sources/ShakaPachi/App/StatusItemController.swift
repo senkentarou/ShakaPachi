@@ -12,6 +12,7 @@ final class StatusItemController {
     // Held references to menu items that need runtime updates.
     private var permissionStatusItem: NSMenuItem?
     private var toggleItem: NSMenuItem?
+    private var settingsMenuItem: NSMenuItem?
 
     // Tap state mirrored from HotkeyTap for icon/menu rendering.
     private var tapEnabled = false
@@ -26,6 +27,9 @@ final class StatusItemController {
 
     /// Called when the user chooses 「設定…」 from the menu.
     var onOpenSettings: (() -> Void)?
+
+    /// Called when the user chooses 「設定を閉じる」 while the Settings window is open.
+    var onCloseSettings: (() -> Void)?
 
     // Retained while open: NSWindow.delegate is weak, so a local variable
     // would deallocate the controller and leave the activation policy stuck
@@ -45,6 +49,7 @@ final class StatusItemController {
         ) { [weak self] note in
             MainActor.assumeIsolated {
                 self?.settingsOpen = (note.userInfo?["open"] as? Bool) ?? false
+                self?.refreshSettingsMenuItem()
                 self?.refreshIcon()
             }
         }
@@ -95,93 +100,30 @@ final class StatusItemController {
     // Icon precedence: permission problem > tap stopped > settings open > normal.
     private func refreshIcon() {
         guard let button = statusItem.button else { return }
+        let state: TrayIconState
+        let tooltip: String
         if !permissionManager.allPermissionsGranted() {
-            button.image = makeWarningIcon()
-            button.toolTip = "ShakaPachi — 権限が不足しています"
+            state = .permission
+            tooltip = "ShakaPachi — 権限が不足しています"
         } else if !tapEnabled {
-            button.image = makeStoppedIcon()
-            button.toolTip = "ShakaPachi — 停止中" + (tapStopReason.map { " (\($0))" } ?? "")
+            state = .restricted
+            tooltip = "ShakaPachi — 停止中" + (tapStopReason.map { " (\($0))" } ?? "")
         } else if settingsOpen {
-            button.image = makeInfoIcon()
-            button.toolTip = "ShakaPachi — 設定を開いています"
+            state = .settings
+            tooltip = "ShakaPachi — 設定を開いています"
         } else {
-            button.image = makeStatusIcon()
-            button.toolTip = "ShakaPachi"
-            // Normal icon is template; badged icons set isTemplate = false in their builders.
-            button.image?.isTemplate = true
+            state = .normal
+            tooltip = "ShakaPachi"
         }
+        button.image = TrayIconRenderer.menuBarImage(for: state)
+        button.toolTip = tooltip
     }
 
     // MARK: - Private: button
 
     private func setupButton() {
         guard let button = statusItem.button else { return }
-        button.image = makeStatusIcon()
-        button.image?.isTemplate = true
-    }
-
-    /// Draws the 16×16 normal-state menu-bar icon: the ShakaPachi glyph as a
-    /// template (white / adaptive). Warning and stopped states draw the SAME
-    /// glyph tinted amber / red — state is shown by the glyph's colour, not by a
-    /// separate badge.
-    private func makeStatusIcon() -> NSImage {
-        let size = NSSize(width: 18, height: 18)
-        let image = NSImage(size: size, flipped: false) { bounds in
-            // Template: only alpha matters, so .black renders adaptively (white
-            // on a dark menu bar). The front window is a solid "白掛け" fill.
-            self.drawGlyph(in: bounds, color: .black)
-            return true
-        }
-        image.isTemplate = true
-        return image
-    }
-
-    // MARK: - Private: icon helpers
-
-    /// Draws the ShakaPachi glyph — two overlapping windows — in a single `color`:
-    /// the back window as an outline and the front window as a SOLID fill (the
-    /// "白掛け" front), so the whole glyph reads as one state colour
-    /// (white = normal, amber = warning, red = stopped). Geometry mirrors the app
-    /// icon (OnboardingWindow.makeAppIconTile): back lower-left, front upper-right.
-    private func drawGlyph(in bounds: NSRect, color: NSColor) {
-        let s = bounds.width / 16.0
-        // Fill most of the canvas (menu-bar icons have no surrounding tile,
-        // unlike the app icon, so the glyph itself must be large): ~1.25px margins
-        // in the 16-unit design space, rendered into an 18px image.
-        let w = 9.5 * s
-        let r = 1.65 * s
-        let line = 1.3 * s
-
-        color.setStroke()
-        color.setFill()
-
-        // Back window frame (outline) — lower-left.
-        let backRect = NSRect(x: bounds.minX + 1.25 * s, y: bounds.minY + 1.25 * s, width: w, height: w)
-        let back = NSBezierPath(roundedRect: backRect, xRadius: r, yRadius: r)
-        back.lineWidth = line
-        back.stroke()
-
-        // Front window — upper-right, solid fill occluding the back beneath it.
-        let frontRect = NSRect(x: bounds.minX + 5.25 * s, y: bounds.minY + 5.25 * s, width: w, height: w)
-        let front = NSBezierPath(roundedRect: frontRect, xRadius: r, yRadius: r)
-        front.fill()
-        front.lineWidth = line
-        front.stroke()
-    }
-
-    /// Draws the 16×16 warning-state icon: the ShakaPachi glyph tinted amber.
-    /// State is shown by the glyph colour (no separate badge). Non-template so
-    /// the amber renders in colour rather than adapting to the menu bar.
-    private func makeWarningIcon() -> NSImage {
-        let size = NSSize(width: 18, height: 18)
-        let image = NSImage(size: size, flipped: false) { bounds in
-            // Soft amber — paler than the raw product colour so it reads as a
-            // gentle warning on the menu bar rather than a harsh block of colour.
-            self.drawGlyph(in: bounds, color: NSColor(srgbRed: 0.95, green: 0.81, blue: 0.45, alpha: 1.0))
-            return true
-        }
-        image.isTemplate = false
-        return image
+        button.image = TrayIconRenderer.menuBarImage(for: .normal)
     }
 
     // MARK: - Private: menu
@@ -214,6 +156,7 @@ final class StatusItemController {
         settingsItem.keyEquivalentModifierMask = .command
         settingsItem.target = self
         menu.addItem(settingsItem)
+        settingsMenuItem = settingsItem
 
         // Permission status item — created but NOT added here. It is shown ONLY
         // when a permission is missing, pinned to the top of the menu by
@@ -240,32 +183,11 @@ final class StatusItemController {
         statusItem.menu = menu
     }
 
-    /// Draws the 16×16 stopped-state icon: the ShakaPachi glyph tinted red.
-    /// State is shown by the glyph colour (no separate badge). Non-template.
-    private func makeStoppedIcon() -> NSImage {
-        let size = NSSize(width: 18, height: 18)
-        let image = NSImage(size: size, flipped: false) { bounds in
-            // Soft coral — a muted, lighter red so the stopped state is clear
-            // without being a harsh saturated red.
-            self.drawGlyph(in: bounds, color: NSColor(srgbRed: 0.92, green: 0.53, blue: 0.51, alpha: 1.0))
-            return true
-        }
-        image.isTemplate = false
-        return image
-    }
-
-    /// Draws the 18×18 settings-open icon: the ShakaPachi glyph tinted blue,
-    /// like an "info" indicator. Non-template so the blue renders in colour.
-    private func makeInfoIcon() -> NSImage {
-        let size = NSSize(width: 18, height: 18)
-        let image = NSImage(size: size, flipped: false) { bounds in
-            // Soft blue — a paler "info" blue (lighter than systemBlue) for the
-            // settings-open state, in keeping with the muted warning/stopped tints.
-            self.drawGlyph(in: bounds, color: NSColor(srgbRed: 0.52, green: 0.68, blue: 0.92, alpha: 1.0))
-            return true
-        }
-        image.isTemplate = false
-        return image
+    /// Reflect the Settings-window open state on the settings menu item: while
+    /// open it reads 「設定を閉じる」 with a check, and selecting it closes the window.
+    private func refreshSettingsMenuItem() {
+        settingsMenuItem?.title = settingsOpen ? "設定を閉じる" : "設定…"
+        settingsMenuItem?.state = settingsOpen ? .on : .off
     }
 
     // MARK: - Menu actions
@@ -275,7 +197,11 @@ final class StatusItemController {
     }
 
     @objc private func openSettings() {
-        onOpenSettings?()
+        if settingsOpen {
+            onCloseSettings?()
+        } else {
+            onOpenSettings?()
+        }
     }
 
     @objc private func showPermissions() {

@@ -57,6 +57,13 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    /// Close the Settings window programmatically (e.g. from the tray menu).
+    /// Triggers windowWillClose, which posts the state-change notification and
+    /// reverts the activation policy.
+    func close() {
+        window?.close()
+    }
+
     // MARK: - NSWindowDelegate
 
     func windowWillClose(_ notification: Notification) {
@@ -126,7 +133,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
         addTab("一般", GeneralSettingsView())
         addTab("外観", AppearanceSettingsView())
-        addTab("権限", PermissionsSettingsView())
+        addTab("状態", StatusSettingsView())
         addTab("統計", StatsSettingsView())
         addTab("クレジット", AboutSettingsView())
         return tvc
@@ -321,9 +328,9 @@ struct AppearanceSettingsView: View {
     }
 }
 
-// ─── 権限 tab ─────────────────────────────────────────────────────────────────
+// ─── 状態 tab ─────────────────────────────────────────────────────────────────
 
-struct PermissionsSettingsView: View {
+struct StatusSettingsView: View {
 
     @State private var accessibilityGranted: Bool = false
     @State private var screenRecordingGranted: Bool = false
@@ -332,6 +339,25 @@ struct PermissionsSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Form {
+                Section {
+                    ForEach(TrayIconState.allCases, id: \.self) { state in
+                        HStack(spacing: 12) {
+                            Image(nsImage: TrayIconRenderer.previewImage(for: state, size: 32))
+                                .frame(width: 32, height: 32)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(state.cardName)
+                                    .font(.body)
+                                Text(state.detail)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("アイコンの状態")
+                }
+
                 Section {
                     HStack {
                         Image(systemName: accessibilityGranted
