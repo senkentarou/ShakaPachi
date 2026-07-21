@@ -175,6 +175,40 @@ enum SwitcherLayout {
         )
     }
 
+    /// Tile rect shifted right by `offsetX` relative to the 2-arg overload.
+    /// Used to center the tile row when the panel is wider than the natural
+    /// tile-row width (e.g. when the preview pane widens the panel).
+    static func tileRect(index: Int, effectiveTile: CGFloat, offsetX: CGFloat) -> NSRect {
+        let base = tileRect(index: index, effectiveTile: effectiveTile)
+        return NSRect(
+            x: base.origin.x + offsetX,
+            y: base.origin.y,
+            width: base.width,
+            height: base.height
+        )
+    }
+
+    /// Returns the horizontal offset needed to center the whole tile row within
+    /// `boundsWidth`. When the preview pane widens the panel, the tile row
+    /// would otherwise cluster at the left margin; this offset shifts the entire
+    /// row rightward so its center aligns with the panel center (matching the
+    /// already-centered preview pane and title). Never returns a negative value:
+    /// if the row is wider than `boundsWidth`, returns 0 so nothing shifts
+    /// left off-screen.
+    static func tileRowOffsetX(
+        itemCount: Int,
+        effectiveTile: CGFloat,
+        boundsWidth: CGFloat
+    ) -> CGFloat {
+        let count = max(itemCount, 1)
+        let rowWidth =
+            horizontalMargin * 2
+            + CGFloat(count) * effectiveTile
+            + CGFloat(count - 1) * tileSpacing
+        let offset = (boundsWidth - rowWidth) / 2
+        return max(offset, 0)
+    }
+
     /// Advance the selection index by +1 with wrap-around.
     static func advanceIndex(_ current: Int, count: Int) -> Int {
         guard count > 0 else { return 0 }
@@ -248,11 +282,13 @@ final class SwitcherListView: NSView {
         guard new != old else { return }
 
         selectedIndex = new
+        let offsetX = tileRowOffsetX
         for index in SwitcherLayout.indicesToRedraw(old: old, new: new) {
             setNeedsDisplay(
                 SwitcherLayout.tileRect(
                     index: index,
-                    effectiveTile: effectiveTile
+                    effectiveTile: effectiveTile,
+                    offsetX: offsetX
                 )
                 .insetBy(dx: -2, dy: -2))
         }
@@ -268,8 +304,9 @@ final class SwitcherListView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         let tile = effectiveTile
         let iconEdge = SwitcherLayout.effectiveIconSize(for: tile)
+        let offsetX = tileRowOffsetX
         for (index, item) in items.enumerated() {
-            let tileRect = SwitcherLayout.tileRect(index: index, effectiveTile: tile)
+            let tileRect = SwitcherLayout.tileRect(index: index, effectiveTile: tile, offsetX: offsetX)
             guard tileRect.insetBy(dx: -2, dy: -2).intersects(dirtyRect) else { continue }
 
             if index == selectedIndex {
@@ -399,6 +436,17 @@ final class SwitcherListView: NSView {
     }
 
     // MARK: - Private helpers
+
+    /// Horizontal offset to center the tile row within the current panel width.
+    /// Returns 0 when preview is disabled (panel width equals the natural tile-row
+    /// width, so no shift is needed).
+    private var tileRowOffsetX: CGFloat {
+        SwitcherLayout.tileRowOffsetX(
+            itemCount: items.count,
+            effectiveTile: effectiveTile,
+            boundsWidth: bounds.width
+        )
+    }
 
     /// Preview rect in flipped (top-left origin) coordinates.
     private var previewRect: NSRect {
