@@ -169,6 +169,34 @@ public enum AccentColor: String, CaseIterable, Sendable {
     }
 }
 
+/// Preferred UI language. `.system` follows the macOS system language;
+/// `.japanese` / `.english` override it. The override is written to the app's
+/// `AppleLanguages` UserDefaults key and takes effect on the next launch.
+public enum AppLanguage: String, CaseIterable, Sendable {
+    case system
+    case japanese
+    case english
+
+    /// Human-readable label. `.system` is localized; the concrete languages use
+    /// their own endonyms (shown identically in any locale, like macOS does).
+    public var displayName: String {
+        switch self {
+        case .system:   return NSLocalizedString("システム", comment: "Language: follow system")
+        case .japanese: return "日本語"
+        case .english:  return "English"
+        }
+    }
+
+    /// Value written to `AppleLanguages`, or nil for `.system` (removes override).
+    var appleLanguagesValue: [String]? {
+        switch self {
+        case .system:   return nil
+        case .japanese: return ["ja"]
+        case .english:  return ["en"]
+        }
+    }
+}
+
 // MARK: - @propertyWrapper
 
 /// A property wrapper that reads/writes a String-raw-valued enum to UserDefaults.
@@ -300,6 +328,7 @@ final class Settings {
         _excludedBundleIDs  = DefaultsStringArray(key: "excludedBundleIDs", defaultValue: [], defaults: defaults)
         _accentColor        = DefaultsEnum(key: "accentColor",        defaultValue: .system, defaults: defaults)
         _showWindowPreview  = DefaultsBool(key: "showWindowPreview",  defaultValue: true,  defaults: defaults)
+        _appLanguage        = DefaultsEnum(key: "appLanguage",        defaultValue: .system, defaults: defaults)
     }
 
     // MARK: Backing store
@@ -415,6 +444,29 @@ final class Settings {
         get { _showWindowPreview.wrappedValue }
         set { _showWindowPreview.wrappedValue = newValue }
     }
+
+    // -- Language --
+
+    private var _appLanguage: DefaultsEnum<AppLanguage>
+    /// The user's preferred UI language. Setting this also writes/removes the
+    /// `AppleLanguages` override in the backing store so the bundle resolves the
+    /// chosen language on the next launch (a relaunch is required to apply).
+    var appLanguage: AppLanguage {
+        get { _appLanguage.wrappedValue }
+        set {
+            _appLanguage.wrappedValue = newValue   // persists + posts .settingsDidChange
+            if let langs = newValue.appleLanguagesValue {
+                defaults.set(langs, forKey: "AppleLanguages")
+            } else {
+                defaults.removeObject(forKey: "AppleLanguages")
+            }
+        }
+    }
+
+    /// The language selected when the process launched, captured once by
+    /// AppDelegate at startup so Settings can show a "restart to apply" prompt.
+    @MainActor static var launchLanguage: AppLanguage = .system
+
 
     // -- Panel width (advisory in v1 — see note below) --
 

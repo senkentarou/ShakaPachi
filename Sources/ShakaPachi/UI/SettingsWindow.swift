@@ -179,6 +179,7 @@ final class SettingsStore: ObservableObject {
     @Published var launchAtLogin: Bool
     @Published var accentColor: AccentColor
     @Published var showWindowPreview: Bool
+    @Published var appLanguage: AppLanguage
 
     private var observer: (any NSObjectProtocol)?
 
@@ -193,6 +194,7 @@ final class SettingsStore: ObservableObject {
         theme             = s.theme
         accentColor       = s.accentColor
         showWindowPreview = s.showWindowPreview
+        appLanguage       = s.appLanguage
         // The real login-item state lives in SMAppService, not the cached bool;
         // read it so the toggle reflects reality (and heal a stale mirror).
         launchAtLogin    = LoginItemManager.isEnabled
@@ -222,6 +224,7 @@ final class SettingsStore: ObservableObject {
         if accentColor       != s.accentColor       { accentColor       = s.accentColor       }
         if launchAtLogin     != s.launchAtLogin     { launchAtLogin     = s.launchAtLogin     }
         if showWindowPreview != s.showWindowPreview { showWindowPreview = s.showWindowPreview }
+        if appLanguage       != s.appLanguage       { appLanguage       = s.appLanguage       }
     }
 }
 
@@ -233,6 +236,32 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
+            Section {
+                Picker("言語", selection: Binding(
+                    get: { store.appLanguage },
+                    set: { Settings.shared.appLanguage = $0 }
+                )) {
+                    ForEach(AppLanguage.allCases, id: \.self) { lang in
+                        Text(lang.displayName).tag(lang)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                if store.appLanguage != Settings.launchLanguage {
+                    HStack {
+                        Text("言語の変更は再起動後に反映されます。")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Button("再起動") {
+                            NotificationCenter.default.post(name: .relaunchApp, object: nil)
+                        }
+                    }
+                }
+            } header: {
+                Text("言語")
+            }
+
             Section {
                 // Modifier-only picker: the trigger key is fixed to Tab.
                 // On set, both modifier and key are written so any previously-
@@ -637,4 +666,6 @@ struct AboutSettingsView: View {
 extension Notification.Name {
     /// Posted by the permissions tab when the user wants to see the onboarding window.
     static let showOnboardingWindow = Notification.Name("com.masahirosenda.shakapachi.showOnboardingWindow")
+    /// Posted when the user requests an app relaunch (e.g. to apply a language change).
+    static let relaunchApp = Notification.Name("com.masahirosenda.shakapachi.relaunchApp")
 }

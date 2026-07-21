@@ -48,6 +48,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Capture the language that was active at launch so Settings can tell
+        // whether a relaunch is needed to apply a language change.
+        Settings.launchLanguage = Settings.shared.appLanguage
+
         // Run as a menu-bar accessory: no Dock icon, no activation on launch.
         NSApp.setActivationPolicy(.accessory)
 
@@ -119,6 +123,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { _ in
             MainActor.assumeIsolated {
                 selfBox.value?.showOnboarding()
+            }
+        }
+
+        // Observer for the relaunch request (e.g. after a language change).
+        NotificationCenter.default.addObserver(
+            forName: .relaunchApp, object: nil, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                selfBox.value?.relaunchApp()
             }
         }
 
@@ -463,6 +476,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onboardingWindow = ow
         }
         onboardingWindow?.show()
+    }
+
+    /// Relaunch the app. Delegates to PermissionManager.relaunchApp() which
+    /// opens a new instance via NSWorkspace and then terminates self.
+    @MainActor
+    private func relaunchApp() {
+        (permissionManager ?? PermissionManager()).relaunchApp()
     }
 
     // MARK: - Prevent spurious quit
