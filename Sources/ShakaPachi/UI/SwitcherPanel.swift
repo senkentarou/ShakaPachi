@@ -74,7 +74,7 @@ final class SwitcherPanel {
         ev.layer?.masksToBounds = true
         // Glass rim: 1px light border reads as the edge of a liquid pane.
         ev.layer?.borderWidth = 1
-        ev.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
+        ev.layer?.borderColor = NSColor.white.withAlphaComponent(AccentColor.glassBorderAlpha).cgColor
 
         // Accent background tint: inserted first so it sits BELOW the sheen and
         // the listView. backgroundColor is set per-show from Settings.accentColor.

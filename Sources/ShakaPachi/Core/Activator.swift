@@ -45,7 +45,10 @@ final class Activator {
 
         // Step 1 (§9.1): activate the app first so it is at least frontmost
         // even if the specific-window raise below falls back to app-only.
-        // On macOS 14+ the deprecated `options:` parameter is omitted.
+        // Why not activate(from:options:) (the macOS 14 replacement):
+        // cooperative activation expects the yielding app to be active, which
+        // a non-activating switcher panel never is — keep the legacy call
+        // until the new path is verified to transfer focus on macOS 14+.
         NSRunningApplication(processIdentifier: pid)?.activate()
 
         // Step 2 (§9.1): create an AX element for the app.
