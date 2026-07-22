@@ -35,6 +35,9 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for a full system overview, com
 
 ## License
 
-Proprietary — All rights reserved. See [LICENSE](LICENSE).
+ShakaPachi is free software licensed under the **GNU General Public License v3.0**
+(GPL-3.0). You are free to use, study, share, and modify it under those terms;
+any distributed derivative work must also be released under the GPL. See
+[LICENSE](LICENSE) for the full text.
 
-The source is currently private; no OSS license has been chosen yet.
+Copyright (C) 2026 Masahiro Senda
