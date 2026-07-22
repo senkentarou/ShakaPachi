@@ -1,5 +1,24 @@
 import AppKit
 
+// AppDelegate.swift
+// The app's wiring diagram: it CREATES every part once at launch and CONNECTS
+// them, then manages lifecycle. It holds no switch logic — it only composes.
+//
+// Wiring at a glance (AppDelegate builds these once and connects them):
+//
+//   HotkeyTap ──> SwitchCoordinator ──> WindowStore    (enumerate + MRU)
+//   (CGEventTap)  (drives one cycle)├──> IconCache      (pre-scaled icons)
+//                                   ├──> SwitcherPanel  (the floating row)
+//                                   ├──> Activator      (raise the window)
+//                                   ├──> StatsStore     (switch counts)
+//                                   └──> PermissionManager (gate preview)
+//
+//   Lifecycle side (created and retained by AppDelegate):
+//     StatusItemController ──> PermissionManager   (menu-bar icon + menu)
+//     PermissionManager                            (AX + Screen Recording)
+//
+// See docs/ARCHITECTURE.md "Layered component map" for the full graph.
+
 // NSApplicationDelegate callbacks are called on the main thread by the
 // framework. We annotate each method with @MainActor explicitly so Swift 6
 // strict concurrency can verify this without requiring the class-level

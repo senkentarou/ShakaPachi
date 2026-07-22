@@ -8,6 +8,9 @@ import AppKit
 //
 // ── The switch cycle at a glance ──────────────────────────────────────────
 //
+//   modifierDown → [armed] → trigger → [panel: idx1] → trigger* → [move]
+//                → modifierUp → confirm   (esc → cancel)
+//
 //   1. Trigger      The user holds the modifier and taps the trigger key.
 //                   We enumerate the on-screen windows ONCE and take a
 //                   snapshot, then show the panel with an initial selection.
