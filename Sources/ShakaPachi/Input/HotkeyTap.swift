@@ -1,5 +1,7 @@
 // HotkeyTap.swift
 // CGEventTap lifecycle wired to the safety mechanisms.
+// Beginners: you can treat this file as a black box — the rest of the app works without understanding its internals.
+// Read the header for *what* it does; skip the *how*.
 //
 // Callback absolute rules: no blocking work, no unbounded loops, return within
 // 1ms. Logging and UI updates are deferred to the main queue; only tapEnable()
@@ -308,6 +310,7 @@ final class HotkeyTap {
 
 // MARK: - C callback trampoline
 
+// (Skippable: C-callback ↔ Swift bridging via Unmanaged. Not needed to understand the switch flow.)
 private func hotkeyTapCallback(
     proxy: CGEventTapProxy,
     type: CGEventType,

@@ -58,6 +58,28 @@ reading; `SpacesEnumerator` and the private-API details are covered in the
 
 ---
 
+## Reading the Swift concurrency annotations
+
+You will see these annotations all over the entry files. On a first read, treat
+them as the compiler being reassured about threading — the actual behaviour lives
+in the method bodies, not these labels. Here is what each one means so you can
+skim past it.
+
+| Annotation | Plain meaning | On a first read |
+|---|---|---|
+| `@MainActor` | Runs on the main (UI) thread | Assume "this is main-thread code; no extra threading to worry about" |
+| `nonisolated` / `nonisolated(unsafe)` | Opts a member out of the main-thread rule; `(unsafe)` means the author has manually ensured it is safe | Skip; it is a concurrency escape hatch |
+| `MainActor.assumeIsolated { }` | "We are already on the main thread here, trust me" | Skip; it is a promise to the compiler |
+| `@Sendable` / `@unchecked Sendable` | Safe to hand across threads; `unchecked` means the author guarantees it by hand | Skip |
+| `@propertyWrapper` (e.g. `DefaultsBool`, `DefaultsEnum`) | A reusable wrapper that makes a property auto-read/write `UserDefaults` | Read it once, then treat wrapped properties as plain values |
+| `nonmutating set` | A setter that writes elsewhere (UserDefaults) instead of mutating the struct | Skip; behaves like a normal property to callers |
+| `[weak self]` | Standard closure hygiene to avoid a retain cycle | Skip |
+
+For a first look at pure logic with none of these annotations, go straight to
+`SwitcherStateMachine`, `SafetyGuard`, and `StreakStats`.
+
+---
+
 ## What happens when you press Cmd+Tab
 
 Here is the whole flow in plain language. A few terms are explained inline the
@@ -181,9 +203,13 @@ dependency, so they are unit-tested directly without a display connection.
 
 ## The switch cycle (hot path)
 
-One complete trigger-to-confirm sequence. `SwitchCoordinator.handleInput` is the
-orchestrator: `HotkeyTap` calls it for every relevant key event, and it executes
-whatever the state machine decides.
+One complete trigger-to-confirm sequence, shown as four small diagrams — one per
+phase — matching the four numbered steps in "What happens when you press Cmd+Tab"
+above (1:1). `SwitchCoordinator.handleInput` is the orchestrator: `HotkeyTap`
+calls it for every relevant key event, and it executes whatever the state machine
+decides.
+
+**Phase 1 — Hold Cmd (arm).** You hold the trigger modifier; the tap is armed but nothing is shown yet.
 
 ```mermaid
 sequenceDiagram
@@ -192,11 +218,6 @@ sequenceDiagram
     participant SG as SafetyGuard
     participant SC as SwitchCoordinator
     participant SSM as SwitcherStateMachine
-    participant WS as WindowStore
-    participant IC as IconCache
-    participant SP as SwitcherPanel
-    participant ACT as Activator
-    participant SS as StatsStore
 
     Note over OS,HT: User holds trigger modifier (e.g. Cmd)
     OS->>HT: flagsChanged (modifier down)
@@ -206,6 +227,19 @@ sequenceDiagram
     SC->>SSM: handle(.modifierDown)
     SSM-->>SC: (none, consumed=false)
     SC-->>HT: false (pass through)
+```
+
+**Phase 2 — Tap Tab (show).** You tap Tab; the coordinator enumerates windows once, snapshots them, and shows the panel with the second window pre-selected.
+
+```mermaid
+sequenceDiagram
+    participant OS as macOS Event System
+    participant HT as HotkeyTap (CGEventTap)
+    participant SC as SwitchCoordinator
+    participant SSM as SwitcherStateMachine
+    participant WS as WindowStore
+    participant IC as IconCache
+    participant SP as SwitcherPanel
 
     Note over OS,HT: User presses trigger key (Tab)
     OS->>HT: keyDown (Tab + Cmd)
@@ -219,6 +253,17 @@ sequenceDiagram
     SSM-->>SC: (showPanel(index:1), consumed=true)
     SC->>SP: show(items:, selectedIndex:1)
     SC-->>HT: true (consume the key)
+```
+
+**Phase 3 — Keep tapping Tab (move).** You tap Tab again; the highlight moves over the existing snapshot with no re-enumeration.
+
+```mermaid
+sequenceDiagram
+    participant OS as macOS Event System
+    participant HT as HotkeyTap (CGEventTap)
+    participant SC as SwitchCoordinator
+    participant SSM as SwitcherStateMachine
+    participant SP as SwitcherPanel
 
     Note over OS,HT: User presses trigger key again (Tab)
     OS->>HT: keyDown (Tab + Cmd)
@@ -227,6 +272,20 @@ sequenceDiagram
     SSM-->>SC: (moveSelection(to:2), consumed=true)
     SC->>SP: updateSelection(to:2)
     SC-->>HT: true (consume)
+```
+
+**Phase 4 — Release Cmd (confirm).** You release the modifier; the coordinator raises the window, records it, bumps the counter, and hides the panel.
+
+```mermaid
+sequenceDiagram
+    participant OS as macOS Event System
+    participant HT as HotkeyTap (CGEventTap)
+    participant SC as SwitchCoordinator
+    participant SSM as SwitcherStateMachine
+    participant ACT as Activator
+    participant WS as WindowStore
+    participant SS as StatsStore
+    participant SP as SwitcherPanel
 
     Note over OS,HT: User releases trigger modifier (Cmd up)
     OS->>HT: flagsChanged (modifier up)

@@ -1,5 +1,7 @@
 // Activator.swift
 // Raise a specific window via the Accessibility API.
+// Beginners: you can treat this file as a black box — the rest of the app works without understanding its internals.
+// Read the header for *what* it does; skip the *how*.
 //
 // The CGWindowID↔AXUIElement mapping is inherently ambiguous (no public
 // direct-lookup API exists). The matching logic tries title first, then bounds
@@ -27,6 +29,7 @@ import ApplicationServices
 // a fallback. Using it does not cost App Store eligibility: this app already
 // cannot be sandboxed (it needs an unsandboxed session-level CGEventTap to
 // intercept Cmd+Tab), so the App Store was never viable regardless.
+// (Skippable: private-API plumbing to map a window ID to an AX element.)
 @_silgen_name("_AXUIElementGetWindow")
 private func _AXUIElementGetWindow(
     _ element: AXUIElement,

@@ -1,6 +1,8 @@
 // SpacesEnumerator.swift
 // Thin defensive wrapper over private SkyLight/CoreGraphicsServices APIs that
 // provide real all-Spaces window enumeration.
+// Beginners: you can treat this file as a black box — the rest of the app works without understanding its internals.
+// Read the header for *what* it does; skip the *how*.
 //
 // The public CGWindowList API (.optionAll) does not reliably return windows on
 // other Mission Control Spaces and gives no Space attribution. The private
@@ -20,6 +22,7 @@ import Foundation
 
 // MARK: - Private SkyLight symbol declarations
 
+// (Skippable: private SkyLight (CGS*) plumbing. The public path above is the one to read.)
 // CGSMainConnectionID() returns the per-process CGS connection used for all
 // SkyLight calls. Same pattern as _AXUIElementGetWindow in Activator.swift.
 @_silgen_name("CGSMainConnectionID")
