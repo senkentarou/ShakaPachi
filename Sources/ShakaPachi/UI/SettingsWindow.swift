@@ -624,8 +624,8 @@ struct AboutSettingsView: View {
                 .foregroundColor(.secondary)
 
             Link(
-                "github.com/senkentarou",
-                destination: URL(string: "https://github.com/senkentarou")!
+                "github.com/senkentarou/ShakaPachi",
+                destination: URL(string: "https://github.com/senkentarou/ShakaPachi")!
             )
             .font(.caption)
 
