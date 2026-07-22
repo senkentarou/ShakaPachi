@@ -104,7 +104,7 @@ final class WindowStore {
             // Raw CGWindowList order — no MRU sort applied.
             return filtered
         case .byApp:
-            // Group windows by app (stable sort by bundleID/appName),
+            // Group windows by app and order groups by app display name (ascending),
             // keeping MRU order within each group.
             let sortedByMRU = {
                 let sortedIDs = WindowStore.sortedByMRU(
@@ -194,33 +194,37 @@ final class WindowStore {
 
     // MARK: - Pure sort helpers (unit-testable without AppKit/CGWindowList)
 
-    /// Return windows grouped by app (stable sort by bundleID then appName),
-    /// preserving the relative order of windows within each group.
+    /// Return windows grouped by app, with groups ordered by app display name
+    /// (case-insensitive ascending), preserving the relative order of windows
+    /// within each group.
     ///
-    /// The group order is determined by the first window encountered for each
-    /// app in the input sequence (which is MRU-sorted when called from enumerate).
-    /// This means the app that was most recently used appears first.
+    /// Groups are sorted by the app's display name using
+    /// `localizedCaseInsensitiveCompare`. When two apps have the same display
+    /// name, the bundle-ID / app-name key is used as a deterministic tiebreaker.
+    /// This order is stable and independent of recency — unlike MRU, switching
+    /// apps does not reorder groups.
     ///
     /// - Parameter windows: The input window list (pre-sorted by MRU or z-order).
     /// - Returns: The same windows reordered so all windows of each app are
-    ///   contiguous, with inter-app order matching the first appearance of each app.
+    ///   contiguous, with inter-app order sorted alphabetically by app display name.
     nonisolated static func sortedByApp(windows: [WindowInfo]) -> [WindowInfo] {
-        // Build the ordered list of unique app keys (bundleID if available, else appName).
-        var appOrder: [String] = []
-        var seenApps: Set<String> = []
+        // Group windows by app (bundleID when available, else appName), then order
+        // the groups by app display name (case-insensitive, ascending) so the list
+        // is stable regardless of recency — unlike MRU, which reorders by last use.
+        // Windows keep their input order within each group (MRU when called from
+        // enumerate).
         var grouped: [String: [WindowInfo]] = [:]
-
+        var displayName: [String: String] = [:]
         for window in windows {
             let key = window.bundleID ?? window.appName
-            if !seenApps.contains(key) {
-                seenApps.insert(key)
-                appOrder.append(key)
-            }
             grouped[key, default: []].append(window)
+            if displayName[key] == nil { displayName[key] = window.appName }
         }
-
-        // Flatten in app-first-appearance order.
-        return appOrder.flatMap { grouped[$0] ?? [] }
+        let orderedKeys = grouped.keys.sorted { a, b in
+            let cmp = (displayName[a] ?? a).localizedCaseInsensitiveCompare(displayName[b] ?? b)
+            return cmp == .orderedSame ? a < b : cmp == .orderedAscending
+        }
+        return orderedKeys.flatMap { grouped[$0] ?? [] }
     }
 
     // MARK: - Pure MRU helpers (unit-testable without AppKit/CGWindowList)
