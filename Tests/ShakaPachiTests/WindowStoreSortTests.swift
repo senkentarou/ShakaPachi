@@ -43,18 +43,17 @@ final class WindowStoreSortTests: XCTestCase {
 
     func testSortedByApp_windowsFromSameApp_areContiguous() {
         // Two Safari windows and one Finder window: Safari, Finder, Safari.
-        // byApp should group them: both Safaris together (in their original
-        // relative order), then Finder.
+        // byApp should group them alphabetically by app name: Finder first, then Safari.
         let s1 = makeWindow(id: 1, pid: 101, bundleID: "com.apple.safari", appName: "Safari", title: "Safari 1")
         let fi = makeWindow(id: 2, pid: 102, bundleID: "com.apple.finder", appName: "Finder", title: "Finder")
         let s2 = makeWindow(id: 3, pid: 101, bundleID: "com.apple.safari", appName: "Safari", title: "Safari 2")
 
         let result = WindowStore.sortedByApp(windows: [s1, fi, s2])
-        // Safari appears first (first-seen), so its two windows lead.
-        // Finder comes after (second first-appearance).
+        // App name ascending: Finder (F) < Safari (S).
+        // Safari windows preserve their input order (1, 3) within the group.
         XCTAssertEqual(
-            result.map { $0.windowID }, [1, 3, 2],
-            "Expected Safari 1, Safari 2, Finder — byApp groups same-bundle windows")
+            result.map { $0.windowID }, [2, 1, 3],
+            "Expected Finder, Safari 1, Safari 2 — byApp orders groups by app name ascending")
     }
 
     func testSortedByApp_allWindowsFromOneApp_orderPreserved() {
@@ -66,27 +65,49 @@ final class WindowStoreSortTests: XCTestCase {
         XCTAssertEqual(result.map { $0.windowID }, [1, 2, 3])
     }
 
-    func testSortedByApp_interGroupOrderMatchesFirstAppearance() {
+    func testSortedByApp_interGroupOrderIsAlphabeticalByAppName() {
         // Input order: B1, A1, A2, B2, C1.
-        // First appearance order: B (id=1), A (id=2), C (id=5).
-        // Expected output: B1, B2, A1, A2, C1.
+        // App name ascending order: A, B, C.
+        // Expected output: A1, A2, B1, B2, C1.
         let b1 = makeWindow(id: 1, pid: 200, bundleID: "com.b", appName: "B")
         let a1 = makeWindow(id: 2, pid: 100, bundleID: "com.a", appName: "A")
         let a2 = makeWindow(id: 3, pid: 100, bundleID: "com.a", appName: "A")
         let b2 = makeWindow(id: 4, pid: 200, bundleID: "com.b", appName: "B")
         let c1 = makeWindow(id: 5, pid: 300, bundleID: "com.c", appName: "C")
         let result = WindowStore.sortedByApp(windows: [b1, a1, a2, b2, c1])
-        XCTAssertEqual(result.map { $0.windowID }, [1, 4, 2, 3, 5])
+        // Groups are alphabetical: A (id=2,3), B (id=1,4), C (id=5).
+        // Windows within each group preserve their input order.
+        XCTAssertEqual(result.map { $0.windowID }, [2, 3, 1, 4, 5])
     }
 
     func testSortedByApp_nilBundleIDGroupsByAppName() {
         // When bundleID is nil, the grouping key falls back to appName.
+        // Groups are ordered by app name ascending: AppX < AppY.
         let x1 = makeWindow(id: 1, pid: 10, bundleID: nil, appName: "AppX")
         let y1 = makeWindow(id: 2, pid: 20, bundleID: nil, appName: "AppY")
         let x2 = makeWindow(id: 3, pid: 10, bundleID: nil, appName: "AppX")
         let result = WindowStore.sortedByApp(windows: [x1, y1, x2])
-        // First appearance: AppX (id=1), then AppY (id=2).
+        // App name ascending: AppX (id=1,3), then AppY (id=2).
         XCTAssertEqual(result.map { $0.windowID }, [1, 3, 2])
+    }
+
+    func testSortedByApp_singleWindowPerApp_orderedByAppName() {
+        // User-reported scenario: one window per app, input in reverse-alphabetical
+        // (MRU) order. byApp must still produce alphabetical group order, proving it
+        // is independent of MRU input order.
+        let z1 = makeWindow(id: 1, pid: 10, bundleID: "com.zed", appName: "Zed")
+        let a1 = makeWindow(id: 2, pid: 20, bundleID: "com.apple", appName: "Apple")
+        let m1 = makeWindow(id: 3, pid: 30, bundleID: "com.music", appName: "Music")
+        let result = WindowStore.sortedByApp(windows: [z1, a1, m1])
+        // App name ascending: Apple (id=2), Music (id=3), Zed (id=1).
+        // This differs from the MRU input order [1, 2, 3], confirming byApp is
+        // not equivalent to MRU even with one window per app.
+        XCTAssertEqual(
+            result.map { $0.windowID }, [2, 3, 1],
+            "byApp must sort by app name ascending, not by MRU input order")
+        XCTAssertNotEqual(
+            result.map { $0.windowID }, [1, 2, 3],
+            "byApp result must differ from MRU input order")
     }
 
     // MARK: - zOrder passthrough

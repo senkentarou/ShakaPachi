@@ -78,8 +78,8 @@ public enum SortMode: String, CaseIterable, Sendable {
     case mru
     /// Raw CGWindowList z-order — no MRU sort applied.
     case zOrder
-    /// Windows grouped by app (stable sort by bundleID/appName),
-    /// keeping MRU or z-order within each group.
+    /// Windows grouped by app, with groups ordered by app display name
+    /// (case-insensitive ascending). Windows keep MRU or z-order within each group.
     case byApp
 
     /// Human-readable label for UI display.
