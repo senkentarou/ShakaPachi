@@ -130,11 +130,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             UpdateManager.shared.checkForUpdates(userInitiated: true)
         }
 
-        // Update badge tapped: open the window (update is already available).
-        sc.onShowUpdate = { [weak self] in
-            self?.showUpdateWindow()
-        }
-
         // Single status subscriber — always called on the main thread.
         UpdateManager.shared.onStatusChange = { [weak self] status in
             switch status {

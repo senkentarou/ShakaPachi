@@ -56,7 +56,6 @@ final class UpdateManager {
 
     private enum DefaultsKey {
         static let autoCheckEnabled = "update.autoCheckEnabled"
-        static let skippedVersion   = "update.skippedVersion"
         static let lastCheck        = "update.lastCheck"
     }
 
@@ -69,16 +68,6 @@ final class UpdateManager {
         }
         set {
             UserDefaults.standard.set(newValue, forKey: DefaultsKey.autoCheckEnabled)
-        }
-    }
-
-    private var skippedVersion: SemanticVersion? {
-        get {
-            guard let raw = UserDefaults.standard.string(forKey: DefaultsKey.skippedVersion) else { return nil }
-            return SemanticVersion(raw)
-        }
-        set {
-            UserDefaults.standard.set(newValue?.description, forKey: DefaultsKey.skippedVersion)
         }
     }
 
@@ -133,10 +122,7 @@ final class UpdateManager {
                 await MainActor.run {
                     UserDefaults.standard.set(Date(), forKey: DefaultsKey.lastCheck)
 
-                    let isNewer = release.version > self.currentVersion
-                    let isSkipped = self.skippedVersion == release.version
-
-                    if isNewer && !isSkipped {
+                    if release.version > self.currentVersion {
                         self.availableRelease = release
                         self.status = .available(release)
                     } else {
@@ -217,16 +203,6 @@ final class UpdateManager {
                 }
             }
         }
-    }
-
-    // MARK: - Skip version
-
-    /// Persists the available release's version as skipped so future checks ignore it.
-    func skipAvailableVersion() {
-        guard let release = availableRelease else { return }
-        skippedVersion = release.version
-        availableRelease = nil
-        status = .idle
     }
 
     // MARK: - Open release page

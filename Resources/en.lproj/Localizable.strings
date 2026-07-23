@@ -83,7 +83,8 @@
 
 /* Update feature */
 "アップデートを確認…" = "Check for Updates…";
-"🆕 更新があります (%@)" = "🆕 Update available (%@)";
+"アップデートを確認… (%@)" = "Check for Updates… (%@)";
+"アップデートが利用可能" = "Update available";
 "アップデート" = "Update";
 "アップデートを確認中…" = "Checking for updates…";
 "最新です (%@)" = "You're up to date (%@)";
@@ -97,6 +98,20 @@
 "署名を検証中…" = "Verifying signature…";
 "インストール中… まもなく再起動します" = "Installing… Restarting shortly";
 "再試行" = "Retry";
+/* Update dialog (redesigned) */
+"アップデートを確認しています…" = "Checking for updates…";
+"お使いのバージョンは最新です" = "You're up to date";
+"新しいバージョンがあります" = "A new version is available";
+"ダウンロードしています…" = "Downloading…";
+"署名を検証しています…" = "Verifying signature…";
+"インストールしています…" = "Installing…";
+"エラーが発生しました" = "Something went wrong";
+"リリースノート" = "Release Notes";
+"GitHub で開く" = "Open on GitHub";
+"（リリースノートはありません）" = "(No release notes)";
+"バージョン %@ をお使いです" = "You're on version %@";
+"%d%% 完了" = "%d%% complete";
+"まもなくアプリが再起動します" = "The app will restart shortly";
 "update.error.checkFailed" = "Failed to check for updates";
 "update.error.noReleaseAvailable" = "No update is available to install";
 "update.error.installFailed" = "Failed to install the update";

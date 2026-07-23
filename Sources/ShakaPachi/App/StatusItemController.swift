@@ -14,7 +14,6 @@ final class StatusItemController {
     private var toggleItem: NSMenuItem?
     private var settingsMenuItem: NSMenuItem?
     private var updateCheckItem: NSMenuItem?
-    private var updateAvailableItem: NSMenuItem?
 
     // Tap state mirrored from HotkeyTap for icon/menu rendering.
     private var tapEnabled = false
@@ -44,9 +43,6 @@ final class StatusItemController {
 
     /// Called when the user chooses "Check for Updates…" (「アップデートを確認…」) from the menu.
     var onCheckForUpdates: (() -> Void)?
-
-    /// Called when the user taps the "Update available" badge item.
-    var onShowUpdate: (() -> Void)?
 
     init(permissionManager: PermissionManager) {
         self.permissionManager = permissionManager
@@ -207,17 +203,6 @@ final class StatusItemController {
         menu.addItem(updateCheck)
         updateCheckItem = updateCheck
 
-        // "Update available" badge item — created but NOT added here. Inserted
-        // directly above updateCheckItem by setUpdateAvailable(_:) when an update
-        // is found; removed when the user is up to date (mirrors permissionStatusItem).
-        let updateAvailable = NSMenuItem(
-            title: "",   // set dynamically by setUpdateAvailable(_:)
-            action: #selector(showUpdateTapped),
-            keyEquivalent: ""
-        )
-        updateAvailable.target = self
-        updateAvailableItem = updateAvailable
-
         // Permission status item — created but NOT added here. It is shown ONLY
         // when a permission is missing, pinned to the top of the menu by
         // updatePermissionWarning(); in the normal (granted) state it is absent.
@@ -276,41 +261,38 @@ final class StatusItemController {
         toggleItem?.state = .off
     }
 
-    // MARK: - Update badge
+    // MARK: - Update availability
 
-    /// Show or hide the "update available" badge item above the check item.
-    /// - Parameter versionText: Non-nil to show the badge with the given version string; nil to remove it.
+    /// Reflect update availability on the "Check for Updates…" item itself:
+    /// when an update is available the item gains a blue "download" badge icon
+    /// and shows the version in its title; otherwise it is the plain check item.
+    /// There is no separate menu row and no emoji.
+    /// - Parameter versionText: Non-nil to mark an update available (with version); nil to clear.
     func setUpdateAvailable(_ versionText: String?) {
-        guard let badgeItem = updateAvailableItem,
-              let checkItem = updateCheckItem
-        else { return }
-
-        let inMenu = menu.index(of: badgeItem) >= 0
-
+        guard let checkItem = updateCheckItem else { return }
         if let versionText {
-            badgeItem.title = String(
+            checkItem.title = String(
                 format: NSLocalizedString(
-                    "🆕 更新があります (%@)",
-                    comment: "Menu item: update available badge with version"),
+                    "アップデートを確認… (%@)",
+                    comment: "Menu item: check for updates, annotated with the available version"),
                 versionText)
-            if !inMenu {
-                // Insert directly above "アップデートを確認…".
-                let idx = menu.index(of: checkItem)
-                if idx >= 0 {
-                    menu.insertItem(badgeItem, at: idx)
-                }
-            }
+            let config = NSImage.SymbolConfiguration(hierarchicalColor: .controlAccentColor)
+            let badge = NSImage(
+                systemSymbolName: "arrow.down.circle.fill",
+                accessibilityDescription: NSLocalizedString(
+                    "アップデートが利用可能", comment: "Accessibility: update available badge"))?
+                .withSymbolConfiguration(config)
+            badge?.isTemplate = false
+            checkItem.image = badge
         } else {
-            if inMenu {
-                menu.removeItem(badgeItem)
-            }
+            checkItem.title = NSLocalizedString("アップデートを確認…", comment: "Menu item: check for updates")
+            checkItem.image = nil
         }
     }
 
     // MARK: - Menu actions
 
     @objc private func checkForUpdatesTapped() { onCheckForUpdates?() }
-    @objc private func showUpdateTapped() { onShowUpdate?() }
 
     @objc private func toggleTap() {
         onToggleTap?(!tapEnabled)
