@@ -78,11 +78,32 @@ struct UpdateView: View {
     let onClose: () -> Void
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
+            appHeader
+            Divider()
             contentView
         }
         .frame(width: 440, alignment: .center)
         .padding(24)
+    }
+
+    /// App identity header (icon + name) so the window is recognisable as
+    /// ShakaPachi in every status, not an anonymous dialog.
+    private var appHeader: some View {
+        HStack(spacing: 12) {
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .frame(width: 44, height: 44)
+            Text(appName)
+                .font(.title2)
+                .fontWeight(.semibold)
+            Spacer()
+        }
+    }
+
+    /// The app's display name, read from the bundle (falls back to the product name).
+    private var appName: String {
+        (Bundle.main.infoDictionary?["CFBundleName"] as? String) ?? "ShakaPachi"
     }
 
     @ViewBuilder
