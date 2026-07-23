@@ -42,6 +42,8 @@
 "少ない" = "Less";
 "多い" = "More";
 "開始 %@" = "Since %@";
+"%1$@ · %2$@ 回" = "%1$@ · %2$@ times";
+"%@ · 記録なし" = "%@ · No records";
 "ノーマルカード" = "Normal card";
 "ブルーカード" = "Blue card";
 "イエローカード" = "Yellow card";
