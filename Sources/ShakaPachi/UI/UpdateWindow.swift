@@ -6,6 +6,14 @@
 import AppKit
 import SwiftUI
 
+extension Notification.Name {
+    /// Posted when the Update window opens (`open: true`) or closes (`open: false`)
+    /// so the menu-bar icon can show its blue "info" state, mirroring
+    /// settingsWindowStateChanged.
+    static let updateWindowStateChanged =
+        Notification.Name("com.masahirosenda.shakapachi.updateWindowStateChanged")
+}
+
 // MARK: - UpdateWindow
 
 @MainActor
@@ -17,6 +25,8 @@ final class UpdateWindow: NSObject, NSWindowDelegate {
     // MARK: - Public
 
     func show() {
+        NotificationCenter.default.post(
+            name: .updateWindowStateChanged, object: nil, userInfo: ["open": true])
         if let win = window {
             win.raiseToFront()
             return
@@ -59,6 +69,8 @@ final class UpdateWindow: NSObject, NSWindowDelegate {
     // MARK: - NSWindowDelegate
 
     func windowWillClose(_ notification: Notification) {
+        NotificationCenter.default.post(
+            name: .updateWindowStateChanged, object: nil, userInfo: ["open": false])
         WindowPresentationCoordinator.shared.windowDidClose()
         window = nil
     }

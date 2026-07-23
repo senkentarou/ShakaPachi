@@ -23,8 +23,14 @@ final class StatusItemController {
     // Whether the Settings window is open — drives the blue "info" icon state.
     private var settingsOpen = false
 
+    // Whether the Update window is open — also drives the blue "info" icon state.
+    private var updateWindowOpen = false
+
     // Retained observer token for the settingsWindowStateChanged subscription.
     private var settingsWindowObserver: (any NSObjectProtocol)?
+
+    // Retained observer token for the updateWindowStateChanged subscription.
+    private var updateWindowObserver: (any NSObjectProtocol)?
 
     /// Called when the user toggles "Enable window switching" (「ウィンドウ切替を有効化」).
     /// Receives the desired new state.
@@ -59,10 +65,23 @@ final class StatusItemController {
                 self?.refreshIcon()
             }
         }
+
+        // Show a blue "info" icon while the Update window is open, too.
+        updateWindowObserver = NotificationCenter.default.addObserver(
+            forName: .updateWindowStateChanged, object: nil, queue: .main
+        ) { [weak self] note in
+            MainActor.assumeIsolated {
+                self?.updateWindowOpen = (note.userInfo?["open"] as? Bool) ?? false
+                self?.refreshIcon()
+            }
+        }
     }
 
     deinit {
         if let token = settingsWindowObserver {
+            NotificationCenter.default.removeObserver(token)
+        }
+        if let token = updateWindowObserver {
             NotificationCenter.default.removeObserver(token)
         }
     }
@@ -111,7 +130,7 @@ final class StatusItemController {
         refreshIcon()
     }
 
-    // Icon precedence: permission problem > tap stopped > settings open > normal.
+    // Icon precedence: permission problem > tap stopped > settings/update window open > normal.
     private func refreshIcon() {
         guard let button = statusItem.button else { return }
         let state: TrayIconState
@@ -124,9 +143,13 @@ final class StatusItemController {
             tooltip =
                 NSLocalizedString("ShakaPachi — 停止中", comment: "Tooltip: tap is paused")
                 + (tapStopReason.map { " (\($0))" } ?? "")
-        } else if settingsOpen {
+        } else if settingsOpen || updateWindowOpen {
+            // Both the Settings and Update windows use the blue "info" icon.
             state = .settings
-            tooltip = NSLocalizedString("ShakaPachi — 設定を開いています", comment: "Tooltip: settings window is open")
+            tooltip =
+                settingsOpen
+                ? NSLocalizedString("ShakaPachi — 設定を開いています", comment: "Tooltip: settings window is open")
+                : NSLocalizedString("ShakaPachi — アップデート画面を開いています", comment: "Tooltip: update window is open")
         } else {
             state = .normal
             tooltip = "ShakaPachi"
