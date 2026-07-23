@@ -50,6 +50,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // is weak; a local would dealloc and leave activation policy stuck at .regular.
     private var settingsWindow: SettingsWindow?
 
+    // Update window controller — same retention rationale as settingsWindow.
+    private var updateWindow: UpdateWindow?
+
     // Settings change observer token (NotificationCenter).
     private var settingsObserver: (any NSObjectProtocol)?
     // Observer tokens for one-shot notification subscriptions registered in
@@ -121,6 +124,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.settingsWindow?.close()
         }
 
+        // "Check for Updates…" tapped: open the window and immediately kick off a check.
+        sc.onCheckForUpdates = { [weak self] in
+            self?.showUpdateWindow()
+            UpdateManager.shared.checkForUpdates(userInitiated: true)
+        }
+
+        // Update badge tapped: open the window (update is already available).
+        sc.onShowUpdate = { [weak self] in
+            self?.showUpdateWindow()
+        }
+
+        // Single status subscriber — always called on the main thread.
+        UpdateManager.shared.onStatusChange = { [weak self] status in
+            switch status {
+            case .available(let r):
+                self?.statusItemController?.setUpdateAvailable(r.version.description)
+            case .upToDate, .idle:
+                self?.statusItemController?.setUpdateAvailable(nil)
+            default:
+                break   // keep badge visible during download / verify / install / failed
+            }
+            self?.updateWindow?.apply(status)
+        }
+
         // Live settings: observe all settings changes and apply immediately.
         // The observer closure is @Sendable, so it captures a Sendable weak box
         // rather than `self` (a non-Sendable @MainActor NSObject) directly. The
@@ -163,6 +190,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSLog("[ShakaPachi] All permissions granted — normal startup.")
             startTapIfPossible()
         }
+
+        // Schedule background update checks (initial: 10 s after launch, then every 24 h).
+        UpdateManager.shared.startAutoCheck()
 
         // First-run login-at-launch registration: register with SMAppService once
         // so the default is ON. The flag prevents re-enabling after the user
@@ -344,6 +374,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindow = SettingsWindow()
         }
         settingsWindow?.show()
+    }
+
+    /// Open the update window. Creates it if it doesn't exist, then syncs to the current status.
+    @MainActor
+    private func showUpdateWindow() {
+        if updateWindow == nil { updateWindow = UpdateWindow() }
+        updateWindow?.show()
+        updateWindow?.apply(UpdateManager.shared.status)
     }
 
     /// Show the onboarding/permissions window. Called from the permissions tab

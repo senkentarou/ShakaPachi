@@ -79,3 +79,23 @@
 "切替キーの捕捉と、選んだウィンドウの前面化に使います。" = "Used to capture the switch key and bring the selected window to the front.";
 "言語" = "Language";
 "言語の変更は再起動後に反映されます。" = "Language changes take effect after a restart.";
+
+/* Update feature */
+"アップデートを確認…" = "Check for Updates…";
+"🆕 更新があります (%@)" = "🆕 Update available (%@)";
+"アップデート" = "Update";
+"アップデートを確認中…" = "Checking for updates…";
+"最新です (%@)" = "You're up to date (%@)";
+"現在のバージョン %@ → 新しいバージョン %@" = "Current version %@ → New version %@";
+"インストールして再起動" = "Install and Restart";
+"リリースノートを開く" = "Open Release Notes";
+"このバージョンをスキップ" = "Skip This Version";
+"後で" = "Later";
+"閉じる" = "Close";
+"ダウンロード中… %d%%" = "Downloading… %d%%";
+"署名を検証中…" = "Verifying signature…";
+"インストール中… まもなく再起動します" = "Installing… Restarting shortly";
+"再試行" = "Retry";
+"update.error.checkFailed" = "Failed to check for updates";
+"update.error.noReleaseAvailable" = "No update is available to install";
+"update.error.installFailed" = "Failed to install the update";

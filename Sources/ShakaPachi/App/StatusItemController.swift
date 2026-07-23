@@ -13,6 +13,8 @@ final class StatusItemController {
     private var permissionStatusItem: NSMenuItem?
     private var toggleItem: NSMenuItem?
     private var settingsMenuItem: NSMenuItem?
+    private var updateCheckItem: NSMenuItem?
+    private var updateAvailableItem: NSMenuItem?
 
     // Tap state mirrored from HotkeyTap for icon/menu rendering.
     private var tapEnabled = false
@@ -33,6 +35,12 @@ final class StatusItemController {
 
     /// Called when the user chooses "Close settings" (「設定を閉じる」) while the Settings window is open.
     var onCloseSettings: (() -> Void)?
+
+    /// Called when the user chooses "Check for Updates…" (「アップデートを確認…」) from the menu.
+    var onCheckForUpdates: (() -> Void)?
+
+    /// Called when the user taps the "Update available" badge item.
+    var onShowUpdate: (() -> Void)?
 
     init(permissionManager: PermissionManager) {
         self.permissionManager = permissionManager
@@ -166,6 +174,27 @@ final class StatusItemController {
         menu.addItem(settingsItem)
         settingsMenuItem = settingsItem
 
+        // "Check for Updates…" item — always visible, placed right after Settings.
+        let updateCheck = NSMenuItem(
+            title: NSLocalizedString("アップデートを確認…", comment: "Menu item: check for updates"),
+            action: #selector(checkForUpdatesTapped),
+            keyEquivalent: ""
+        )
+        updateCheck.target = self
+        menu.addItem(updateCheck)
+        updateCheckItem = updateCheck
+
+        // "Update available" badge item — created but NOT added here. Inserted
+        // directly above updateCheckItem by setUpdateAvailable(_:) when an update
+        // is found; removed when the user is up to date (mirrors permissionStatusItem).
+        let updateAvailable = NSMenuItem(
+            title: "",   // set dynamically by setUpdateAvailable(_:)
+            action: #selector(showUpdateTapped),
+            keyEquivalent: ""
+        )
+        updateAvailable.target = self
+        updateAvailableItem = updateAvailable
+
         // Permission status item — created but NOT added here. It is shown ONLY
         // when a permission is missing, pinned to the top of the menu by
         // updatePermissionWarning(); in the normal (granted) state it is absent.
@@ -224,7 +253,41 @@ final class StatusItemController {
         toggleItem?.state = .off
     }
 
+    // MARK: - Update badge
+
+    /// Show or hide the "update available" badge item above the check item.
+    /// - Parameter versionText: Non-nil to show the badge with the given version string; nil to remove it.
+    func setUpdateAvailable(_ versionText: String?) {
+        guard let badgeItem = updateAvailableItem,
+              let checkItem = updateCheckItem
+        else { return }
+
+        let inMenu = menu.index(of: badgeItem) >= 0
+
+        if let versionText {
+            badgeItem.title = String(
+                format: NSLocalizedString(
+                    "🆕 更新があります (%@)",
+                    comment: "Menu item: update available badge with version"),
+                versionText)
+            if !inMenu {
+                // Insert directly above "アップデートを確認…".
+                let idx = menu.index(of: checkItem)
+                if idx >= 0 {
+                    menu.insertItem(badgeItem, at: idx)
+                }
+            }
+        } else {
+            if inMenu {
+                menu.removeItem(badgeItem)
+            }
+        }
+    }
+
     // MARK: - Menu actions
+
+    @objc private func checkForUpdatesTapped() { onCheckForUpdates?() }
+    @objc private func showUpdateTapped() { onShowUpdate?() }
 
     @objc private func toggleTap() {
         onToggleTap?(!tapEnabled)
