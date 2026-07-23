@@ -171,10 +171,46 @@ struct ContributionHeatmap: View {
 
     @ViewBuilder
     private func cellView(cell: DayCell) -> some View {
-        RoundedRectangle(cornerRadius: 2)
+        let square = RoundedRectangle(cornerRadius: 2)
             .fill(cellColor(cell: cell))
             .frame(width: squareSize, height: squareSize)
             .overlay(todayRing(for: cell))
+        // A native hover tooltip reveals the exact date and recorded count.
+        // Padding cells (out of range) return nil, so they get no tooltip.
+        if let tip = tooltip(for: cell) {
+            square.help(tip)
+        } else {
+            square
+        }
+    }
+
+    // Cached formatter for hover tooltips (medium date — matches the legend's
+    // start-date style for visual consistency).
+    private static let tooltipDateFormatter: DateFormatter = {
+        let fmt = DateFormatter()
+        fmt.dateStyle = .medium
+        fmt.timeStyle = .none
+        fmt.locale = Locale.current
+        return fmt
+    }()
+
+    // Hover tooltip text: the day's date plus how many switches were recorded
+    // that day. Returns nil for out-of-range padding cells so no tooltip shows.
+    private func tooltip(for cell: DayCell) -> String? {
+        guard cell.isInRange, let s = cell.dateString,
+            let date = StreakStats.dateFromString(s)
+        else { return nil }
+        let dateText = Self.tooltipDateFormatter.string(from: date)
+        if cell.count > 0 {
+            return String(
+                format: NSLocalizedString(
+                    "%1$@ · %2$@ 回", comment: "Heatmap cell tooltip: date and switch count"),
+                dateText, String(cell.count))
+        }
+        return String(
+            format: NSLocalizedString(
+                "%@ · 記録なし", comment: "Heatmap cell tooltip: date with no records"),
+            dateText)
     }
 
     // A thin high-contrast ring marks the current local day so it's always
