@@ -115,6 +115,18 @@ final class WindowStore {
                 return sortedIDs.compactMap { byID[$0] }
             }()
             return WindowStore.sortedByApp(windows: sortedByMRU)
+        case .byAppMRU:
+            // Group windows by app and order groups by the app's recency (MRU),
+            // keeping MRU order within each group.
+            let sortedByMRU = {
+                let sortedIDs = WindowStore.sortedByMRU(
+                    windowIDs: filtered.map { $0.windowID },
+                    mruOrder: mruOrder
+                )
+                let byID = Dictionary(uniqueKeysWithValues: filtered.map { ($0.windowID, $0) })
+                return sortedIDs.compactMap { byID[$0] }
+            }()
+            return WindowStore.sortedByAppMRU(windows: sortedByMRU)
         }
     }
 
@@ -225,6 +237,30 @@ final class WindowStore {
             return cmp == .orderedSame ? a < b : cmp == .orderedAscending
         }
         return orderedKeys.flatMap { grouped[$0] ?? [] }
+    }
+
+    /// Return windows grouped by app, with groups ordered by the app's recency
+    /// (MRU), preserving the relative order of windows within each group.
+    ///
+    /// The input is assumed to be already MRU-sorted (as produced by
+    /// `sortedByMRU` in `enumerate`). Because the most recently used windows come
+    /// first, the first appearance of each app key marks that app's recency rank:
+    /// grouping by first-seen order therefore yields "most recently used app"
+    /// group order. Unlike `sortedByApp`, which orders groups alphabetically by
+    /// display name, this order follows recency — switching apps reorders groups.
+    ///
+    /// - Parameter windows: The input window list, pre-sorted by MRU.
+    /// - Returns: The same windows reordered so all windows of each app are
+    ///   contiguous, with inter-app order following the app's MRU (first-seen) rank.
+    nonisolated static func sortedByAppMRU(windows: [WindowInfo]) -> [WindowInfo] {
+        var grouped: [String: [WindowInfo]] = [:]
+        var order: [String] = []
+        for window in windows {
+            let key = window.bundleID ?? window.appName
+            if grouped[key] == nil { order.append(key) }
+            grouped[key, default: []].append(window)
+        }
+        return order.flatMap { grouped[$0] ?? [] }
     }
 
     // MARK: - Pure MRU helpers (unit-testable without AppKit/CGWindowList)

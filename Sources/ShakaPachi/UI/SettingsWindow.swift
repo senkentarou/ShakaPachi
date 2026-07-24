@@ -232,7 +232,7 @@ struct BehaviorSettingsView: View {
                         set: { Settings.shared.sortMode = $0 }
                     )
                 ) {
-                    ForEach([SortMode.mru, .byApp], id: \.self) { mode in
+                    ForEach([SortMode.mru, .byApp, .byAppMRU], id: \.self) { mode in
                         Text(mode.displayName).tag(mode)
                     }
                 }
