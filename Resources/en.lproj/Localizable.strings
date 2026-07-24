@@ -71,11 +71,13 @@
 "アプリ別" = "By app";
 "ライト" = "Light";
 "ダーク" = "Dark";
+"パール" = "Pearl";
 "ブルー" = "Blue";
 "グラファイト" = "Graphite";
 "ティール" = "Teal";
 "サンド" = "Sand";
 "プラム" = "Plum";
+"パティナ" = "Patina";
 "ウィンドウを切り替えるには 2 つの権限が必要です。" = "Switching windows requires two permissions.";
 "「設定を開く」を押して ShakaPachi をオンにしてください。この画面は自動で更新されます。画面収録は再起動後に反映されます。" = "Press \"Open Settings\" to turn on ShakaPachi. This screen updates automatically. Screen Recording takes effect after a restart.";
 "再起動" = "Restart";

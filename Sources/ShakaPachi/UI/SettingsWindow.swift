@@ -344,7 +344,8 @@ struct AppearanceSettingsView: View {
                     accent: settings.accentColor,
                     iconSize: settings.switcherIconSize,
                     windowPreviewWidth: settings.windowPreviewWidth,
-                    showWindowPreview: settings.showWindowPreview)
+                    showWindowPreview: settings.showWindowPreview,
+                    totalCount: StatsStore.shared.totalCount)
             } header: {
                 Text("プレビュー")
             }

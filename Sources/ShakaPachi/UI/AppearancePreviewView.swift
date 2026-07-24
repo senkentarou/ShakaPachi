@@ -37,13 +37,13 @@ enum AppearancePreview {
     }
 
     /// The accent tint drawn over the panel base (accent at backgroundTintAlpha).
-    static func tintColor(accent: AccentColor) -> NSColor {
-        accent.nsColor.withAlphaComponent(AccentColor.backgroundTintAlpha)
+    static func tintColor(accent: AccentColor, totalCount: Int = 0) -> NSColor {
+        accent.resolvedColor(totalCount: totalCount).withAlphaComponent(AccentColor.backgroundTintAlpha)
     }
 
     /// The selected-tile highlight color (accent at selectionHighlightAlpha).
-    static func selectionColor(accent: AccentColor) -> NSColor {
-        accent.nsColor.withAlphaComponent(AccentColor.selectionHighlightAlpha)
+    static func selectionColor(accent: AccentColor, totalCount: Int = 0) -> NSColor {
+        accent.resolvedColor(totalCount: totalCount).withAlphaComponent(AccentColor.selectionHighlightAlpha)
     }
 }
 
@@ -62,15 +62,25 @@ struct AppearancePreviewView: View {
     var windowPreviewWidth: Int = 320
     /// Whether to show a window preview placeholder below the title.
     var showWindowPreview: Bool = true
+    /// Lifetime switch count, used only to resolve the evolving `.patina` accent.
+    var totalCount: Int = 0
 
     // Used to resolve Theme.system to light or dark base color.
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
+        if accent == .patina {
+            patinaPreview
+        } else {
+            standardPreview
+        }
+    }
+
+    private var standardPreview: some View {
         let systemIsDark = colorScheme == .dark
         let base = AppearancePreview.backgroundBaseColor(theme: theme, systemIsDark: systemIsDark)
-        let tint = AppearancePreview.tintColor(accent: accent)
-        let selection = AppearancePreview.selectionColor(accent: accent)
+        let tint = AppearancePreview.tintColor(accent: accent, totalCount: totalCount)
+        let selection = AppearancePreview.selectionColor(accent: accent, totalCount: totalCount)
         let scale = CGFloat(iconSize) / 60
 
         // Resolve the preview's own color scheme from the chosen theme so the
@@ -86,7 +96,7 @@ struct AppearancePreviewView: View {
             }
         }()
 
-        ZStack {
+        return ZStack {
             // Panel background: base color overlaid with the accent tint, matching
             // how SwitcherPanel composites tintLayer over the NSVisualEffectView.
             RoundedRectangle(cornerRadius: 16)
@@ -126,6 +136,97 @@ struct AppearancePreviewView: View {
             .padding(.horizontal, 16)
         }
         .frame(minHeight: 120)
+        .environment(\.colorScheme, resolvedScheme)
+    }
+
+    /// Patina preview: keeps the switcher panel mock (tiles) but splits the
+    /// accent tint into five vertical bands — one per milestone — so the whole
+    /// dull-bronze → gold evolution is shown across the real preview. Each band
+    /// is annotated with the switch count that reaches that stage, and the stage
+    /// the user has currently reached is marked. Bands use the real panel tint
+    /// alpha (subtle by design); the full-strength chip shows the true colour.
+    private var patinaPreview: some View {
+        let systemIsDark = colorScheme == .dark
+        let base = AppearancePreview.backgroundBaseColor(theme: theme, systemIsDark: systemIsDark)
+        let scale = CGFloat(iconSize) / 60
+        let resolvedScheme: ColorScheme = {
+            switch theme {
+            case .light: return .light
+            case .dark: return .dark
+            case .system: return colorScheme
+            }
+        }()
+
+        // Milestones the patina accent steps through, labelled by switch count.
+        let stages: [(label: String, lower: Int)] = [
+            ("0回", 0),
+            ("1,000回", 1_000),
+            ("10,000回", 10_000),
+            ("100,000回", 100_000),
+            ("1,000,000回", 1_000_000),
+        ]
+        // The selection tile reflects the user's actual current stage.
+        let selection = AccentColor.patinaColor(forTotalCount: totalCount)
+            .withAlphaComponent(AccentColor.selectionHighlightAlpha)
+
+        return ZStack {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(nsColor: base))
+                // Tint split into five vertical bands at the real panel alpha, so
+                // this reads as the actual panel aged across each milestone.
+                .overlay(
+                    HStack(spacing: 0) {
+                        ForEach(0..<stages.count, id: \.self) { i in
+                            Color(nsColor: AccentColor.patinaColor(forTotalCount: stages[i].lower))
+                                .opacity(Double(AccentColor.backgroundTintAlpha))
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(Color.white.opacity(AccentColor.glassBorderAlpha), lineWidth: 1)
+                )
+
+            VStack(spacing: 6) {
+                Text("切替回数で色が育つ")
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+
+                // Switch-count labels aligned to the five tint bands.
+                HStack(spacing: 0) {
+                    ForEach(0..<stages.count, id: \.self) { i in
+                        Text(stages[i].label)
+                            .font(.system(size: 9, weight: .semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+
+                // Real switcher content so this still reads as a preview.
+                HStack(spacing: 8) {
+                    ForEach(0..<3, id: \.self) { index in
+                        TileView(isSelected: index == 1, selectionColor: selection, scale: scale)
+                    }
+                }
+                Text("ウィンドウ名")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                if showWindowPreview {
+                    // Same window-screenshot placeholder as the standard preview,
+                    // so toggling the option affects both accents identically.
+                    let previewScale = CGFloat(windowPreviewWidth) / 320
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.secondary.opacity(0.25))
+                        .frame(width: 120 * previewScale, height: 75 * previewScale)
+                }
+            }
+            .padding(.vertical, 14)
+            .padding(.horizontal, 16)
+        }
+        .frame(minHeight: 140)
         .environment(\.colorScheme, resolvedScheme)
     }
 }

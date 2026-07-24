@@ -1,7 +1,7 @@
 // AccentColorTests.swift
-// Verifies: .system returns NSColor.controlAccentColor, every case has a
-// non-empty displayName, rawValue round-trips work for all cases, and the
-// Settings.accentColor property defaults to .system and persists correctly.
+// Verifies: default accent is .pearl, every case has a non-empty displayName,
+// all cases have sRGB-representable NSColor values, rawValue round-trips work
+// for all cases, and the Settings.accentColor property persists correctly.
 
 import XCTest
 
@@ -22,14 +22,13 @@ final class AccentColorTests: XCTestCase {
         return (defaults, settings)
     }
 
-    // MARK: - .system uses NSColor.controlAccentColor
+    // MARK: - .pearl nsColor value
 
-    func testSystem_nsColor_isControlAccentColor() {
-        XCTAssertEqual(
-            AccentColor.system.nsColor,
-            NSColor.controlAccentColor,
-            ".system.nsColor must return NSColor.controlAccentColor"
-        )
+    func testPearl_nsColor_value() {
+        let srgb = AccentColor.pearl.nsColor.usingColorSpace(.sRGB)!
+        XCTAssertEqual(srgb.redComponent, 0.74, accuracy: 0.001)
+        XCTAssertEqual(srgb.greenComponent, 0.77, accuracy: 0.001)
+        XCTAssertEqual(srgb.blueComponent, 0.82, accuracy: 0.001)
     }
 
     // MARK: - Every case has a non-empty displayName
@@ -56,13 +55,13 @@ final class AccentColorTests: XCTestCase {
         }
     }
 
-    // MARK: - Settings.accentColor defaults to .system
+    // MARK: - Settings.accentColor defaults to .pearl
 
-    func testDefault_accentColor_isSystem() {
+    func testDefault_accentColor_isPearl() {
         let (_, settings) = makeSuite()
         XCTAssertEqual(
-            settings.accentColor, .system,
-            "Default accentColor must be .system"
+            settings.accentColor, .pearl,
+            "Default accentColor must be .pearl"
         )
     }
 
@@ -76,6 +75,40 @@ final class AccentColorTests: XCTestCase {
                 settings.accentColor, color,
                 "accentColor must persist .\(color) and read it back"
             )
+        }
+    }
+
+    func testPatina_stageBoundaries() {
+        func red(_ count: Int) -> CGFloat {
+            AccentColor.patinaColor(forTotalCount: count).usingColorSpace(.sRGB)!.redComponent
+        }
+        XCTAssertEqual(red(0), 0.549, accuracy: 0.001)
+        XCTAssertEqual(red(999), 0.549, accuracy: 0.001)
+        XCTAssertEqual(red(1_000), 0.667, accuracy: 0.001)
+        XCTAssertEqual(red(9_999), 0.667, accuracy: 0.001)
+        XCTAssertEqual(red(10_000), 0.784, accuracy: 0.001)
+        XCTAssertEqual(red(100_000), 0.878, accuracy: 0.001)
+        XCTAssertEqual(red(1_000_000), 0.933, accuracy: 0.001)
+        XCTAssertEqual(red(50_000_000), 0.933, accuracy: 0.001)
+    }
+
+    func testResolvedColor_staticIgnoresCount() {
+        XCTAssertEqual(
+            AccentColor.blue.resolvedColor(totalCount: 999_999).usingColorSpace(.sRGB),
+            AccentColor.blue.nsColor.usingColorSpace(.sRGB),
+            "static accent must ignore totalCount")
+    }
+
+    func testResolvedColor_patinaMatchesStage() {
+        XCTAssertEqual(
+            AccentColor.patina.resolvedColor(totalCount: 12_345).usingColorSpace(.sRGB),
+            AccentColor.patinaColor(forTotalCount: 12_345).usingColorSpace(.sRGB))
+    }
+
+    func testEvolvesWithUsage() {
+        XCTAssertTrue(AccentColor.patina.evolvesWithUsage)
+        for c in AccentColor.allCases where c != .patina {
+            XCTAssertFalse(c.evolvesWithUsage, "\(c) must be static")
         }
     }
 }
