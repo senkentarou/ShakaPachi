@@ -497,33 +497,35 @@ struct StatsSettingsView: View {
                     Text("記録")
                 }
 
-                // ── Switch count ──
-                Section {
-                    HStack {
-                        Text("今日")
-                        Spacer()
-                        Text(formatted(todayCount))
-                            .foregroundColor(.secondary)
+                if statsEnabled {
+                    // ── Switch count ──
+                    Section {
+                        HStack {
+                            Text("今日")
+                            Spacer()
+                            Text(formatted(todayCount))
+                                .foregroundColor(.secondary)
+                        }
+                        HStack {
+                            Text("累計")
+                            Spacer()
+                            Text(formatted(totalCount))
+                                .foregroundColor(.secondary)
+                        }
+                    } header: {
+                        Text("切替回数")
                     }
-                    HStack {
-                        Text("累計")
-                        Spacer()
-                        Text(formatted(totalCount))
-                            .foregroundColor(.secondary)
-                    }
-                } header: {
-                    Text("切替回数")
-                }
 
-                // ── Activity (heatmap) ──
-                Section {
-                    ContributionHeatmap(
-                        dailyCounts: dailyCounts,
-                        firstUseDate: firstUseDate
-                    )
-                    .padding(.vertical, 4)
-                } header: {
-                    Text("アクティビティ")
+                    // ── Activity (heatmap) ──
+                    Section {
+                        ContributionHeatmap(
+                            dailyCounts: dailyCounts,
+                            firstUseDate: firstUseDate
+                        )
+                        .padding(.vertical, 4)
+                    } header: {
+                        Text("アクティビティ")
+                    }
                 }
             }
             .formStyle(.grouped)
