@@ -147,6 +147,12 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(settings.sortMode, .byApp)
     }
 
+    func testRoundTrip_sortMode_byAppMRU() {
+        let (_, settings) = makeSuite()
+        settings.sortMode = .byAppMRU
+        XCTAssertEqual(settings.sortMode, .byAppMRU)
+    }
+
     // MARK: - Theme round-trip
 
     func testRoundTrip_theme_light() {
@@ -322,11 +328,12 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(TriggerKey.allCases.contains(.grave))
     }
 
-    func testCaseIterable_sortMode_hasAllThreeCases() {
-        XCTAssertEqual(SortMode.allCases.count, 3)
+    func testCaseIterable_sortMode_hasAllFourCases() {
+        XCTAssertEqual(SortMode.allCases.count, 4)
         XCTAssertTrue(SortMode.allCases.contains(.mru))
         XCTAssertTrue(SortMode.allCases.contains(.zOrder))
         XCTAssertTrue(SortMode.allCases.contains(.byApp))
+        XCTAssertTrue(SortMode.allCases.contains(.byAppMRU))
     }
 
     func testCaseIterable_theme_hasAllThreeCases() {
