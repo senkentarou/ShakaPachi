@@ -16,8 +16,6 @@ granted); turn it off in Settings for a pure text list.
 
 ![The switcher list showing multiple windows of the same app listed individually](docs/assets/switcher-list.png)
 
-![The menu bar icon and its dropdown menu](docs/assets/menu-bar.png)
-
 ## Features
 
 - Window-level switching (multiple windows of the same app are listed individually)
