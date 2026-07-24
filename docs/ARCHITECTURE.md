@@ -1,5 +1,7 @@
 # ShakaPachi — Architecture
 
+**English** | [日本語](ARCHITECTURE.ja.md)
+
 This document is written for someone new to Swift and macOS app development. It
 explains what the app does, the order in which to read the source, and how the
 pieces fit together. The advanced macOS trickery is quarantined at the end — you
