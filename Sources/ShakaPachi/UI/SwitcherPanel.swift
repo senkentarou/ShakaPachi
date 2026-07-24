@@ -155,7 +155,8 @@ final class SwitcherPanel {
     func show(items: [SwitcherItem], selectedIndex: Int, previewEnabled: Bool = false) {
         // Read accent color once per show — runs once per trigger, not on the
         // hot selection-move path, so calling into Settings here is fine.
-        let accent = Settings.shared.accentColor.nsColor
+        let accent = Settings.shared.accentColor.resolvedColor(
+            totalCount: StatsStore.shared.totalCount)
         tintLayer.backgroundColor = accent.withAlphaComponent(AccentColor.backgroundTintAlpha).cgColor
         listView.accentColor = accent
 

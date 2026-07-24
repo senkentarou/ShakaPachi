@@ -119,22 +119,24 @@ public enum Theme: String, CaseIterable, Sendable {
 
 /// Accent color for the switcher panel highlight and background tint.
 public enum AccentColor: String, CaseIterable, Sendable {
-    case system
+    case pearl
     case blue
     case graphite
     case teal
     case sand
     case plum
+    case patina
 
     /// Human-readable label for UI display.
     public var displayName: String {
         switch self {
-        case .system: return NSLocalizedString("システム", comment: "Accent color: system")
+        case .pearl: return NSLocalizedString("パール", comment: "Accent color: pearl")
         case .blue: return NSLocalizedString("ブルー", comment: "Accent color: blue")
         case .graphite: return NSLocalizedString("グラファイト", comment: "Accent color: graphite")
         case .teal: return NSLocalizedString("ティール", comment: "Accent color: teal")
         case .sand: return NSLocalizedString("サンド", comment: "Accent color: sand")
         case .plum: return NSLocalizedString("プラム", comment: "Accent color: plum")
+        case .patina: return NSLocalizedString("パティナ", comment: "Accent color: patina (evolves with usage count)")
         }
     }
 
@@ -158,9 +160,10 @@ public enum AccentColor: String, CaseIterable, Sendable {
     /// The NSColor for this accent. Muted / desaturated — this is a work app.
     public var nsColor: NSColor {
         switch self {
-        case .system:
-            // Follows the macOS accent color preference.
-            return NSColor.controlAccentColor
+        case .pearl:
+            // Soft cool silver-white. Neutral default that feels close to the
+            // macOS standard for users migrating from the system accent.
+            return NSColor(srgbRed: 0.74, green: 0.77, blue: 0.82, alpha: 1.0)
         case .blue:
             // Desaturated steel blue — readable on both light and dark panels.
             return NSColor(srgbRed: 0.30, green: 0.50, blue: 0.75, alpha: 1.0)
@@ -176,6 +179,41 @@ public enum AccentColor: String, CaseIterable, Sendable {
         case .plum:
             // Muted plum — subtle and sophisticated.
             return NSColor(srgbRed: 0.50, green: 0.35, blue: 0.58, alpha: 1.0)
+        case .patina:
+            // Base (unused) tone; the live color is resolved via resolvedColor(totalCount:).
+            return AccentColor.patinaColor(forTotalCount: 0)
+        }
+    }
+
+    /// Whether this accent evolves with the lifetime switch count.
+    /// Only `.patina` does; every other case is static.
+    public var evolvesWithUsage: Bool { self == .patina }
+
+    /// The accent color resolved for a given lifetime switch count.
+    /// Static accents ignore `totalCount`; `.patina` steps up through five
+    /// discrete stages as the count crosses 1k / 10k / 100k / 1M.
+    public func resolvedColor(totalCount: Int) -> NSColor {
+        guard self == .patina else { return nsColor }
+        return AccentColor.patinaColor(forTotalCount: totalCount)
+    }
+
+    /// Pure stage function for the `.patina` accent. Exposed for testing.
+    /// Raw pewter → vivid gold, keyed to log-scale milestones. The spread is
+    /// wide (saturation climbs steeply toward the top) so each milestone reads
+    /// as a distinct step even at the panel's low tint/selection alpha, where a
+    /// tightly-packed ramp would be indistinguishable in real use.
+    public static func patinaColor(forTotalCount count: Int) -> NSColor {
+        switch count {
+        case ..<1_000:
+            return NSColor(srgbRed: 0.549, green: 0.541, blue: 0.510, alpha: 1.0)  // #8C8A82 raw pewter-grey
+        case ..<10_000:
+            return NSColor(srgbRed: 0.667, green: 0.580, blue: 0.333, alpha: 1.0)  // #AA9455 bronze
+        case ..<100_000:
+            return NSColor(srgbRed: 0.784, green: 0.651, blue: 0.235, alpha: 1.0)  // #C8A63C brass gold
+        case ..<1_000_000:
+            return NSColor(srgbRed: 0.878, green: 0.714, blue: 0.165, alpha: 1.0)  // #E0B62A rich gold
+        default:
+            return NSColor(srgbRed: 0.933, green: 0.784, blue: 0.078, alpha: 1.0)  // #EEC814 vivid gold
         }
     }
 }
@@ -372,7 +410,7 @@ final class Settings: ObservableObject {
         _currentSpaceOnly = DefaultsBool(key: Key.currentSpaceOnly, defaultValue: true, defaults: defaults)
         _launchAtLogin = DefaultsBool(key: Key.launchAtLogin, defaultValue: true, defaults: defaults)
         _excludedBundleIDs = DefaultsStringArray(key: Key.excludedBundleIDs, defaultValue: [], defaults: defaults)
-        _accentColor = DefaultsEnum(key: Key.accentColor, defaultValue: .system, defaults: defaults)
+        _accentColor = DefaultsEnum(key: Key.accentColor, defaultValue: .pearl, defaults: defaults)
         _showWindowPreview = DefaultsBool(key: Key.showWindowPreview, defaultValue: true, defaults: defaults)
         _appLanguage = DefaultsEnum(key: Key.appLanguage, defaultValue: .system, defaults: defaults)
         _switcherIconSize = DefaultsInt(key: Key.switcherIconSize, defaultValue: 60, defaults: defaults)
