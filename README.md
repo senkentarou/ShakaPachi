@@ -1,5 +1,7 @@
 # ShakaPachi
 
+**English** | [日本語](README.ja.md)
+
 A fast, thumbnail-free window switcher for macOS.
 
 macOS's built-in Cmd+Tab switches between *applications*. ShakaPachi replaces it
