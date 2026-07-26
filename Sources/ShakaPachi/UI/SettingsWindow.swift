@@ -131,6 +131,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         addTab("状態", StatusSettingsView())
         addTab("統計", StatsSettingsView())
         addTab("クレジット", AboutSettingsView())
+        #if DEBUG
+            addTab("開発者", DeveloperSettingsView())
+        #endif
         return tvc
     }
 }
@@ -638,6 +641,239 @@ struct AboutSettingsView: View {
         .padding()
     }
 }
+
+// ─── Developer tab (DEBUG only) ─────────────────────────────────────────────────
+
+#if DEBUG
+
+    /// Developer-only tab for previewing how the evolving `.patina` accent maps to
+    /// the lifetime switch count, WITHOUT mutating the real statistics. Setting the
+    /// preview count writes an in-memory override on StatsStore; the real
+    /// `totalCount` (and the 統計 tab) stay untouched. Wrapped in `#if DEBUG` so it
+    /// is compiled out of release builds. Strings are hardcoded Japanese (this tab
+    /// is developer-only and never localized).
+    struct DeveloperSettingsView: View {
+
+        @ObservedObject private var settings = Settings.shared
+
+        // Local preview count; changes write StatsStore.previewTotalCountOverride.
+        // Seeded from the effective count so it reflects any existing override.
+        @State private var previewCount: Int = StatsStore.shared.effectiveTotalCount
+
+        // Locale-aware thousands separator (e.g. "1,234").
+        private let countFormatter: NumberFormatter = {
+            let f = NumberFormatter()
+            f.numberStyle = .decimal
+            return f
+        }()
+
+        var body: some View {
+            Form {
+                Section {
+                    Text("パティナ色プレビュー（実際の統計は変更されません）")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                // ── Preview count control ──
+                Section {
+                    HStack(spacing: 12) {
+                        Text("プレビュー回数")
+                            .frame(width: 140, alignment: .leading)
+                        TextField(
+                            "",
+                            value: Binding(
+                                get: { previewCount },
+                                set: { setPreview($0) }
+                            ),
+                            formatter: countFormatter
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        .monospacedDigit()
+                        Stepper(
+                            "",
+                            value: Binding(
+                                get: { previewCount },
+                                set: { setPreview($0) }
+                            ),
+                            in: 0...Int.max
+                        )
+                        .labelsHidden()
+                    }
+
+                    // Stage-jump buttons — land squarely in each patina stage.
+                    HStack {
+                        ForEach(AccentColor.patinaStages, id: \.minCount) { stage in
+                            Button(stage.label) { setPreview(stage.minCount) }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                        }
+                    }
+
+                    Button("override をクリア（実値に戻す）") {
+                        StatsStore.shared.previewTotalCountOverride = nil
+                        previewCount = StatsStore.shared.totalCount
+                    }
+
+                    HStack {
+                        Text("実際の累計")
+                        Spacer()
+                        Text(formatted(StatsStore.shared.totalCount))
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
+                    }
+                } header: {
+                    Text("プレビュー回数")
+                }
+
+                // ── Color legend ──
+                Section {
+                    ForEach(Array(AccentColor.patinaStages.enumerated()), id: \.offset) { index, stage in
+                        let isCurrent = currentStageIndex == index
+                        HStack(spacing: 10) {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color(nsColor: stage.color))
+                                .frame(width: 28, height: 18)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .strokeBorder(Color.secondary.opacity(0.4), lineWidth: 0.5)
+                                )
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(stage.label)
+                                    .font(.body)
+                                Text(rangeLabel(for: index))
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .monospacedDigit()
+                            }
+                            Spacer()
+                            Text(hexString(stage.color))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .monospacedDigit()
+                            if isCurrent {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.accentColor)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("色と回数の対応")
+                }
+
+                // ── Resolved readout ──
+                Section {
+                    HStack {
+                        Text("有効な回数")
+                        Spacer()
+                        Text(formatted(effectiveCount))
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
+                    }
+                    HStack {
+                        Text("解決される色")
+                        Spacer()
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color(nsColor: resolvedColor))
+                            .frame(width: 28, height: 18)
+                        Text(hexString(resolvedColor))
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
+                    }
+                    Text("この色は素材の上に不透明度 0.14 で重ねて適用されます。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } header: {
+                    Text("解決結果")
+                }
+
+                // ── Live preview ──
+                Section {
+                    AppearancePreviewView(
+                        theme: settings.theme,
+                        accent: settings.accentColor,
+                        iconSize: settings.switcherIconSize,
+                        windowPreviewWidth: settings.windowPreviewWidth,
+                        showWindowPreview: settings.showWindowPreview,
+                        totalCount: effectiveCount)
+                } header: {
+                    Text("プレビュー")
+                }
+
+                // ── Convenience ──
+                Section {
+                    Button("アクセントをパティナに設定") {
+                        Settings.shared.accentColor = .patina
+                    }
+                    Text("ライブの切替パネルはアクセントが「パティナ」のときだけ色が変わります。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .formStyle(.grouped)
+            .padding(.top, 12)
+            .padding([.leading, .trailing, .bottom])
+        }
+
+        // MARK: - Derived values
+
+        /// The count currently driving the accent resolution.
+        private var effectiveCount: Int { StatsStore.shared.effectiveTotalCount }
+
+        /// The patina color the effective count resolves to.
+        private var resolvedColor: NSColor {
+            AccentColor.patinaColor(forTotalCount: effectiveCount)
+        }
+
+        /// Index of the patina stage the effective count currently falls into.
+        private var currentStageIndex: Int {
+            var result = 0
+            for (i, stage) in AccentColor.patinaStages.enumerated() where effectiveCount >= stage.minCount {
+                result = i
+            }
+            return result
+        }
+
+        // MARK: - Actions
+
+        /// Write the (clamped) preview count to the in-memory override.
+        private func setPreview(_ value: Int) {
+            let clamped = max(0, value)
+            previewCount = clamped
+            StatsStore.shared.previewTotalCountOverride = clamped
+        }
+
+        // MARK: - Formatting
+
+        private func formatted(_ n: Int) -> String {
+            countFormatter.string(from: NSNumber(value: n)) ?? "\(n)"
+        }
+
+        /// The inclusive count range covered by the stage at `index`, e.g.
+        /// "0–999", "1,000–9,999", … and "1,000,000+" for the last stage.
+        private func rangeLabel(for index: Int) -> String {
+            let lower = AccentColor.patinaStages[index].minCount
+            if index + 1 < AccentColor.patinaStages.count {
+                let upper = AccentColor.patinaStages[index + 1].minCount - 1
+                return "\(formatted(lower))–\(formatted(upper))"
+            }
+            return "\(formatted(lower))+"
+        }
+
+        /// "#RRGGBB" for an sRGB NSColor.
+        private func hexString(_ color: NSColor) -> String {
+            let c = color.usingColorSpace(.sRGB) ?? color
+            let r = Int((c.redComponent * 255).rounded())
+            let g = Int((c.greenComponent * 255).rounded())
+            let b = Int((c.blueComponent * 255).rounded())
+            return String(format: "#%02X%02X%02X", r, g, b)
+        }
+    }
+
+#endif
 
 // MARK: - Notification for onboarding open
 

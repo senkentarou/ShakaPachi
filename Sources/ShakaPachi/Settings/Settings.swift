@@ -202,24 +202,55 @@ public enum AccentColor: String, CaseIterable, Sendable {
         return AccentColor.patinaColor(forTotalCount: totalCount)
     }
 
+    /// One discrete stage of the `.patina` accent, keyed to an inclusive lower
+    /// bound on the lifetime switch count. Single source of truth for the color
+    /// ramp so the pure stage function and any UI legend can never drift.
+    public struct PatinaStage: Sendable {
+        /// Inclusive lower bound on the lifetime count that reaches this stage.
+        public let minCount: Int
+        /// The resolved accent color for this stage.
+        public let color: NSColor
+        /// Developer-facing label for this stage.
+        public let label: String
+    }
+
+    /// The five patina stages in ascending order. Raw pewter → vivid gold, keyed
+    /// to log-scale milestones. The spread is wide (saturation climbs steeply
+    /// toward the top) so each milestone reads as a distinct step even at the
+    /// panel's low tint/selection alpha, where a tightly-packed ramp would be
+    /// indistinguishable in real use.
+    public static let patinaStages: [PatinaStage] = [
+        .init(
+            minCount: 0,
+            color: NSColor(srgbRed: 0.549, green: 0.541, blue: 0.510, alpha: 1.0),  // #8C8A82 raw pewter-grey
+            label: "ピューター灰"),
+        .init(
+            minCount: 1_000,
+            color: NSColor(srgbRed: 0.667, green: 0.580, blue: 0.333, alpha: 1.0),  // #AA9455 bronze
+            label: "ブロンズ"),
+        .init(
+            minCount: 10_000,
+            color: NSColor(srgbRed: 0.784, green: 0.651, blue: 0.235, alpha: 1.0),  // #C8A63C brass gold
+            label: "真鍮"),
+        .init(
+            minCount: 100_000,
+            color: NSColor(srgbRed: 0.878, green: 0.714, blue: 0.165, alpha: 1.0),  // #E0B62A rich gold
+            label: "リッチゴールド"),
+        .init(
+            minCount: 1_000_000,
+            color: NSColor(srgbRed: 0.933, green: 0.784, blue: 0.078, alpha: 1.0),  // #EEC814 vivid gold
+            label: "ヴィヴィッドゴールド"),
+    ]
+
     /// Pure stage function for the `.patina` accent. Exposed for testing.
-    /// Raw pewter → vivid gold, keyed to log-scale milestones. The spread is
-    /// wide (saturation climbs steeply toward the top) so each milestone reads
-    /// as a distinct step even at the panel's low tint/selection alpha, where a
-    /// tightly-packed ramp would be indistinguishable in real use.
+    /// Derives from `patinaStages`: returns the color of the last stage whose
+    /// `minCount` the count has reached.
     public static func patinaColor(forTotalCount count: Int) -> NSColor {
-        switch count {
-        case ..<1_000:
-            return NSColor(srgbRed: 0.549, green: 0.541, blue: 0.510, alpha: 1.0)  // #8C8A82 raw pewter-grey
-        case ..<10_000:
-            return NSColor(srgbRed: 0.667, green: 0.580, blue: 0.333, alpha: 1.0)  // #AA9455 bronze
-        case ..<100_000:
-            return NSColor(srgbRed: 0.784, green: 0.651, blue: 0.235, alpha: 1.0)  // #C8A63C brass gold
-        case ..<1_000_000:
-            return NSColor(srgbRed: 0.878, green: 0.714, blue: 0.165, alpha: 1.0)  // #E0B62A rich gold
-        default:
-            return NSColor(srgbRed: 0.933, green: 0.784, blue: 0.078, alpha: 1.0)  // #EEC814 vivid gold
+        var result = patinaStages[0].color
+        for stage in patinaStages where count >= stage.minCount {
+            result = stage.color
         }
+        return result
     }
 }
 

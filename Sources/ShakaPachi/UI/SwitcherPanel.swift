@@ -156,7 +156,7 @@ final class SwitcherPanel {
         // Read accent color once per show — runs once per trigger, not on the
         // hot selection-move path, so calling into Settings here is fine.
         let accent = Settings.shared.accentColor.resolvedColor(
-            totalCount: StatsStore.shared.totalCount)
+            totalCount: StatsStore.shared.effectiveTotalCount)
         tintLayer.backgroundColor = accent.withAlphaComponent(AccentColor.backgroundTintAlpha).cgColor
         listView.accentColor = accent
 

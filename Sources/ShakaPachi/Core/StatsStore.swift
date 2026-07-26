@@ -55,6 +55,22 @@ final class StatsStore {
         defaults.integer(forKey: Key.totalCount)
     }
 
+    #if DEBUG
+        /// Developer-only, in-memory (non-persistent) override for previewing how the
+        /// patina accent evolves at different lifetime counts. nil = use the real count.
+        /// Never written to UserDefaults — the real statistics are left untouched.
+        var previewTotalCountOverride: Int?
+    #endif
+
+    /// Count used for accent-color resolution. Release builds always return the real
+    /// lifetime count; debug builds honor a developer preview override when set.
+    var effectiveTotalCount: Int {
+        #if DEBUG
+            if let override = previewTotalCountOverride { return override }
+        #endif
+        return totalCount
+    }
+
     /// Switches counted today (local calendar day). Resets at midnight.
     var todayCount: Int {
         defaults.integer(forKey: Key.todayCount)
