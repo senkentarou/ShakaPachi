@@ -661,12 +661,14 @@ struct AboutSettingsView: View {
 
 #if DEBUG
 
-    /// Developer-only tab exposing several dev knobs in a COMPACT layout: one
-    /// control per row, aligned by a fixed-width leading label. Stat overrides are
-    /// non-destructive (in-memory only — UserDefaults is never touched); accent /
-    /// sort / delay are real setting writes (that is the point of a dev panel).
-    /// Wrapped in `#if DEBUG` so it is compiled out of release builds. Strings are
-    /// hardcoded Japanese (this tab is developer-only and never localized).
+    /// Developer-only tab exposing a few dev knobs in a COMPACT three-row layout.
+    /// `LabeledContent` (macOS 13+) lays out the leading label column and the
+    /// trailing content column natively, so the Form aligns them without a manual
+    /// fixed-width label gutter. Stat overrides are non-destructive (in-memory
+    /// only — UserDefaults is never touched); accent is a real setting write (that
+    /// is the point of a dev panel). Wrapped in `#if DEBUG` so it is compiled out
+    /// of release builds. Strings are hardcoded Japanese (this tab is
+    /// developer-only and never localized).
     struct DeveloperSettingsView: View {
 
         @ObservedObject private var settings = Settings.shared
@@ -677,12 +679,6 @@ struct AboutSettingsView: View {
         @State private var previewTotal: Int = StatsStore.shared.effectiveTotalCount
         @State private var previewToday: Int = StatsStore.shared.effectiveTodayCount
 
-        // Result of the last enumerate() measurement, or nil before first run.
-        @State private var enumResult: String? = nil
-
-        // Fixed leading-label width so every row aligns to the same gutter.
-        private let labelWidth: CGFloat = 84
-
         // Locale-aware thousands separator (e.g. "1,234").
         private let countFormatter: NumberFormatter = {
             let f = NumberFormatter()
@@ -692,40 +688,32 @@ struct AboutSettingsView: View {
 
         var body: some View {
             Form {
-                Section {
-                    statsRow
-                    accentRow
-                    stagesRow
-                    sortRow
-                    delayRow
-                    enumerateRow
-                }
+                LabeledContent("統計") { statsControls }
+                LabeledContent("アクセント") { accentControls }
+                LabeledContent("段階") { stagesControls }
             }
             .formStyle(.grouped)
             .padding(.top, 12)
             .padding([.leading, .trailing, .bottom])
         }
 
-        // MARK: - Rows
+        // MARK: - Row content (trailing column of each LabeledContent)
 
         /// 統計 — non-destructive total/today overrides + clear.
-        private var statsRow: some View {
+        private var statsControls: some View {
             HStack(spacing: 8) {
-                label("統計")
                 Text("累計")
                 overrideField(get: { previewTotal }, set: setTotal)
                 Text("今日")
                 overrideField(get: { previewToday }, set: setToday)
                 Button("クリア") { clearOverrides() }
                     .controlSize(.small)
-                Spacer()
             }
         }
 
         /// アクセント — real setting write; trailing swatch + hex of the resolved color.
-        private var accentRow: some View {
+        private var accentControls: some View {
             HStack(spacing: 8) {
-                label("アクセント")
                 Picker(
                     "",
                     selection: Binding(
@@ -745,14 +733,12 @@ struct AboutSettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .monospacedDigit()
-                Spacer()
             }
         }
 
         /// 段階 — one-row patina mini-legend; each swatch is tappable to jump.
-        private var stagesRow: some View {
+        private var stagesControls: some View {
             HStack(spacing: 8) {
-                label("段階")
                 ForEach(Array(AccentColor.patinaStages.enumerated()), id: \.offset) { index, stage in
                     swatch(stage.color)
                         .overlay(
@@ -770,84 +756,10 @@ struct AboutSettingsView: View {
                 Text("(現: \(stageShortLabel(currentStageIndex)))")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                Spacer()
-            }
-        }
-
-        /// 並び順 — real setting write; includes the normally-hidden .zOrder.
-        private var sortRow: some View {
-            HStack(spacing: 8) {
-                label("並び順")
-                Picker(
-                    "",
-                    selection: Binding(
-                        get: { settings.sortMode },
-                        set: { Settings.shared.sortMode = $0 }
-                    )
-                ) {
-                    ForEach(SortMode.allCases, id: \.self) { mode in
-                        Text(mode.displayName).tag(mode)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .fixedSize()
-                Spacer()
-            }
-        }
-
-        /// ディレイ — real setting write (ms).
-        private var delayRow: some View {
-            HStack(spacing: 8) {
-                label("ディレイ")
-                TextField(
-                    "",
-                    value: Binding(
-                        get: { settings.showDelayMs },
-                        set: { Settings.shared.showDelayMs = max(0, $0) }
-                    ),
-                    formatter: countFormatter
-                )
-                .textFieldStyle(.roundedBorder)
-                .monospacedDigit()
-                .frame(width: 64)
-                Text("ms")
-                    .foregroundColor(.secondary)
-                Stepper(
-                    "",
-                    value: Binding(
-                        get: { settings.showDelayMs },
-                        set: { Settings.shared.showDelayMs = max(0, $0) }
-                    ),
-                    in: 0...Int.max
-                )
-                .labelsHidden()
-                Spacer()
-            }
-        }
-
-        /// 列挙実測 — time enumerate() and show the median.
-        private var enumerateRow: some View {
-            HStack(spacing: 8) {
-                label("列挙実測")
-                Button("計測") { measureEnumerate() }
-                    .controlSize(.small)
-                if let enumResult {
-                    Text(enumResult)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .monospacedDigit()
-                }
-                Spacer()
             }
         }
 
         // MARK: - Row building blocks
-
-        private func label(_ text: String) -> some View {
-            Text(text)
-                .frame(width: labelWidth, alignment: .leading)
-        }
 
         /// A small numeric field + stepper for a clamped (>= 0) override value.
         private func overrideField(get: @escaping () -> Int, set: @escaping (Int) -> Void)
@@ -921,26 +833,6 @@ struct AboutSettingsView: View {
             StatsStore.shared.previewTodayCountOverride = nil
             previewTotal = StatsStore.shared.totalCount
             previewToday = StatsStore.shared.todayCount
-        }
-
-        /// Time `enumerate()` ~11 times with a monotonic clock and store the
-        /// median duration (ms) plus the last run's window count.
-        private func measureEnumerate() {
-            let store = WindowStore()
-            var durations: [Double] = []
-            var lastCount = 0
-            for _ in 0..<11 {
-                let start = DispatchTime.now().uptimeNanoseconds
-                let windows = store.enumerate(
-                    currentSpaceOnly: settings.currentSpaceOnly,
-                    sortMode: settings.sortMode)
-                let end = DispatchTime.now().uptimeNanoseconds
-                durations.append(Double(end - start) / 1_000_000.0)
-                lastCount = windows.count
-            }
-            durations.sort()
-            let median = durations[durations.count / 2]
-            enumResult = String(format: "median %.1f ms / %d win", median, lastCount)
         }
 
         // MARK: - Formatting
