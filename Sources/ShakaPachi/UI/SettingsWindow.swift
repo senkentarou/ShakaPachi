@@ -131,6 +131,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         addTab("状態", StatusSettingsView())
         addTab("統計", StatsSettingsView())
         addTab("クレジット", AboutSettingsView())
+        #if DEBUG
+            addTab("開発者", DeveloperSettingsView())
+        #endif
         return tvc
     }
 }
@@ -513,6 +516,19 @@ struct StatsSettingsView: View {
                             Text(formatted(totalCount))
                                 .foregroundColor(.secondary)
                         }
+                        #if DEBUG
+                            // The developer tab can set an in-memory override; the real
+                            // statistics are never touched. Surface it so the shown
+                            // numbers aren't mistaken for the persisted values.
+                            if StatsStore.shared.previewTotalCountOverride != nil
+                                || StatsStore.shared.previewTodayCountOverride != nil
+                            {
+                                Text("プレビュー中（実際の統計は変更されていません）")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        #endif
                     } header: {
                         Text("切替回数")
                     }
@@ -563,8 +579,10 @@ struct StatsSettingsView: View {
 
     private func reloadSnapshot() {
         statsEnabled = StatsStore.shared.isStatsEnabled
-        todayCount = StatsStore.shared.todayCount
-        totalCount = StatsStore.shared.totalCount
+        // Display the effective counts so a developer preview override is
+        // reflected here; in release builds these equal the real values.
+        todayCount = StatsStore.shared.effectiveTodayCount
+        totalCount = StatsStore.shared.effectiveTotalCount
         dailyCounts = StatsStore.shared.dailyCounts
         firstUseDate = StatsStore.shared.firstUseDate
     }
@@ -638,6 +656,230 @@ struct AboutSettingsView: View {
         .padding()
     }
 }
+
+// ─── Developer tab (DEBUG only) ─────────────────────────────────────────────────
+
+#if DEBUG
+
+    /// Developer-only tab exposing a few dev knobs in a COMPACT three-row layout.
+    /// `LabeledContent` (macOS 13+) lays out the leading label column and the
+    /// trailing content column natively, so the Form aligns them without a manual
+    /// fixed-width label gutter. Stat overrides are non-destructive (in-memory
+    /// only — UserDefaults is never touched); accent is a real setting write (that
+    /// is the point of a dev panel). Wrapped in `#if DEBUG` so it is compiled out
+    /// of release builds. Strings are hardcoded Japanese (this tab is
+    /// developer-only and never localized).
+    struct DeveloperSettingsView: View {
+
+        @ObservedObject private var settings = Settings.shared
+
+        // Local stat-override fields; writes go to StatsStore's in-memory
+        // overrides. Seeded from the effective counts so they reflect any
+        // existing override.
+        @State private var previewTotal: Int = StatsStore.shared.effectiveTotalCount
+        @State private var previewToday: Int = StatsStore.shared.effectiveTodayCount
+
+        // Locale-aware thousands separator (e.g. "1,234").
+        private let countFormatter: NumberFormatter = {
+            let f = NumberFormatter()
+            f.numberStyle = .decimal
+            return f
+        }()
+
+        var body: some View {
+            Form {
+                LabeledContent("統計") { statsControls }
+                LabeledContent("アクセント") { accentControls }
+                LabeledContent("段階") { stagesControls }
+                LabeledContent("並び順") { sortControls }
+            }
+            .formStyle(.grouped)
+            .padding(.top, 12)
+            .padding([.leading, .trailing, .bottom])
+        }
+
+        // MARK: - Row content (trailing column of each LabeledContent)
+
+        /// 統計 — non-destructive total/today overrides + clear.
+        private var statsControls: some View {
+            HStack(spacing: 8) {
+                Text("累計")
+                overrideField(get: { previewTotal }, set: setTotal)
+                Text("今日")
+                overrideField(get: { previewToday }, set: setToday)
+                Button("クリア") { clearOverrides() }
+                    .controlSize(.small)
+            }
+        }
+
+        /// アクセント — real setting write; trailing swatch + hex of the resolved color.
+        private var accentControls: some View {
+            HStack(spacing: 8) {
+                Picker(
+                    "",
+                    selection: Binding(
+                        get: { settings.accentColor },
+                        set: { Settings.shared.accentColor = $0 }
+                    )
+                ) {
+                    ForEach(AccentColor.allCases, id: \.self) { c in
+                        Text(c.displayName).tag(c)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
+                swatch(accentSwatchColor)
+                Text(hexString(accentSwatchColor))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .monospacedDigit()
+            }
+        }
+
+        /// 段階 — one-row patina mini-legend; each swatch is tappable to jump.
+        private var stagesControls: some View {
+            HStack(spacing: 8) {
+                ForEach(Array(AccentColor.patinaStages.enumerated()), id: \.offset) { index, stage in
+                    swatch(stage.color)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 3)
+                                .strokeBorder(
+                                    Color.accentColor,
+                                    lineWidth: currentStageIndex == index ? 2 : 0)
+                        )
+                        .onTapGesture { setTotal(stage.minCount) }
+                }
+                Text("0 / 1k / 10k / 100k / 1M")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .monospacedDigit()
+                Text("(現: \(stageShortLabel(currentStageIndex)))")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+
+        /// 並び順 — real setting write. `.zOrder` is intentionally excluded (same
+        /// as the 動作 tab); that case is kept only for internal WindowStore use.
+        private var sortControls: some View {
+            Picker(
+                "",
+                selection: Binding(
+                    get: { settings.sortMode },
+                    set: { Settings.shared.sortMode = $0 }
+                )
+            ) {
+                ForEach([SortMode.mru, .byApp, .byAppMRU], id: \.self) { mode in
+                    Text(mode.displayName).tag(mode)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .fixedSize()
+        }
+
+        // MARK: - Row building blocks
+
+        /// A small numeric field + stepper for a clamped (>= 0) override value.
+        private func overrideField(get: @escaping () -> Int, set: @escaping (Int) -> Void)
+            -> some View
+        {
+            HStack(spacing: 2) {
+                TextField(
+                    "",
+                    value: Binding(get: get, set: set),
+                    formatter: countFormatter
+                )
+                .textFieldStyle(.roundedBorder)
+                .monospacedDigit()
+                .frame(width: 72)
+                Stepper("", value: Binding(get: get, set: set), in: 0...Int.max)
+                    .labelsHidden()
+            }
+        }
+
+        private func swatch(_ color: NSColor) -> some View {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Color(nsColor: color))
+                .frame(width: 18, height: 14)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3)
+                        .strokeBorder(Color.secondary.opacity(0.4), lineWidth: 0.5)
+                )
+        }
+
+        // MARK: - Derived values
+
+        /// The count currently driving the accent resolution.
+        private var effectiveCount: Int { StatsStore.shared.effectiveTotalCount }
+
+        /// Trailing swatch color: the live patina color when the accent is
+        /// `.patina`, otherwise the selected accent's own resolved color.
+        private var accentSwatchColor: NSColor {
+            settings.accentColor == .patina
+                ? AccentColor.patinaColor(forTotalCount: effectiveCount)
+                : settings.accentColor.resolvedColor(totalCount: effectiveCount)
+        }
+
+        /// Index of the patina stage the effective count currently falls into.
+        private var currentStageIndex: Int {
+            var result = 0
+            for (i, stage) in AccentColor.patinaStages.enumerated() where effectiveCount >= stage.minCount {
+                result = i
+            }
+            return result
+        }
+
+        // MARK: - Actions
+
+        /// Write the (clamped) total override (in-memory only).
+        private func setTotal(_ value: Int) {
+            let clamped = max(0, value)
+            previewTotal = clamped
+            StatsStore.shared.previewTotalCountOverride = clamped
+        }
+
+        /// Write the (clamped) today override (in-memory only).
+        private func setToday(_ value: Int) {
+            let clamped = max(0, value)
+            previewToday = clamped
+            StatsStore.shared.previewTodayCountOverride = clamped
+        }
+
+        /// Clear both overrides and reset the fields to the real persisted values.
+        private func clearOverrides() {
+            StatsStore.shared.previewTotalCountOverride = nil
+            StatsStore.shared.previewTodayCountOverride = nil
+            previewTotal = StatsStore.shared.totalCount
+            previewToday = StatsStore.shared.todayCount
+        }
+
+        // MARK: - Formatting
+
+        /// A compact per-stage label for the "現在" readout (0 / 1k / 10k / …).
+        private func stageShortLabel(_ index: Int) -> String {
+            ["0", "1k", "10k", "100k", "1M"][safe: index] ?? "0"
+        }
+
+        /// "#RRGGBB" for an sRGB NSColor.
+        private func hexString(_ color: NSColor) -> String {
+            let c = color.usingColorSpace(.sRGB) ?? color
+            let r = Int((c.redComponent * 255).rounded())
+            let g = Int((c.greenComponent * 255).rounded())
+            let b = Int((c.blueComponent * 255).rounded())
+            return String(format: "#%02X%02X%02X", r, g, b)
+        }
+    }
+
+    /// Safe indexing used only by the developer tab's compact stage labels.
+    extension Array {
+        fileprivate subscript(safe index: Int) -> Element? {
+            indices.contains(index) ? self[index] : nil
+        }
+    }
+
+#endif
 
 // MARK: - Notification for onboarding open
 
