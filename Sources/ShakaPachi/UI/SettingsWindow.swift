@@ -225,9 +225,6 @@ struct BehaviorSettingsView: View {
                 }
                 .pickerStyle(.menu)
 
-                // .zOrder is intentionally excluded from the picker; the enum
-                // case is kept for internal WindowStore use but is not exposed
-                // as a user-selectable option.
                 Picker(
                     "並び順",
                     selection: Binding(
@@ -246,11 +243,6 @@ struct BehaviorSettingsView: View {
         .padding(.top, 12)
         .padding([.leading, .trailing, .bottom])
         .onAppear {
-            // .zOrder is no longer listed in the picker; normalize it to .mru
-            // so the picker never shows an unlisted selection.
-            if Settings.shared.sortMode == .zOrder {
-                Settings.shared.sortMode = .mru
-            }
             // The real login-item state lives in SMAppService, not the cached
             // bool; heal a stale mirror so the persisted value matches reality.
             // (Previously done in SettingsStore.init, before this view existed.)
@@ -760,8 +752,7 @@ struct AboutSettingsView: View {
             }
         }
 
-        /// 並び順 — real setting write. `.zOrder` is intentionally excluded (same
-        /// as the 動作 tab); that case is kept only for internal WindowStore use.
+        /// 並び順 — real setting write.
         private var sortControls: some View {
             Picker(
                 "",

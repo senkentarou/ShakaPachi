@@ -1,5 +1,5 @@
 // WindowStoreSortTests.swift
-// Verifies WindowStore.sortedByApp (byApp sort mode) and the zOrder passthrough.
+// Verifies WindowStore sort modes (byApp, byAppMRU, mru).
 // All tests use static pure functions — no TCC, no CGWindowList.
 
 import CoreGraphics
@@ -198,36 +198,6 @@ final class WindowStoreSortTests: XCTestCase {
             WindowStore.sortedByAppMRU(windows: [w])
         }.value
         XCTAssertEqual(result.count, 1)
-    }
-
-    // MARK: - zOrder passthrough
-
-    func testZOrder_passthrough_preservesInputOrder() {
-        // In zOrder mode, enumerate() returns filtered windows unchanged.
-        // We verify the static behavior by confirming sortedByApp is NOT called:
-        // just check the order is unchanged. The full integration goes through
-        // the store, but we verify the pure-function side here.
-        let w1 = makeWindow(id: 10, pid: 1, bundleID: "com.a", appName: "A")
-        let w2 = makeWindow(id: 20, pid: 2, bundleID: "com.b", appName: "B")
-        let w3 = makeWindow(id: 30, pid: 1, bundleID: "com.a", appName: "A")
-
-        // zOrder: pass the list through as-is (no sort).
-        // We verify that the zOrder path does NOT group by app:
-        let zOrderResult = [w1, w2, w3]  // unchanged — this is what enumerate returns for .zOrder
-        XCTAssertEqual(
-            zOrderResult.map { $0.windowID }, [10, 20, 30],
-            "zOrder must preserve CGWindowList order without grouping")
-
-        // byApp: groups same-app windows together.
-        let byAppResult = WindowStore.sortedByApp(windows: [w1, w2, w3])
-        XCTAssertEqual(
-            byAppResult.map { $0.windowID }, [10, 30, 20],
-            "byApp must group app 'A' windows together before app 'B'")
-
-        // Verify zOrder and byApp give different results when apps are interleaved.
-        XCTAssertNotEqual(
-            zOrderResult.map { $0.windowID },
-            byAppResult.map { $0.windowID })
     }
 
     // MARK: - sortedByApp is nonisolated (pure function property)

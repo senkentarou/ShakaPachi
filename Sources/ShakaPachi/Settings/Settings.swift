@@ -76,10 +76,8 @@ public enum TriggerKey: String, CaseIterable, Sendable {
 public enum SortMode: String, CaseIterable, Sendable {
     /// Most-recently-used order (MRU array, sorted by last activation time).
     case mru
-    /// Raw CGWindowList z-order — no MRU sort applied.
-    case zOrder
     /// Windows grouped by app, with groups ordered by app display name
-    /// (case-insensitive ascending). Windows keep MRU or z-order within each group.
+    /// (case-insensitive ascending). Windows keep MRU order within each group.
     case byApp
     /// Windows grouped by app, with groups ordered by the app's recency (MRU).
     /// Windows keep MRU order within each group.
@@ -89,7 +87,6 @@ public enum SortMode: String, CaseIterable, Sendable {
     public var displayName: String {
         switch self {
         case .mru: return NSLocalizedString("最近使った順 (MRU)", comment: "Sort mode: most recently used")
-        case .zOrder: return NSLocalizedString("Z オーダー", comment: "Sort mode: Z-order")
         case .byApp: return NSLocalizedString("アプリ別", comment: "Sort mode: by app")
         case .byAppMRU:
             return NSLocalizedString("最近使ったアプリ順", comment: "Sort mode: by recently used app")
