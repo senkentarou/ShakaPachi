@@ -24,6 +24,15 @@ final class SwitcherPanel {
     // Inserted below sheenLayer so it sits behind all tile content.
     // Set once per show(); never participates in the selection-move partial redraw.
     private let tintLayer = CALayer()
+    // Patina-only gloss layers (static, no animation). Hidden for every other
+    // accent so non-patina panels render exactly as before.
+    // patinaTintGradient replaces the flat tintLayer color with a vertical
+    // polished-metal gradient (brighter top → deeper bottom). Sits just above
+    // tintLayer, below sheenLayer.
+    private let patinaTintGradient = CAGradientLayer()
+    // patinaSpecular is a soft diagonal light streak in the upper-left, layered
+    // above sheenLayer to read as a highlight catching the light.
+    private let patinaSpecular = CAGradientLayer()
 
     // Window preview cache: owned here, injected into listView once in init().
     // Not cleared on hide() so cached images survive between panel sessions;
@@ -87,6 +96,16 @@ final class SwitcherPanel {
         // backgroundColor is left nil here; show() sets it before orderFront.
         ev.layer?.addSublayer(tint)
 
+        // Patina polished-metal tint gradient: sits directly above the flat
+        // tintLayer, below the sheen. Colors/visibility are driven per-show;
+        // hidden by default so non-patina accents keep the flat tint.
+        let patinaTint = patinaTintGradient
+        patinaTint.cornerRadius = Self.cornerRadius
+        patinaTint.masksToBounds = true
+        patinaTint.frame = ev.bounds
+        patinaTint.isHidden = true
+        ev.layer?.addSublayer(patinaTint)
+
         // Top sheen gradient for the liquid-glass feel.
         let sheen = sheenLayer
         sheen.colors = [
@@ -101,6 +120,24 @@ final class SwitcherPanel {
         sheen.masksToBounds = true
         sheen.frame = ev.bounds
         ev.layer?.addSublayer(sheen)
+
+        // Patina diagonal specular highlight: a soft light streak from the
+        // top-left, layered above the sheen (but below listView). Static
+        // colors/points; only visibility flips per-show. Hidden by default.
+        let specular = patinaSpecular
+        specular.colors = [
+            NSColor.white.withAlphaComponent(0.22).cgColor,
+            NSColor.white.withAlphaComponent(0.06).cgColor,
+            NSColor.clear.cgColor,
+        ]
+        specular.locations = [0.0, 0.25, 0.5]
+        specular.startPoint = CGPoint(x: 0.0, y: 1.0)  // top-left (layer coords: y=1 is the top)
+        specular.endPoint = CGPoint(x: 1.0, y: 0.0)  // bottom-right
+        specular.cornerRadius = Self.cornerRadius
+        specular.masksToBounds = true
+        specular.frame = ev.bounds
+        specular.isHidden = true
+        ev.layer?.addSublayer(specular)
 
         // SwitcherListView fills the effect view; padding is drawn internally.
         let lv = SwitcherListView(frame: ev.bounds)
@@ -157,8 +194,43 @@ final class SwitcherPanel {
         // hot selection-move path, so calling into Settings here is fine.
         let accent = Settings.shared.accentColor.resolvedColor(
             totalCount: StatsStore.shared.effectiveTotalCount)
-        tintLayer.backgroundColor = accent.withAlphaComponent(AccentColor.backgroundTintAlpha).cgColor
         listView.accentColor = accent
+
+        // Patina gets a static "gloss / lustre" treatment (gradient tint,
+        // diagonal specular, warm rim) to feel special. Every other accent
+        // keeps the flat tint + white rim exactly as before. Wrapped in a
+        // CATransaction with actions disabled so the per-show color/visibility
+        // swaps never animate.
+        let isPatina = Settings.shared.accentColor == .patina
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        if isPatina {
+            // Polished-metal vertical gradient replaces the flat tint.
+            let topTint = (accent.blended(withFraction: 0.25, of: .white) ?? accent)
+                .withAlphaComponent(0.20)
+            let bottomTint = (accent.blended(withFraction: 0.10, of: .black) ?? accent)
+                .withAlphaComponent(0.10)
+            patinaTintGradient.colors = [topTint.cgColor, bottomTint.cgColor]
+            patinaTintGradient.startPoint = CGPoint(x: 0.5, y: 1.0)  // top (layer coords: y=1 is the top)
+            patinaTintGradient.endPoint = CGPoint(x: 0.5, y: 0.0)  // bottom
+            patinaTintGradient.isHidden = false
+            patinaSpecular.isHidden = false
+            // Flat tint stands down so the gradient reads cleanly.
+            tintLayer.backgroundColor = NSColor.clear.cgColor
+            // Warm, brighter gold-white rim catches the light for patina.
+            effectView.layer?.borderColor =
+                NSColor(srgbRed: 1.0, green: 0.95, blue: 0.82, alpha: 1.0)
+                .withAlphaComponent(0.30).cgColor
+        } else {
+            patinaTintGradient.isHidden = true
+            patinaSpecular.isHidden = true
+            // Restore today's exact flat tint + white rim behavior.
+            tintLayer.backgroundColor =
+                accent.withAlphaComponent(AccentColor.backgroundTintAlpha).cgColor
+            effectView.layer?.borderColor =
+                NSColor.white.withAlphaComponent(AccentColor.glassBorderAlpha).cgColor
+        }
+        CATransaction.commit()
 
         // Set previewEnabled BEFORE setItems so the first requestPreviews() call
         // inside setItems already sees the correct flag.
@@ -248,7 +320,9 @@ final class SwitcherPanel {
         CATransaction.setDisableActions(true)
         effectView.frame = NSRect(origin: .zero, size: newFrame.size)
         tintLayer.frame = effectView.bounds
+        patinaTintGradient.frame = effectView.bounds
         sheenLayer.frame = effectView.bounds
+        patinaSpecular.frame = effectView.bounds
         CATransaction.commit()
     }
 
