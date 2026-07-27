@@ -784,7 +784,8 @@ struct AboutSettingsView: View {
                 )
                 .textFieldStyle(.roundedBorder)
                 .monospacedDigit()
-                .frame(width: 72)
+                // Wide enough for a 1,000,000 (1M) count with separators without clipping.
+                .frame(width: 96)
                 Stepper("", value: Binding(get: get, set: set), in: 0...Int.max)
                     .labelsHidden()
             }
