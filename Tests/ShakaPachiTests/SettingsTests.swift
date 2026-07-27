@@ -135,12 +135,6 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(settings.sortMode, .mru)
     }
 
-    func testRoundTrip_sortMode_zOrder() {
-        let (_, settings) = makeSuite()
-        settings.sortMode = .zOrder
-        XCTAssertEqual(settings.sortMode, .zOrder)
-    }
-
     func testRoundTrip_sortMode_byApp() {
         let (_, settings) = makeSuite()
         settings.sortMode = .byApp
@@ -151,6 +145,16 @@ final class SettingsTests: XCTestCase {
         let (_, settings) = makeSuite()
         settings.sortMode = .byAppMRU
         XCTAssertEqual(settings.sortMode, .byAppMRU)
+    }
+
+    func testFallback_sortMode_unknownRawValueDefaultsToMRU() {
+        // Verifies DefaultsEnum falls back to .mru when the stored string is
+        // unrecognized — e.g. a user who had "zOrder" persisted before removal.
+        let (defaults, settings) = makeSuite()
+        defaults.set("zOrder", forKey: "sortMode")
+        XCTAssertEqual(
+            settings.sortMode, .mru,
+            "Unrecognized raw value must fall back to the default (.mru)")
     }
 
     // MARK: - Theme round-trip
@@ -328,10 +332,9 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(TriggerKey.allCases.contains(.grave))
     }
 
-    func testCaseIterable_sortMode_hasAllFourCases() {
-        XCTAssertEqual(SortMode.allCases.count, 4)
+    func testCaseIterable_sortMode_hasAllThreeCases() {
+        XCTAssertEqual(SortMode.allCases.count, 3)
         XCTAssertTrue(SortMode.allCases.contains(.mru))
-        XCTAssertTrue(SortMode.allCases.contains(.zOrder))
         XCTAssertTrue(SortMode.allCases.contains(.byApp))
         XCTAssertTrue(SortMode.allCases.contains(.byAppMRU))
     }

@@ -100,9 +100,6 @@ final class WindowStore {
             )
             let byID = Dictionary(uniqueKeysWithValues: filtered.map { ($0.windowID, $0) })
             return sortedIDs.compactMap { byID[$0] }
-        case .zOrder:
-            // Raw CGWindowList order — no MRU sort applied.
-            return filtered
         case .byApp:
             // Group windows by app and order groups by app display name (ascending),
             // keeping MRU order within each group.
