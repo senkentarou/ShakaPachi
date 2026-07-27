@@ -76,6 +76,22 @@ final class StatsStore {
         defaults.integer(forKey: Key.todayCount)
     }
 
+    #if DEBUG
+        /// Developer-only, in-memory (non-persistent) override for previewing the
+        /// today count. nil = use the real count. Never written to UserDefaults —
+        /// the real statistics are left untouched.
+        var previewTodayCountOverride: Int?
+    #endif
+
+    /// Count used for the today display. Release builds always return the real
+    /// today count; debug builds honor a developer preview override when set.
+    var effectiveTodayCount: Int {
+        #if DEBUG
+            if let override = previewTodayCountOverride { return override }
+        #endif
+        return todayCount
+    }
+
     /// Per-day switch counts keyed by "yyyy-MM-dd". Empty dict if no data.
     var dailyCounts: [String: Int] {
         guard let raw = defaults.dictionary(forKey: Key.statsDailyCounts) else { return [:] }

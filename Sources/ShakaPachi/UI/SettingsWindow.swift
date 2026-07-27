@@ -516,6 +516,19 @@ struct StatsSettingsView: View {
                             Text(formatted(totalCount))
                                 .foregroundColor(.secondary)
                         }
+                        #if DEBUG
+                            // The developer tab can set an in-memory override; the real
+                            // statistics are never touched. Surface it so the shown
+                            // numbers aren't mistaken for the persisted values.
+                            if StatsStore.shared.previewTotalCountOverride != nil
+                                || StatsStore.shared.previewTodayCountOverride != nil
+                            {
+                                Text("プレビュー中（実際の統計は変更されていません）")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        #endif
                     } header: {
                         Text("切替回数")
                     }
@@ -566,8 +579,10 @@ struct StatsSettingsView: View {
 
     private func reloadSnapshot() {
         statsEnabled = StatsStore.shared.isStatsEnabled
-        todayCount = StatsStore.shared.todayCount
-        totalCount = StatsStore.shared.totalCount
+        // Display the effective counts so a developer preview override is
+        // reflected here; in release builds these equal the real values.
+        todayCount = StatsStore.shared.effectiveTodayCount
+        totalCount = StatsStore.shared.effectiveTotalCount
         dailyCounts = StatsStore.shared.dailyCounts
         firstUseDate = StatsStore.shared.firstUseDate
     }
@@ -646,19 +661,27 @@ struct AboutSettingsView: View {
 
 #if DEBUG
 
-    /// Developer-only tab for previewing how the evolving `.patina` accent maps to
-    /// the lifetime switch count, WITHOUT mutating the real statistics. Setting the
-    /// preview count writes an in-memory override on StatsStore; the real
-    /// `totalCount` (and the 統計 tab) stay untouched. Wrapped in `#if DEBUG` so it
-    /// is compiled out of release builds. Strings are hardcoded Japanese (this tab
-    /// is developer-only and never localized).
+    /// Developer-only tab exposing several dev knobs in a COMPACT layout: one
+    /// control per row, aligned by a fixed-width leading label. Stat overrides are
+    /// non-destructive (in-memory only — UserDefaults is never touched); accent /
+    /// sort / delay are real setting writes (that is the point of a dev panel).
+    /// Wrapped in `#if DEBUG` so it is compiled out of release builds. Strings are
+    /// hardcoded Japanese (this tab is developer-only and never localized).
     struct DeveloperSettingsView: View {
 
         @ObservedObject private var settings = Settings.shared
 
-        // Local preview count; changes write StatsStore.previewTotalCountOverride.
-        // Seeded from the effective count so it reflects any existing override.
-        @State private var previewCount: Int = StatsStore.shared.effectiveTotalCount
+        // Local stat-override fields; writes go to StatsStore's in-memory
+        // overrides. Seeded from the effective counts so they reflect any
+        // existing override.
+        @State private var previewTotal: Int = StatsStore.shared.effectiveTotalCount
+        @State private var previewToday: Int = StatsStore.shared.effectiveTodayCount
+
+        // Result of the last enumerate() measurement, or nil before first run.
+        @State private var enumResult: String? = nil
+
+        // Fixed leading-label width so every row aligns to the same gutter.
+        private let labelWidth: CGFloat = 84
 
         // Locale-aware thousands separator (e.g. "1,234").
         private let countFormatter: NumberFormatter = {
@@ -670,147 +693,12 @@ struct AboutSettingsView: View {
         var body: some View {
             Form {
                 Section {
-                    Text("パティナ色プレビュー（実際の統計は変更されません）")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                // ── Preview count control ──
-                Section {
-                    HStack(spacing: 12) {
-                        Text("プレビュー回数")
-                            .frame(width: 140, alignment: .leading)
-                        TextField(
-                            "",
-                            value: Binding(
-                                get: { previewCount },
-                                set: { setPreview($0) }
-                            ),
-                            formatter: countFormatter
-                        )
-                        .textFieldStyle(.roundedBorder)
-                        .monospacedDigit()
-                        Stepper(
-                            "",
-                            value: Binding(
-                                get: { previewCount },
-                                set: { setPreview($0) }
-                            ),
-                            in: 0...Int.max
-                        )
-                        .labelsHidden()
-                    }
-
-                    // Stage-jump buttons — land squarely in each patina stage.
-                    HStack {
-                        ForEach(AccentColor.patinaStages, id: \.minCount) { stage in
-                            Button(stage.label) { setPreview(stage.minCount) }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                        }
-                    }
-
-                    Button("override をクリア（実値に戻す）") {
-                        StatsStore.shared.previewTotalCountOverride = nil
-                        previewCount = StatsStore.shared.totalCount
-                    }
-
-                    HStack {
-                        Text("実際の累計")
-                        Spacer()
-                        Text(formatted(StatsStore.shared.totalCount))
-                            .foregroundColor(.secondary)
-                            .monospacedDigit()
-                    }
-                } header: {
-                    Text("プレビュー回数")
-                }
-
-                // ── Color legend ──
-                Section {
-                    ForEach(Array(AccentColor.patinaStages.enumerated()), id: \.offset) { index, stage in
-                        let isCurrent = currentStageIndex == index
-                        HStack(spacing: 10) {
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color(nsColor: stage.color))
-                                .frame(width: 28, height: 18)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .strokeBorder(Color.secondary.opacity(0.4), lineWidth: 0.5)
-                                )
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(stage.label)
-                                    .font(.body)
-                                Text(rangeLabel(for: index))
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .monospacedDigit()
-                            }
-                            Spacer()
-                            Text(hexString(stage.color))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .monospacedDigit()
-                            if isCurrent {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.accentColor)
-                            }
-                        }
-                    }
-                } header: {
-                    Text("色と回数の対応")
-                }
-
-                // ── Resolved readout ──
-                Section {
-                    HStack {
-                        Text("有効な回数")
-                        Spacer()
-                        Text(formatted(effectiveCount))
-                            .foregroundColor(.secondary)
-                            .monospacedDigit()
-                    }
-                    HStack {
-                        Text("解決される色")
-                        Spacer()
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color(nsColor: resolvedColor))
-                            .frame(width: 28, height: 18)
-                        Text(hexString(resolvedColor))
-                            .foregroundColor(.secondary)
-                            .monospacedDigit()
-                    }
-                    Text("この色は素材の上に不透明度 0.14 で重ねて適用されます。")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } header: {
-                    Text("解決結果")
-                }
-
-                // ── Live preview ──
-                Section {
-                    AppearancePreviewView(
-                        theme: settings.theme,
-                        accent: settings.accentColor,
-                        iconSize: settings.switcherIconSize,
-                        windowPreviewWidth: settings.windowPreviewWidth,
-                        showWindowPreview: settings.showWindowPreview,
-                        totalCount: effectiveCount)
-                } header: {
-                    Text("プレビュー")
-                }
-
-                // ── Convenience ──
-                Section {
-                    Button("アクセントをパティナに設定") {
-                        Settings.shared.accentColor = .patina
-                    }
-                    Text("ライブの切替パネルはアクセントが「パティナ」のときだけ色が変わります。")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    statsRow
+                    accentRow
+                    stagesRow
+                    sortRow
+                    delayRow
+                    enumerateRow
                 }
             }
             .formStyle(.grouped)
@@ -818,14 +706,188 @@ struct AboutSettingsView: View {
             .padding([.leading, .trailing, .bottom])
         }
 
+        // MARK: - Rows
+
+        /// 統計 — non-destructive total/today overrides + clear.
+        private var statsRow: some View {
+            HStack(spacing: 8) {
+                label("統計")
+                Text("累計")
+                overrideField(get: { previewTotal }, set: setTotal)
+                Text("今日")
+                overrideField(get: { previewToday }, set: setToday)
+                Button("クリア") { clearOverrides() }
+                    .controlSize(.small)
+                Spacer()
+            }
+        }
+
+        /// アクセント — real setting write; trailing swatch + hex of the resolved color.
+        private var accentRow: some View {
+            HStack(spacing: 8) {
+                label("アクセント")
+                Picker(
+                    "",
+                    selection: Binding(
+                        get: { settings.accentColor },
+                        set: { Settings.shared.accentColor = $0 }
+                    )
+                ) {
+                    ForEach(AccentColor.allCases, id: \.self) { c in
+                        Text(c.displayName).tag(c)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
+                swatch(accentSwatchColor)
+                Text(hexString(accentSwatchColor))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .monospacedDigit()
+                Spacer()
+            }
+        }
+
+        /// 段階 — one-row patina mini-legend; each swatch is tappable to jump.
+        private var stagesRow: some View {
+            HStack(spacing: 8) {
+                label("段階")
+                ForEach(Array(AccentColor.patinaStages.enumerated()), id: \.offset) { index, stage in
+                    swatch(stage.color)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 3)
+                                .strokeBorder(
+                                    Color.accentColor,
+                                    lineWidth: currentStageIndex == index ? 2 : 0)
+                        )
+                        .onTapGesture { setTotal(stage.minCount) }
+                }
+                Text("0 / 1k / 10k / 100k / 1M")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .monospacedDigit()
+                Text("(現: \(stageShortLabel(currentStageIndex)))")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
+        }
+
+        /// 並び順 — real setting write; includes the normally-hidden .zOrder.
+        private var sortRow: some View {
+            HStack(spacing: 8) {
+                label("並び順")
+                Picker(
+                    "",
+                    selection: Binding(
+                        get: { settings.sortMode },
+                        set: { Settings.shared.sortMode = $0 }
+                    )
+                ) {
+                    ForEach(SortMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
+                Spacer()
+            }
+        }
+
+        /// ディレイ — real setting write (ms).
+        private var delayRow: some View {
+            HStack(spacing: 8) {
+                label("ディレイ")
+                TextField(
+                    "",
+                    value: Binding(
+                        get: { settings.showDelayMs },
+                        set: { Settings.shared.showDelayMs = max(0, $0) }
+                    ),
+                    formatter: countFormatter
+                )
+                .textFieldStyle(.roundedBorder)
+                .monospacedDigit()
+                .frame(width: 64)
+                Text("ms")
+                    .foregroundColor(.secondary)
+                Stepper(
+                    "",
+                    value: Binding(
+                        get: { settings.showDelayMs },
+                        set: { Settings.shared.showDelayMs = max(0, $0) }
+                    ),
+                    in: 0...Int.max
+                )
+                .labelsHidden()
+                Spacer()
+            }
+        }
+
+        /// 列挙実測 — time enumerate() and show the median.
+        private var enumerateRow: some View {
+            HStack(spacing: 8) {
+                label("列挙実測")
+                Button("計測") { measureEnumerate() }
+                    .controlSize(.small)
+                if let enumResult {
+                    Text(enumResult)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .monospacedDigit()
+                }
+                Spacer()
+            }
+        }
+
+        // MARK: - Row building blocks
+
+        private func label(_ text: String) -> some View {
+            Text(text)
+                .frame(width: labelWidth, alignment: .leading)
+        }
+
+        /// A small numeric field + stepper for a clamped (>= 0) override value.
+        private func overrideField(get: @escaping () -> Int, set: @escaping (Int) -> Void)
+            -> some View
+        {
+            HStack(spacing: 2) {
+                TextField(
+                    "",
+                    value: Binding(get: get, set: set),
+                    formatter: countFormatter
+                )
+                .textFieldStyle(.roundedBorder)
+                .monospacedDigit()
+                .frame(width: 72)
+                Stepper("", value: Binding(get: get, set: set), in: 0...Int.max)
+                    .labelsHidden()
+            }
+        }
+
+        private func swatch(_ color: NSColor) -> some View {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Color(nsColor: color))
+                .frame(width: 18, height: 14)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3)
+                        .strokeBorder(Color.secondary.opacity(0.4), lineWidth: 0.5)
+                )
+        }
+
         // MARK: - Derived values
 
         /// The count currently driving the accent resolution.
         private var effectiveCount: Int { StatsStore.shared.effectiveTotalCount }
 
-        /// The patina color the effective count resolves to.
-        private var resolvedColor: NSColor {
-            AccentColor.patinaColor(forTotalCount: effectiveCount)
+        /// Trailing swatch color: the live patina color when the accent is
+        /// `.patina`, otherwise the selected accent's own resolved color.
+        private var accentSwatchColor: NSColor {
+            settings.accentColor == .patina
+                ? AccentColor.patinaColor(forTotalCount: effectiveCount)
+                : settings.accentColor.resolvedColor(totalCount: effectiveCount)
         }
 
         /// Index of the patina stage the effective count currently falls into.
@@ -839,28 +901,53 @@ struct AboutSettingsView: View {
 
         // MARK: - Actions
 
-        /// Write the (clamped) preview count to the in-memory override.
-        private func setPreview(_ value: Int) {
+        /// Write the (clamped) total override (in-memory only).
+        private func setTotal(_ value: Int) {
             let clamped = max(0, value)
-            previewCount = clamped
+            previewTotal = clamped
             StatsStore.shared.previewTotalCountOverride = clamped
+        }
+
+        /// Write the (clamped) today override (in-memory only).
+        private func setToday(_ value: Int) {
+            let clamped = max(0, value)
+            previewToday = clamped
+            StatsStore.shared.previewTodayCountOverride = clamped
+        }
+
+        /// Clear both overrides and reset the fields to the real persisted values.
+        private func clearOverrides() {
+            StatsStore.shared.previewTotalCountOverride = nil
+            StatsStore.shared.previewTodayCountOverride = nil
+            previewTotal = StatsStore.shared.totalCount
+            previewToday = StatsStore.shared.todayCount
+        }
+
+        /// Time `enumerate()` ~11 times with a monotonic clock and store the
+        /// median duration (ms) plus the last run's window count.
+        private func measureEnumerate() {
+            let store = WindowStore()
+            var durations: [Double] = []
+            var lastCount = 0
+            for _ in 0..<11 {
+                let start = DispatchTime.now().uptimeNanoseconds
+                let windows = store.enumerate(
+                    currentSpaceOnly: settings.currentSpaceOnly,
+                    sortMode: settings.sortMode)
+                let end = DispatchTime.now().uptimeNanoseconds
+                durations.append(Double(end - start) / 1_000_000.0)
+                lastCount = windows.count
+            }
+            durations.sort()
+            let median = durations[durations.count / 2]
+            enumResult = String(format: "median %.1f ms / %d win", median, lastCount)
         }
 
         // MARK: - Formatting
 
-        private func formatted(_ n: Int) -> String {
-            countFormatter.string(from: NSNumber(value: n)) ?? "\(n)"
-        }
-
-        /// The inclusive count range covered by the stage at `index`, e.g.
-        /// "0–999", "1,000–9,999", … and "1,000,000+" for the last stage.
-        private func rangeLabel(for index: Int) -> String {
-            let lower = AccentColor.patinaStages[index].minCount
-            if index + 1 < AccentColor.patinaStages.count {
-                let upper = AccentColor.patinaStages[index + 1].minCount - 1
-                return "\(formatted(lower))–\(formatted(upper))"
-            }
-            return "\(formatted(lower))+"
+        /// A compact per-stage label for the "現在" readout (0 / 1k / 10k / …).
+        private func stageShortLabel(_ index: Int) -> String {
+            ["0", "1k", "10k", "100k", "1M"][safe: index] ?? "0"
         }
 
         /// "#RRGGBB" for an sRGB NSColor.
@@ -870,6 +957,13 @@ struct AboutSettingsView: View {
             let g = Int((c.greenComponent * 255).rounded())
             let b = Int((c.blueComponent * 255).rounded())
             return String(format: "#%02X%02X%02X", r, g, b)
+        }
+    }
+
+    /// Safe indexing used only by the developer tab's compact stage labels.
+    extension Array {
+        fileprivate subscript(safe index: Int) -> Element? {
+            indices.contains(index) ? self[index] : nil
         }
     }
 
