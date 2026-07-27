@@ -691,6 +691,7 @@ struct AboutSettingsView: View {
                 LabeledContent("統計") { statsControls }
                 LabeledContent("アクセント") { accentControls }
                 LabeledContent("段階") { stagesControls }
+                LabeledContent("並び順") { sortControls }
             }
             .formStyle(.grouped)
             .padding(.top, 12)
@@ -757,6 +758,25 @@ struct AboutSettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
+        }
+
+        /// 並び順 — real setting write. `.zOrder` is intentionally excluded (same
+        /// as the 動作 tab); that case is kept only for internal WindowStore use.
+        private var sortControls: some View {
+            Picker(
+                "",
+                selection: Binding(
+                    get: { settings.sortMode },
+                    set: { Settings.shared.sortMode = $0 }
+                )
+            ) {
+                ForEach([SortMode.mru, .byApp, .byAppMRU], id: \.self) { mode in
+                    Text(mode.displayName).tag(mode)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .fixedSize()
         }
 
         // MARK: - Row building blocks
