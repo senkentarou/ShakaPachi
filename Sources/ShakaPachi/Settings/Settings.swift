@@ -176,8 +176,9 @@ public enum AccentColor: String, CaseIterable, Sendable {
             // Muted teal, low saturation so it doesn't dominate.
             return NSColor(srgbRed: 0.22, green: 0.55, blue: 0.55, alpha: 1.0)
         case .sand:
-            // Warm sandy beige — professional and neutral.
-            return NSColor(srgbRed: 0.72, green: 0.62, blue: 0.45, alpha: 1.0)
+            // Light warm greige — #C7B89C. Lighter and lower-saturation than patina bronze
+            // (#AA9455) and brass (#C8A63C) so it reads as a distinct neutral, not a gold.
+            return NSColor(srgbRed: 0.78, green: 0.72, blue: 0.61, alpha: 1.0)
         case .plum:
             // Muted plum — subtle and sophisticated.
             return NSColor(srgbRed: 0.50, green: 0.35, blue: 0.58, alpha: 1.0)
