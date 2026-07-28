@@ -249,6 +249,13 @@ private struct TileView: View {
                 // Highlight fill matching SwitcherListView's selection draw path.
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .fill(Color(nsColor: selectionColor))
+                // Two-tone hairline rim, same alphas and stacking order as the
+                // real panel: dark line on the tile edge, light line just inside.
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .strokeBorder(Color.black.opacity(AccentColor.selectionRimDarkAlpha), lineWidth: 1)
+                RoundedRectangle(cornerRadius: cornerRadius - 1)
+                    .strokeBorder(Color.white.opacity(AccentColor.selectionRimLightAlpha), lineWidth: 1)
+                    .padding(1)
             }
             // Placeholder icon — uses a semantic color so it stays legible on
             // both light and dark base colors without forcing a colorScheme override.

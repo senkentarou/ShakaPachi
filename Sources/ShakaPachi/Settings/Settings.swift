@@ -152,6 +152,18 @@ public enum AccentColor: String, CaseIterable, Sendable {
     /// Alpha for the 1px glass rim border on the switcher panel.
     /// Shared by SwitcherPanel (CALayer borderColor) and AppearancePreviewView (SwiftUI strokeBorder).
     public static let glassBorderAlpha: CGFloat = 0.18
+    /// Alpha for the light half of the selected tile's two-tone hairline rim.
+    /// Two tones rather than one: the panel is an NSVisualEffectView with
+    /// `.behindWindow` blending, so its luminance follows whatever window happens
+    /// to sit behind the switcher. A single translucent tone therefore cannot
+    /// guarantee contrast — a light accent such as `sand` collapses into a bright
+    /// backdrop, a dark one into a dark backdrop. Pairing a light line with an
+    /// adjacent dark line keeps one of the two visible at any backdrop luminance.
+    /// Shared by SwitcherListView and the Settings appearance preview.
+    public static let selectionRimLightAlpha: CGFloat = 0.55
+    /// Alpha for the dark half of the selected tile's two-tone hairline rim.
+    /// See `selectionRimLightAlpha` for why the rim carries both tones.
+    public static let selectionRimDarkAlpha: CGFloat = 0.28
 
     /// Soft green used by the contribution heatmap cells and legend swatches.
     /// Matches the tray icon soft palette. Kept here alongside the other shared
