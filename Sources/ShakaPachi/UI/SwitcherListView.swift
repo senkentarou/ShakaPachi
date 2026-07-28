@@ -345,12 +345,34 @@ final class SwitcherListView: NSView {
             guard tileRect.insetBy(dx: -2, dy: -2).intersects(dirtyRect) else { continue }
 
             if index == selectedIndex {
-                // Accent-tinted rounded highlight (α≈0.30) — clearly shows the
-                // chosen accent colour while staying tasteful. Color is pushed by
-                // the panel before each show so this path stays pure/fast.
-                let highlight = NSBezierPath(roundedRect: tileRect, xRadius: 14, yRadius: 14)
+                // Accent-tinted rounded highlight — clearly shows the chosen
+                // accent colour while staying tasteful. Color is pushed by the
+                // panel before each show so this path stays pure/fast.
+                let radius: CGFloat = 14
+                let highlight = NSBezierPath(roundedRect: tileRect, xRadius: radius, yRadius: radius)
                 accentColor.withAlphaComponent(AccentColor.selectionHighlightAlpha).setFill()
                 highlight.fill()
+
+                // Two-tone hairline rim over the fill. The fill alone is a
+                // source-over blend, so it disappears whenever the panel's
+                // .behindWindow material lands on the accent's own luminance;
+                // a dark line with a light line immediately inside it always
+                // leaves one of the two contrasting. Strokes straddle their path,
+                // so both are inset by half a line width to stay inside tileRect
+                // (and well within moveSelection's 2pt redraw margin).
+                let darkRim = NSBezierPath(
+                    roundedRect: tileRect.insetBy(dx: 0.5, dy: 0.5),
+                    xRadius: radius - 0.5, yRadius: radius - 0.5)
+                darkRim.lineWidth = 1
+                NSColor.black.withAlphaComponent(AccentColor.selectionRimDarkAlpha).setStroke()
+                darkRim.stroke()
+
+                let lightRim = NSBezierPath(
+                    roundedRect: tileRect.insetBy(dx: 1.5, dy: 1.5),
+                    xRadius: radius - 1.5, yRadius: radius - 1.5)
+                lightRim.lineWidth = 1
+                NSColor.white.withAlphaComponent(AccentColor.selectionRimLightAlpha).setStroke()
+                lightRim.stroke()
             }
 
             let inset = (tile - iconEdge) / 2

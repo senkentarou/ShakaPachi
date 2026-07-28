@@ -1,7 +1,9 @@
 // AppearancePreviewTests.swift
-// Verifies: alpha constants haven't drifted, tint/selection colors carry the
-// correct alpha, selection shares the accent hue, and backgroundBaseColor
-// produces distinct light/dark values and respects Theme.system.
+// Verifies: alpha constants haven't drifted, the two-tone selection rim keeps
+// its light > dark ordering within valid alpha bounds, tint/selection colors
+// carry the correct alpha, selection shares the accent hue, and
+// backgroundBaseColor produces distinct light/dark values and respects
+// Theme.system.
 
 import XCTest
 
@@ -22,6 +24,28 @@ final class AppearancePreviewTests: XCTestCase {
         XCTAssertEqual(
             AccentColor.selectionHighlightAlpha, 0.30,
             "selectionHighlightAlpha must be 0.30 — changing it drifts the preview from the real panel")
+    }
+
+    func testSelectionRimAlphas_areExact() {
+        XCTAssertEqual(
+            AccentColor.selectionRimLightAlpha, 0.55,
+            "selectionRimLightAlpha must be 0.55 — changing it drifts the preview from the real panel")
+        XCTAssertEqual(
+            AccentColor.selectionRimDarkAlpha, 0.28,
+            "selectionRimDarkAlpha must be 0.28 — changing it drifts the preview from the real panel")
+    }
+
+    func testSelectionRimAlphas_lightIsStrongerThanDark() {
+        XCTAssertGreaterThan(
+            AccentColor.selectionRimLightAlpha, AccentColor.selectionRimDarkAlpha,
+            "The light rim is the tone that has to carry the selection on dark panels")
+    }
+
+    func testSelectionRimAlphas_areValidAlphas() {
+        for alpha in [AccentColor.selectionRimLightAlpha, AccentColor.selectionRimDarkAlpha] {
+            XCTAssertGreaterThan(alpha, 0, "A rim alpha of 0 would draw nothing")
+            XCTAssertLessThanOrEqual(alpha, 1, "Alpha must stay within the 0...1 range")
+        }
     }
 
     // MARK: - tintColor alpha
