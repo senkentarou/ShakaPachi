@@ -8,8 +8,8 @@ import Foundation
 // Testability: the heavy lifting (raw dict array → [WindowInfo]) lives in the
 // static `filterAndBuild` method which accepts [[String: Any]] so unit tests
 // can supply hand-built fixtures without TCC permissions.
-// The MRU pure helpers (sortedByMRU, movedToFront) are also static so tests
-// can exercise them without any AppKit or TCC calls.
+// The MRU pure helpers (sortedByMRU, movedToFront, adoptingFrontmost) are also
+// static so tests can exercise them without any AppKit or TCC calls.
 //
 // Concurrency: the class is @MainActor because all callers (AppDelegate, the
 // NSWorkspace notification handler) run on the main thread. This satisfies Swift
@@ -91,9 +91,26 @@ final class WindowStore {
             filtered = SpacesEnumerator.filterToAllowedIDs(filtered, allowedIDs: allowedIDs)
         }
 
+        // Adopt the frontmost window into mruOrder before sorting.  This makes
+        // enumerate() deliberately mutate MRU state, because the activation
+        // paths that feed mruOrder (switcher confirm + didActivateApplication)
+        // miss several ways a window comes to the front: switching windows
+        // within one app posts no activation notification, and a freshly
+        // launched app has no window yet when its notification fires.  A window
+        // that was never recorded would otherwise stay unknown indefinitely no
+        // matter how recently it was used.  Reading the z-order top here
+        // self-heals those misses and guarantees index 0 is the current window
+        // — the assumption press-once-release is built on (SwitcherStateMachine
+        // opens the panel at index 1).
+        mruOrder = WindowStore.adoptingFrontmost(
+            windowIDs: filtered.map { $0.windowID },
+            order: mruOrder,
+            cap: mruCap
+        )
+
         switch sortMode {
         case .mru:
-            // Sort by mruOrder; unknowns appended in z-order at the end.
+            // Sort by mruOrder; unknowns spliced in at their z-order position.
             let sortedIDs = WindowStore.sortedByMRU(
                 windowIDs: filtered.map { $0.windowID },
                 mruOrder: mruOrder
@@ -264,29 +281,85 @@ final class WindowStore {
 
     /// Return window IDs sorted by MRU order.
     ///
-    /// IDs that appear in `mruOrder` come first, in mruOrder sequence.
-    /// IDs not in `mruOrder` are appended at the end in the order they appear
-    /// in `windowIDs` (i.e. z-order as returned by CGWindowList).
+    /// IDs that appear in `mruOrder` are ordered by that sequence. IDs missing
+    /// from `mruOrder` ("unknown") are placed by their z-order position rather
+    /// than being pushed to the end: an unknown window is inserted directly in
+    /// front of the nearest known window that sits behind it in z-order, because
+    /// being in front of that window implies it was used more recently.  Only
+    /// unknowns with no known window behind them go to the end.  Unknowns keep
+    /// their relative z-order.
+    ///
+    /// Treating z-order as an approximation of recency is the same assumption
+    /// this function already makes when `mruOrder` is empty (z-order is returned
+    /// unchanged).  It matters because `mruOrder` is recorded on a best-effort
+    /// basis: a window the user is actively using may never have been recorded
+    /// (see `enumerate`), and appending such a window after every stale entry
+    /// would rank the most recent window last.
     ///
     /// - Parameters:
-    ///   - windowIDs: The IDs of on-screen windows in z-order.
+    ///   - windowIDs: The IDs of on-screen windows in z-order (index 0 = front).
     ///   - mruOrder: The current MRU sequence (index 0 = most recently used).
-    /// - Returns: The same IDs reordered by MRU, then z-order for unknowns.
+    /// - Returns: The same IDs reordered by MRU, with unknowns spliced in at
+    ///   their z-order position.
     nonisolated static func sortedByMRU(
         windowIDs: [CGWindowID],
         mruOrder: [CGWindowID]
     ) -> [CGWindowID] {
         guard !mruOrder.isEmpty else { return windowIDs }
         let windowSet = Set(windowIDs)
-        // Build the known-first portion: only IDs that exist in windowIDs,
-        // preserving their relative MRU sequence.
-        var result: [CGWindowID] = mruOrder.filter { windowSet.contains($0) }
-        // Append unknowns in z-order (i.e., the order they appeared in windowIDs).
-        let knownSet = Set(result)
-        for id in windowIDs where !knownSet.contains(id) {
+        // Known IDs: those that exist in windowIDs, in their MRU sequence.
+        let known = mruOrder.filter { windowSet.contains($0) }
+        let knownSet = Set(known)
+
+        // Walk z-order front to back and attach each run of unknown windows to
+        // the known window that immediately follows it — that is the nearest
+        // known window behind them, and they must be emitted just before it.
+        var unknownsInFrontOf: [CGWindowID: [CGWindowID]] = [:]
+        var run: [CGWindowID] = []
+        for id in windowIDs {
+            if knownSet.contains(id) {
+                if !run.isEmpty {
+                    unknownsInFrontOf[id] = run
+                    run = []
+                }
+            } else {
+                run.append(id)
+            }
+        }
+        // Whatever remains has no known window behind it, so it has no anchor.
+        let unanchored = run
+
+        var result: [CGWindowID] = []
+        result.reserveCapacity(windowIDs.count)
+        for id in known {
+            if let unknowns = unknownsInFrontOf[id] {
+                result.append(contentsOf: unknowns)
+            }
             result.append(id)
         }
+        result.append(contentsOf: unanchored)
         return result
+    }
+
+    /// Return `order` with the frontmost entry of `windowIDs` promoted to index 0.
+    ///
+    /// `windowIDs` is in z-order, so its first entry is the window the user is
+    /// looking at right now.  Promoting it repairs MRU entries that the
+    /// activation paths never recorded — see the call site in `enumerate`.
+    ///
+    /// - Parameters:
+    ///   - windowIDs: On-screen window IDs in z-order (index 0 = front).
+    ///   - order: The current MRU array (index 0 = most recently used).
+    ///   - cap: Maximum number of entries to retain.
+    /// - Returns: `order` unchanged when `windowIDs` is empty, otherwise `order`
+    ///   with the frontmost ID moved to the front.
+    nonisolated static func adoptingFrontmost(
+        windowIDs: [CGWindowID],
+        order: [CGWindowID],
+        cap: Int
+    ) -> [CGWindowID] {
+        guard let frontmost = windowIDs.first else { return order }
+        return movedToFront(frontmost, in: order, cap: cap)
     }
 
     /// Return a new order array with `id` moved (or inserted) at the front.
