@@ -279,8 +279,74 @@ final class SwitcherListView: NSView {
     // Weak to avoid a retain cycle: panel → cache ← listView.
     weak var previewCache: WindowPreviewCache?
 
+    // When true the selected tile's rim comes from the opal layer stack below
+    // instead of the two-tone hairline drawn in draw(_:). Pushed by the panel on
+    // each show(), like accentColor, so draw() never reads Settings.
+    var opalRimEnabled: Bool = false {
+        didSet {
+            guard opalRimEnabled != oldValue else { return }
+            if !opalRimEnabled { stopOpalRimAnimation() }
+            updateOpalRimLayout()
+            needsDisplay = true
+        }
+    }
+
     // Top-left origin so tile math matches SwitcherLayout directly.
     override var isFlipped: Bool { true }
+
+    // MARK: Opal rim layers
+
+    /// Corner radius of the selected tile's highlight, shared by the drawn
+    /// highlight and the opal rim's ring mask so the two can never diverge.
+    private static let selectionCornerRadius: CGFloat = 14
+
+    /// Animation key for the opal rim's rotation, so it can be removed on hide.
+    private static let opalRimAnimationKey = "opalRimSpin"
+
+    // Iridescent rim for the `.opal` accent. Two layers, deliberately:
+    //   opalRimContainer — frame = the selected tile, masked to a 1px rounded
+    //     rect ring. Never rotates.
+    //   opalRimGradient  — child conic gradient carrying the spectrum, inflated
+    //     past the container's diagonal so no corner of it can turn into view.
+    //     This is the layer the rotation is attached to.
+    // Masking the rotating gradient directly would spin the ring itself and make
+    // the tile's rounded corners visibly swing.
+    private let opalRimContainer = CALayer()
+    private let opalRimMask = CAShapeLayer()
+    private let opalRimGradient = CAGradientLayer()
+
+    // MARK: Init
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setUpOpalRimLayers()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setUpOpalRimLayers()
+    }
+
+    /// Build the opal rim layers once, at init. The panel that owns this view is
+    /// created at startup and never rebuilt, so neither is this layer stack —
+    /// show() only flips its visibility and moves its frame.
+    private func setUpOpalRimLayers() {
+        // The panel's NSVisualEffectView already backs this whole subtree, so
+        // this only guarantees `layer` is non-nil here in init.
+        wantsLayer = true
+
+        opalRimGradient.type = .conic
+        opalRimGradient.colors = AccentColor.opalSpectrum.map(\.cgColor)
+        opalRimGradient.startPoint = CGPoint(x: 0.5, y: 0.5)  // conic center
+        opalRimGradient.endPoint = CGPoint(x: 0.5, y: 0.0)  // angle the sweep starts from
+        opalRimContainer.addSublayer(opalRimGradient)
+
+        opalRimMask.fillRule = .evenOdd  // outer rect minus inner rect = the ring
+        opalRimMask.fillColor = NSColor.black.cgColor
+        opalRimContainer.mask = opalRimMask
+        opalRimContainer.isHidden = true
+        layer?.addSublayer(opalRimContainer)
+    }
 
     // MARK: Public API
 
@@ -306,6 +372,7 @@ final class SwitcherListView: NSView {
             effectiveTile = baseTile
         }
         needsDisplay = true
+        updateOpalRimLayout()
         if previewEnabled { requestPreviews() }
     }
 
@@ -328,10 +395,87 @@ final class SwitcherListView: NSView {
                 .insetBy(dx: -2, dy: -2))
         }
         setNeedsDisplay(titleRect)
+        // Moves layers only — the two tile rects invalidated above stay the
+        // whole redraw cost of a selection move.
+        updateOpalRimLayout()
         if previewEnabled {
             setNeedsDisplay(previewRect)
             requestPreviews()
         }
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        // bounds.width feeds tileRowOffsetX, so the rim has to follow the panel
+        // resize that show() performs before ordering the panel front.
+        updateOpalRimLayout()
+    }
+
+    // MARK: - Opal rim
+
+    /// Park the opal rim over the currently selected tile and rebuild its ring
+    /// mask. No-op for every other accent.
+    private func updateOpalRimLayout() {
+        let visible = opalRimEnabled && items.indices.contains(selectedIndex)
+        // Free for every other accent: this is called from the selection-move
+        // path, and once the rim is hidden its frame stops mattering.
+        guard visible || !opalRimContainer.isHidden else { return }
+        // Frames and visibility only; disable implicit actions so the rim never
+        // slides between tiles. The explicit rotation is the only animation.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        opalRimContainer.isHidden = !visible
+        if visible {
+            let radius = Self.selectionCornerRadius
+            let rect = SwitcherLayout.tileRect(
+                index: selectedIndex, effectiveTile: effectiveTile, offsetX: tileRowOffsetX)
+            opalRimContainer.frame = rect
+            opalRimMask.frame = opalRimContainer.bounds
+            opalRimMask.path = Self.rimRingPath(in: opalRimContainer.bounds, radius: radius)
+            // Square the gradient off past the container's diagonal so a corner
+            // of it can never rotate into the ring and expose the gradient's
+            // edge. The diagonal on its own is the tangent case — the ring's
+            // corners land exactly on the rotating square's edge at four angles
+            // — so carry a margin instead of sitting on the boundary.
+            let diagonal = (rect.width * rect.width + rect.height * rect.height).squareRoot()
+            let side = (diagonal + 2).rounded(.up)
+            opalRimGradient.bounds = CGRect(x: 0, y: 0, width: side, height: side)
+            opalRimGradient.position = CGPoint(x: rect.width / 2, y: rect.height / 2)
+        }
+        CATransaction.commit()
+    }
+
+    /// The 1px ring the opal rim is masked to: the tile's rounded outline minus
+    /// the same outline inset by one point, filled even-odd. Matches the
+    /// outermost line of the two-tone hairline it replaces.
+    private static func rimRingPath(in rect: CGRect, radius: CGFloat) -> CGPath {
+        let path = CGMutablePath()
+        path.addRoundedRect(in: rect, cornerWidth: radius, cornerHeight: radius)
+        path.addRoundedRect(
+            in: rect.insetBy(dx: 1, dy: 1), cornerWidth: radius - 1, cornerHeight: radius - 1)
+        return path
+    }
+
+    /// Start the rim's rotation. Called by the panel on show and paired with
+    /// `stopOpalRimAnimation()` on hide, so nothing ticks while the panel is
+    /// ordered out. Core Animation runs it on the render server, so the main
+    /// thread does no per-frame work.
+    func startOpalRimAnimation() {
+        guard opalRimEnabled,
+            opalRimGradient.animation(forKey: Self.opalRimAnimationKey) == nil
+        else { return }
+        let spin = CABasicAnimation(keyPath: "transform.rotation.z")
+        spin.fromValue = 0
+        spin.toValue = 2 * Double.pi
+        spin.duration = AccentColor.opalRimRotationDuration
+        spin.repeatCount = .infinity
+        spin.timingFunction = CAMediaTimingFunction(name: .linear)
+        opalRimGradient.add(spin, forKey: Self.opalRimAnimationKey)
+    }
+
+    /// Stop the rim's rotation (panel hidden, or the accent moved off opal).
+    func stopOpalRimAnimation() {
+        opalRimGradient.removeAnimation(forKey: Self.opalRimAnimationKey)
     }
 
     // MARK: Drawing
@@ -348,31 +492,36 @@ final class SwitcherListView: NSView {
                 // Accent-tinted rounded highlight — clearly shows the chosen
                 // accent colour while staying tasteful. Color is pushed by the
                 // panel before each show so this path stays pure/fast.
-                let radius: CGFloat = 14
+                let radius = Self.selectionCornerRadius
                 let highlight = NSBezierPath(roundedRect: tileRect, xRadius: radius, yRadius: radius)
                 accentColor.withAlphaComponent(AccentColor.selectionHighlightAlpha).setFill()
                 highlight.fill()
 
-                // Two-tone hairline rim over the fill. The fill alone is a
-                // source-over blend, so it disappears whenever the panel's
-                // .behindWindow material lands on the accent's own luminance;
-                // a dark line with a light line immediately inside it always
-                // leaves one of the two contrasting. Strokes straddle their path,
-                // so both are inset by half a line width to stay inside tileRect
-                // (and well within moveSelection's 2pt redraw margin).
-                let darkRim = NSBezierPath(
-                    roundedRect: tileRect.insetBy(dx: 0.5, dy: 0.5),
-                    xRadius: radius - 0.5, yRadius: radius - 0.5)
-                darkRim.lineWidth = 1
-                NSColor.black.withAlphaComponent(AccentColor.selectionRimDarkAlpha).setStroke()
-                darkRim.stroke()
+                // The opal accent supplies the rim from its rotating gradient
+                // layer instead (see updateOpalRimLayout), so the hairline is
+                // skipped rather than drawn underneath it.
+                if !opalRimEnabled {
+                    // Two-tone hairline rim over the fill. The fill alone is a
+                    // source-over blend, so it disappears whenever the panel's
+                    // .behindWindow material lands on the accent's own luminance;
+                    // a dark line with a light line immediately inside it always
+                    // leaves one of the two contrasting. Strokes straddle their path,
+                    // so both are inset by half a line width to stay inside tileRect
+                    // (and well within moveSelection's 2pt redraw margin).
+                    let darkRim = NSBezierPath(
+                        roundedRect: tileRect.insetBy(dx: 0.5, dy: 0.5),
+                        xRadius: radius - 0.5, yRadius: radius - 0.5)
+                    darkRim.lineWidth = 1
+                    NSColor.black.withAlphaComponent(AccentColor.selectionRimDarkAlpha).setStroke()
+                    darkRim.stroke()
 
-                let lightRim = NSBezierPath(
-                    roundedRect: tileRect.insetBy(dx: 1.5, dy: 1.5),
-                    xRadius: radius - 1.5, yRadius: radius - 1.5)
-                lightRim.lineWidth = 1
-                NSColor.white.withAlphaComponent(AccentColor.selectionRimLightAlpha).setStroke()
-                lightRim.stroke()
+                    let lightRim = NSBezierPath(
+                        roundedRect: tileRect.insetBy(dx: 1.5, dy: 1.5),
+                        xRadius: radius - 1.5, yRadius: radius - 1.5)
+                    lightRim.lineWidth = 1
+                    NSColor.white.withAlphaComponent(AccentColor.selectionRimLightAlpha).setStroke()
+                    lightRim.stroke()
+                }
             }
 
             let inset = (tile - iconEdge) / 2

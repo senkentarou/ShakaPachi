@@ -196,6 +196,11 @@ final class SwitcherPanel {
             totalCount: StatsStore.shared.effectiveTotalCount)
         listView.accentColor = accent
 
+        // Opal draws the selected tile's rim from a rotating conic gradient
+        // layer inside the list view rather than the two-tone hairline. The
+        // panel itself is untouched — the tint and rim below stay flat/white.
+        listView.opalRimEnabled = Settings.shared.accentColor == .opal
+
         // Patina gets a static "gloss / lustre" treatment (gradient tint,
         // diagonal specular, warm rim) to feel special. Every other accent
         // keeps the flat tint + white rim exactly as before. Wrapped in a
@@ -259,6 +264,10 @@ final class SwitcherPanel {
             previewPaneWidth: paneSize.width,
             previewPaneHeight: paneSize.height)
         panel.orderFrontRegardless()
+
+        // Started only once the panel is on screen and removed again in hide(),
+        // so the opal rim never animates while the panel is ordered out.
+        listView.startOpalRimAnimation()
     }
 
     /// Move the highlight to a different row without reloading the table.
@@ -269,6 +278,7 @@ final class SwitcherPanel {
     /// Hide the panel without destroying it (the panel is reused across sessions).
     func hide() {
         panel.orderOut(nil)
+        listView.stopOpalRimAnimation()
     }
 
     /// Force a display pass so the N1/N2 end-timestamp is taken after the

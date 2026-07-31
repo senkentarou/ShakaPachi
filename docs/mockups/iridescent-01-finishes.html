@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShakaPachi — イリデッセンス仕上げ 試作</title>
+<style>
+  :root {
+    --panel-w: 620px;
+    --radius: 24px;
+    --tile: 64px;
+    /* iridescent spectrum (pastel, low-chroma so it reads as glass not neon) */
+    --i1: #a9c9ff;
+    --i2: #b8a5ff;
+    --i3: #ffc6f0;
+    --i4: #ffe6a7;
+    --i5: #b9f5e0;
+    --hue: 0deg;
+    --strength: 1;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    color: #e9e9ef;
+  }
+
+  /* ---- fake desktop backdrop: the glass needs something real to blur ---- */
+  body {
+    background: #14141c;
+    position: relative;
+    overflow-x: hidden;
+  }
+  .desktop {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    transition: filter .3s ease;
+  }
+  .desktop::before {
+    content: "";
+    position: absolute;
+    inset: -10%;
+    background:
+      radial-gradient(50% 55% at 18% 22%, #3b6ea5 0%, transparent 60%),
+      radial-gradient(45% 50% at 82% 18%, #8c4a7a 0%, transparent 62%),
+      radial-gradient(60% 60% at 70% 85%, #2f6b5e 0%, transparent 65%),
+      radial-gradient(40% 40% at 30% 80%, #a06a3c 0%, transparent 60%),
+      linear-gradient(160deg, #171722 0%, #0e0e16 100%);
+  }
+  /* window-ish rectangles so the blur has edges to smear — matters a lot for
+     judging behind-window blur; a flat gradient flatters glass unfairly */
+  .desktop::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(90deg, transparent 6%, rgba(255,255,255,.10) 6%, rgba(255,255,255,.10) 34%, transparent 34%),
+      linear-gradient(0deg, transparent 18%, rgba(0,0,0,.28) 18%, rgba(0,0,0,.28) 74%, transparent 74%),
+      linear-gradient(90deg, transparent 58%, rgba(255,255,255,.07) 58%, rgba(255,255,255,.07) 92%, transparent 92%);
+    mix-blend-mode: overlay;
+  }
+  body.bg-light .desktop::before {
+    background:
+      radial-gradient(50% 55% at 18% 22%, #cfe2ff 0%, transparent 60%),
+      radial-gradient(45% 50% at 82% 18%, #ffd9ee 0%, transparent 62%),
+      radial-gradient(60% 60% at 70% 85%, #d6f2e6 0%, transparent 65%),
+      linear-gradient(160deg, #f2f2f6 0%, #dcdce6 100%);
+  }
+  body.bg-plain .desktop::before { background: #2a2a34; }
+  body.bg-plain .desktop::after { opacity: 0; }
+
+  /* ---- page chrome ---- */
+  .page {
+    position: relative;
+    z-index: 1;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 40px 24px 96px;
+  }
+  header h1 {
+    font-size: 20px;
+    font-weight: 650;
+    margin: 0 0 6px;
+    letter-spacing: .02em;
+  }
+  header p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.7;
+    color: rgba(233,233,239,.62);
+  }
+  body.bg-light header p { color: rgba(20,20,28,.68); }
+  body.bg-light header h1,
+  body.bg-light .controls,
+  body.bg-light .case-note { color: #14141c; }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px 26px;
+    align-items: center;
+    margin: 22px 0 8px;
+    padding: 14px 18px;
+    border-radius: 14px;
+    background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.12);
+    backdrop-filter: blur(20px);
+    font-size: 12px;
+  }
+  body.bg-light .controls {
+    background: rgba(255,255,255,.55);
+    border-color: rgba(0,0,0,.10);
+  }
+  .controls label { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .controls input[type=range] { width: 120px; accent-color: #b8a5ff; }
+  .controls button {
+    font: inherit;
+    padding: 5px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,.18);
+    background: rgba(255,255,255,.08);
+    color: inherit;
+    cursor: pointer;
+  }
+  .controls button.on { background: rgba(184,165,255,.30); border-color: rgba(184,165,255,.6); }
+  body.bg-light .controls button { border-color: rgba(0,0,0,.15); background: rgba(0,0,0,.05); }
+
+  /* ---- case blocks ---- */
+  .case { margin: 46px 0 0; }
+  .case-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+  }
+  .case-head h2 { font-size: 15px; margin: 0; font-weight: 640; }
+  .badge {
+    font-size: 10.5px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    letter-spacing: .04em;
+  }
+  .badge.ok   { background: rgba(120,220,170,.20); color: #8ff0c4; border: 1px solid rgba(120,220,170,.35); }
+  .badge.no   { background: rgba(255,120,140,.16); color: #ff9fb0; border: 1px solid rgba(255,120,140,.32); }
+  .badge.now  { background: rgba(255,255,255,.10); color: rgba(255,255,255,.66); border: 1px solid rgba(255,255,255,.18); }
+  body.bg-light .badge.now { color: rgba(0,0,0,.55); border-color: rgba(0,0,0,.18); background: rgba(0,0,0,.05); }
+  .case-note {
+    font-size: 12px;
+    line-height: 1.75;
+    color: rgba(233,233,239,.58);
+    margin: 0 0 18px;
+    max-width: 68ch;
+  }
+  body.bg-light .case-note { color: rgba(20,20,28,.62); }
+  .case-note code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11.5px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(255,255,255,.10);
+  }
+  body.bg-light .case-note code { background: rgba(0,0,0,.07); }
+
+  /* ================= THE PANEL ================= */
+  .stage { display: flex; justify-content: center; padding: 8px 0 4px; }
+
+  .panel {
+    position: relative;
+    width: var(--panel-w);
+    border-radius: var(--radius);
+    padding: 22px 22px 20px;
+    isolation: isolate;
+    overflow: hidden;
+    /* the frosted glass — NSVisualEffectView .popover / .behindWindow */
+    backdrop-filter: blur(34px) saturate(1.5);
+    -webkit-backdrop-filter: blur(34px) saturate(1.5);
+    background: rgba(255,255,255,.055);
+    border: 1px solid rgba(255,255,255,.18);
+    box-shadow: 0 26px 70px rgba(0,0,0,.46), 0 2px 8px rgba(0,0,0,.30);
+  }
+  body.bg-light .panel { background: rgba(255,255,255,.30); border-color: rgba(255,255,255,.55); }
+
+  /* layer 3: sheen — always on today (SwitcherPanel.swift:109-122) */
+  .panel::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    background: linear-gradient(180deg,
+      rgba(255,255,255,.14) 0%,
+      rgba(255,255,255,.04) 40%,
+      rgba(255,255,255,0)   75%);
+  }
+
+  .layer { position: absolute; inset: 0; pointer-events: none; }
+
+  /* ---- current: パール (flat accent tint, α0.14) ---- */
+  .pearl .tint { z-index: 1; background: rgba(232,235,245,.14); }
+
+  /* ---- current: パティナ (PR #38) ---- */
+  .patina .tint {
+    z-index: 1;
+    background: linear-gradient(180deg,
+      rgba(243,214,84,.20) 0%,
+      rgba(214,180,18,.10) 100%);
+  }
+  .patina .spec {
+    z-index: 2;
+    background: linear-gradient(135deg,
+      rgba(255,255,255,.22) 0%,
+      rgba(255,255,255,.06) 25%,
+      rgba(255,255,255,0)   50%);
+  }
+
+  /* ---- 案A / 案B: iridescent — conic ×2 + soft-light ---- */
+  .irid .conic-a {
+    z-index: 1;
+    background: conic-gradient(from calc(210deg + var(--hue)) at 62% 28%,
+      var(--i1), var(--i2), var(--i3), var(--i4), var(--i5), var(--i1));
+    mix-blend-mode: soft-light;
+    opacity: calc(.92 * var(--strength));
+    filter: blur(14px);
+  }
+  .irid .conic-b {
+    z-index: 2;
+    background: conic-gradient(from calc(-40deg - var(--hue) * .6) at 24% 78%,
+      var(--i4), var(--i5), var(--i1), var(--i3), var(--i2), var(--i4));
+    mix-blend-mode: overlay;
+    opacity: calc(.46 * var(--strength));
+    filter: blur(20px);
+  }
+  /* the marbling: a third, tightly-blurred pass breaks the conic's
+     mechanical symmetry into something that reads as veined stone */
+  .irid .veil {
+    z-index: 2;
+    background:
+      radial-gradient(58% 44% at 30% 34%, rgba(255,255,255,.20), transparent 70%),
+      radial-gradient(46% 60% at 78% 66%, rgba(180,220,255,.20), transparent 72%),
+      radial-gradient(40% 40% at 54% 88%, rgba(255,205,240,.18), transparent 70%);
+    mix-blend-mode: soft-light;
+    opacity: calc(.9 * var(--strength));
+  }
+  .irid { border-color: rgba(255,255,255,.26); }
+
+  /* ---- 案C: rim only ---- */
+  /* (no panel-level layers; see .tile.sel.rainbow below) */
+
+  /* ---- 参考: 本物のシェーダ相当（時間で流れる） ---- */
+  .flow .conic-a { animation: spinA 14s linear infinite; }
+  .flow .conic-b { animation: spinB 22s linear infinite; }
+  .flow .veil    { animation: drift 11s ease-in-out infinite alternate; }
+  @keyframes spinA { to { --hue: 360deg; } }
+  @keyframes spinB { to { --hue: 360deg; } }
+  @keyframes drift {
+    from { transform: translate3d(-3%, -2%, 0) scale(1.06); }
+    to   { transform: translate3d(4%, 3%, 0) scale(1.14); }
+  }
+  /* @property lets the conic angle actually interpolate (Chrome/Safari 16.4+) */
+  @property --hue { syntax: '<angle>'; initial-value: 0deg; inherits: true; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flow .conic-a, .flow .conic-b, .flow .veil { animation: none; }
+  }
+
+  /* ---- panel content: tiles / title / preview ---- */
+  .content { position: relative; z-index: 4; }
+  .tiles {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .tile {
+    width: var(--tile);
+    height: var(--tile);
+    border-radius: 13px;
+    display: grid;
+    place-items: center;
+    font-size: 32px;
+    line-height: 1;
+    position: relative;
+    filter: drop-shadow(0 2px 5px rgba(0,0,0,.34));
+  }
+  .tile.sel::before {
+    content: "";
+    position: absolute;
+    inset: -5px;
+    border-radius: 17px;
+    background: rgba(232,235,245,.30);
+    border-top: 1px solid rgba(255,255,255,.55);
+    border-bottom: 1px solid rgba(0,0,0,.28);
+    z-index: -1;
+  }
+  .patina .tile.sel::before { background: rgba(243,214,84,.30); }
+  .irid  .tile.sel::before {
+    background: rgba(255,255,255,.22);
+    border-top-color: rgba(255,255,255,.66);
+  }
+
+  /* 案C: rainbow rim on the selected tile only */
+  .tile.sel.rainbow::before {
+    background: rgba(255,255,255,.14);
+    border: none;
+  }
+  .tile.sel.rainbow::after {
+    content: "";
+    position: absolute;
+    inset: -5px;
+    border-radius: 17px;
+    padding: 1.6px;
+    background: conic-gradient(from calc(120deg + var(--hue)),
+      var(--i1), var(--i2), var(--i3), var(--i4), var(--i5), var(--i1));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    z-index: -1;
+  }
+
+  .ptitle {
+    text-align: center;
+    font-size: 12.5px;
+    letter-spacing: .01em;
+    color: rgba(255,255,255,.90);
+    text-shadow: 0 1px 3px rgba(0,0,0,.55);
+    margin-bottom: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  body.bg-light .ptitle { color: rgba(255,255,255,.96); }
+
+  .shot {
+    width: 320px;
+    height: 200px;
+    margin: 0 auto;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,.20);
+    overflow: hidden;
+    position: relative;
+    background: #1b1b26;
+    box-shadow: 0 8px 22px rgba(0,0,0,.40);
+  }
+  .shot::before {
+    content: "";
+    position: absolute; inset: 0;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.13) 0 22px, transparent 22px),
+      repeating-linear-gradient(180deg, transparent 0 34px, rgba(255,255,255,.045) 34px 35px),
+      linear-gradient(135deg, #26263a, #171722);
+  }
+  .shot::after {
+    content: "";
+    position: absolute;
+    left: 10px; top: 8px;
+    width: 42px; height: 7px;
+    border-radius: 99px;
+    background: rgba(255,255,255,.35);
+    box-shadow: 52px 0 0 rgba(255,255,255,.18), 74px 0 0 rgba(255,255,255,.18);
+  }
+
+  footer {
+    margin-top: 56px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255,255,255,.12);
+    font-size: 12px;
+    line-height: 1.85;
+    color: rgba(233,233,239,.52);
+  }
+  body.bg-light footer { color: rgba(20,20,28,.60); border-top-color: rgba(0,0,0,.12); }
+  footer b { color: rgba(233,233,239,.80); font-weight: 620; }
+  body.bg-light footer b { color: #14141c; }
+</style>
+</head>
+<body class="bg-dark">
+<div class="desktop"></div>
+
+<div class="page">
+  <header>
+    <h1>ShakaPachi — イリデッセンス（玉虫色）仕上げ 試作</h1>
+    <p>
+      スイッチャーパネルに虹色マーブル表現を入れた場合の見え方。背景はデスクトップ代わりのダミーで、
+      パネルは実物と同じ構成（角丸24 / アイコンタイル / ウィンドウタイトル / 320×200 プレビュー）にしてあります。
+      <br>案A・案Bのパネル上でマウスを動かすと色相がずれます（＝実装時の「表示位置で色が変わる」挙動）。
+    </p>
+  </header>
+
+  <div class="controls">
+    <label>強度 <input type="range" id="strength" min="0" max="150" value="100"></label>
+    <label>色相 <input type="range" id="hue" min="0" max="360" value="0"></label>
+    <label>背景
+      <button data-bg="bg-dark" class="on">暗</button>
+      <button data-bg="bg-light">明</button>
+      <button data-bg="bg-plain">無地</button>
+    </label>
+    <label><input type="checkbox" id="follow" checked> マウス追従</label>
+  </div>
+
+  <!-- ===== 現状 ===== -->
+  <section class="case">
+    <div class="case-head">
+      <h2>現状 ①：パール（既定）</h2>
+      <span class="badge now">実装済み</span>
+    </div>
+    <p class="case-note">比較用。フラットなアクセント塗り α0.14 ＋ 上から下への sheen だけ。</p>
+    <div class="stage">
+      <div class="panel pearl">
+        <div class="layer tint"></div>
+        <div class="content"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="case">
+    <div class="case-head">
+      <h2>現状 ②：パティナ</h2>
+      <span class="badge now">実装済み</span>
+    </div>
+    <p class="case-note">比較用。縦の金属ランプ ＋ 斜めのスペキュラ。PR #38 で「静的な光沢・アニメーションなし」を選択済み。</p>
+    <div class="stage">
+      <div class="panel patina">
+        <div class="layer tint"></div>
+        <div class="layer spec"></div>
+        <div class="content"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 案A ===== -->
+  <section class="case">
+    <div class="case-head">
+      <h2>案A：イリデッセンス（パネル全体・静的）</h2>
+      <span class="badge ok">macOS 13 で可</span>
+    </div>
+    <p class="case-note">
+      <code>conic-gradient</code> 2枚を角度・中心・分布を変えて重ね、<code>soft-light</code> / <code>overlay</code> で合成。
+      さらにぼかした放射グラデを1枚かぶせて円錐の機械的な対称性を崩し、石の脈のような不均一さを出しています。
+      Swift では <code>CAGradientLayer.type = .conic</code>（macOS 10.14+）＋ <code>compositingFilter = "softLightBlendMode"</code> で同じ構成が組めます。
+      色は差し替えるだけなので<strong>表示ごとに1回描画</strong>で済み、パティナと同じコスト帯・50ms 予算を維持できます。
+    </p>
+    <div class="stage">
+      <div class="panel irid" data-follow>
+        <div class="layer conic-a"></div>
+        <div class="layer conic-b"></div>
+        <div class="layer veil"></div>
+        <div class="content"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 案B ===== -->
+  <section class="case">
+    <div class="case-head">
+      <h2>案B：案A ＋ 選択タイルも虹色リム</h2>
+      <span class="badge ok">macOS 13 で可</span>
+    </div>
+    <p class="case-note">
+      案Aに、選択中タイルの縁を円錐グラデのリムにしたもの。選択が動くたびに角度をずらせば、
+      連続再描画なしで「表面が動いている」感じが出ます（既存の <code>moveSelection</code> のタイミングに乗る）。
+    </p>
+    <div class="stage">
+      <div class="panel irid" data-follow>
+        <div class="layer conic-a"></div>
+        <div class="layer conic-b"></div>
+        <div class="layer veil"></div>
+        <div class="content" data-rainbow></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 案C ===== -->
+  <section class="case">
+    <div class="case-head">
+      <h2>案C：選択タイルの縁だけ虹色（最小案）</h2>
+      <span class="badge ok">macOS 13 で可</span>
+    </div>
+    <p class="case-note">
+      パネルの質感は現状のまま、選択リムだけ虹色に。触るのは描画1箇所で、既存の外観への影響がほぼゼロ。
+    </p>
+    <div class="stage">
+      <div class="panel pearl">
+        <div class="layer tint"></div>
+        <div class="content" data-rainbow></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 参考 ===== -->
+  <section class="case">
+    <div class="case-head">
+      <h2>参考：本物の「流れるマーブル」</h2>
+      <span class="badge no">macOS 13 では不可</span>
+    </div>
+    <p class="case-note">
+      AI ボタンでよく見るやつ。時間でマーブルが流れます。これを出すには <code>MeshGradient</code>（macOS 15+）か
+      Metal シェーダ（<code>.colorEffect</code> は macOS 14+）が要り、<strong>最低対応 macOS 13 のままでは届きません</strong>。
+      加えてパネルは修飾キーを押している間しか出ない＝表示は通常1秒未満なので、
+      アニメーションの旨味自体が薄く、既存の「静的光沢」方針とも噛み合いません。
+    </p>
+    <div class="stage">
+      <div class="panel irid flow">
+        <div class="layer conic-a"></div>
+        <div class="layer conic-b"></div>
+        <div class="layer veil"></div>
+        <div class="content"></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <b>呼び名の整理</b><br>
+    角度で虹色が変わる質感 ＝ <b>イリデッセンス / iridescence</b>（日本語で玉虫色。物理的には薄膜干渉）。
+    色が混ざって流れるやつ ＝ <b>メッシュグラデーション</b> / <b>オーロラグラデーション</b>。
+    ボタンの縁が虹色に回るやつ ＝ <b>conic（円錐）グラデーション</b>。
+    箔っぽいキラキラ ＝ <b>ホログラフィック</b>。ガラスが透過光で色を分けるのは <b>ダイクロイック</b>。
+  </footer>
+</div>
+
+<script>
+  const root = document.documentElement;
+  const strength = document.getElementById('strength');
+  const hue = document.getElementById('hue');
+  const follow = document.getElementById('follow');
+
+  strength.addEventListener('input', () => {
+    root.style.setProperty('--strength', strength.value / 100);
+  });
+  hue.addEventListener('input', () => {
+    root.style.setProperty('--hue', hue.value + 'deg');
+  });
+
+  document.querySelectorAll('.controls button[data-bg]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.body.className = btn.dataset.bg;
+      document.querySelectorAll('.controls button[data-bg]')
+        .forEach(b => b.classList.toggle('on', b === btn));
+    });
+  });
+
+  // Panel content is identical everywhere, so build it once and clone —
+  // keeps the markup above readable as a list of *finishes*, not of panels.
+  const APPS = ['🧭', '📮', '🎧', '🗒️', '⌨️', '📦'];
+  const SELECTED = 2;
+  document.querySelectorAll('.content').forEach(content => {
+    const rainbow = content.hasAttribute('data-rainbow');
+    const tiles = document.createElement('div');
+    tiles.className = 'tiles';
+    APPS.forEach((glyph, i) => {
+      const t = document.createElement('div');
+      t.className = 'tile' + (i === SELECTED ? ' sel' : '') + (i === SELECTED && rainbow ? ' rainbow' : '');
+      t.textContent = glyph;
+      tiles.appendChild(t);
+    });
+    const title = document.createElement('div');
+    title.className = 'ptitle';
+    title.textContent = 'ShakaPachi — 最近AIボタンとかで見る虹色のような表現';
+    const shot = document.createElement('div');
+    shot.className = 'shot';
+    content.append(tiles, title, shot);
+  });
+
+  // Angle-dependent hue shift. Thin-film interference varies with viewing
+  // angle, not with time — so the honest analogue of "moving your head" is
+  // pointer position, which is also what the real panel gets for free
+  // (it opens centred on the screen under the mouse).
+  document.querySelectorAll('.panel[data-follow]').forEach(panel => {
+    panel.addEventListener('pointermove', e => {
+      if (!follow.checked) return;
+      const r = panel.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width;
+      const y = (e.clientY - r.top) / r.height;
+      panel.style.setProperty('--hue', Math.round(x * 260 + y * 100) + 'deg');
+    });
+    panel.addEventListener('pointerleave', () => {
+      panel.style.removeProperty('--hue');
+    });
+  });
+</script>
+</body>
+</html>

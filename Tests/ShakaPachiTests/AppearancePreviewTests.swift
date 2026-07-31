@@ -3,7 +3,7 @@
 // its light > dark ordering within valid alpha bounds, tint/selection colors
 // carry the correct alpha, selection shares the accent hue, and
 // backgroundBaseColor produces distinct light/dark values and respects
-// Theme.system.
+// Theme.system, and the opal rim's spectrum closes its loop and stays opaque.
 
 import XCTest
 
@@ -46,6 +46,37 @@ final class AppearancePreviewTests: XCTestCase {
             XCTAssertGreaterThan(alpha, 0, "A rim alpha of 0 would draw nothing")
             XCTAssertLessThanOrEqual(alpha, 1, "Alpha must stay within the 0...1 range")
         }
+    }
+
+    // MARK: - Opal rim constants
+
+    func testOpalSpectrum_closesTheLoop() throws {
+        let first = try XCTUnwrap(AccentColor.opalSpectrum.first?.usingColorSpace(.sRGB))
+        let last = try XCTUnwrap(AccentColor.opalSpectrum.last?.usingColorSpace(.sRGB))
+        let seam = "The conic sweep wraps, so the last stop must repeat the first or the seam shows"
+        XCTAssertEqual(first.redComponent, last.redComponent, accuracy: 0.001, seam)
+        XCTAssertEqual(first.greenComponent, last.greenComponent, accuracy: 0.001, seam)
+        XCTAssertEqual(first.blueComponent, last.blueComponent, accuracy: 0.001, seam)
+    }
+
+    func testOpalSpectrum_stopsAreSRGBAndOpaque() throws {
+        XCTAssertGreaterThan(
+            AccentColor.opalSpectrum.count, 2,
+            "A conic sweep needs more than one transition to read as iridescent")
+        for stop in AccentColor.opalSpectrum {
+            let srgb = try XCTUnwrap(
+                stop.usingColorSpace(.sRGB), "Every opal stop must be sRGB-representable")
+            XCTAssertEqual(
+                srgb.alphaComponent, 1.0, accuracy: 0.001,
+                "Opal stops stay opaque — the rim drops the two-tone hairline, so it cannot lean on the backdrop for contrast"
+            )
+        }
+    }
+
+    func testOpalRimRotationDuration_isPositive() {
+        XCTAssertGreaterThan(
+            AccentColor.opalRimRotationDuration, 0,
+            "A non-positive period makes the rim's rotation animation degenerate")
     }
 
     // MARK: - tintColor alpha
