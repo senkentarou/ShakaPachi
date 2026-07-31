@@ -128,6 +128,7 @@ public enum AccentColor: String, CaseIterable, Sendable {
     case sand
     case plum
     case patina
+    case opal
 
     /// Human-readable label for UI display.
     public var displayName: String {
@@ -139,6 +140,7 @@ public enum AccentColor: String, CaseIterable, Sendable {
         case .sand: return NSLocalizedString("サンド", comment: "Accent color: sand")
         case .plum: return NSLocalizedString("プラム", comment: "Accent color: plum")
         case .patina: return NSLocalizedString("パティナ", comment: "Accent color: patina (evolves with usage count)")
+        case .opal: return NSLocalizedString("オパール", comment: "Accent color: opal (iridescent rotating rim)")
         }
     }
 
@@ -164,6 +166,29 @@ public enum AccentColor: String, CaseIterable, Sendable {
     /// Alpha for the dark half of the selected tile's two-tone hairline rim.
     /// See `selectionRimLightAlpha` for why the rim carries both tones.
     public static let selectionRimDarkAlpha: CGFloat = 0.28
+
+    /// The iridescent (玉虫色) spectrum swept around the selected tile's rim by
+    /// the `.opal` accent. Six stops with the first repeated as the last so the
+    /// conic sweep closes on itself and the seam never becomes visible as it
+    /// rotates. Opaque pastels rather than translucent tones: the rim replaces
+    /// the two-tone hairline, so it cannot lean on a light/dark pair to survive
+    /// an arbitrary backdrop luminance (see `selectionRimLightAlpha`) and has to
+    /// carry its own contrast. Shared by SwitcherListView (CAGradientLayer) and
+    /// the Settings appearance preview (SwiftUI AngularGradient) so the two
+    /// never drift.
+    public static let opalSpectrum: [NSColor] = [
+        NSColor(srgbRed: 0.663, green: 0.788, blue: 1.000, alpha: 1.0),  // #A9C9FF pale blue
+        NSColor(srgbRed: 0.722, green: 0.647, blue: 1.000, alpha: 1.0),  // #B8A5FF periwinkle
+        NSColor(srgbRed: 1.000, green: 0.776, blue: 0.941, alpha: 1.0),  // #FFC6F0 pink
+        NSColor(srgbRed: 1.000, green: 0.902, blue: 0.655, alpha: 1.0),  // #FFE6A7 warm cream
+        NSColor(srgbRed: 0.725, green: 0.961, blue: 0.878, alpha: 1.0),  // #B9F5E0 mint
+        NSColor(srgbRed: 0.663, green: 0.788, blue: 1.000, alpha: 1.0),  // #A9C9FF — repeat, closes the loop
+    ]
+
+    /// Seconds for one full turn of the `.opal` rim spectrum. Shared by
+    /// SwitcherListView (CABasicAnimation) and the Settings appearance preview
+    /// (SwiftUI `.linear(duration:).repeatForever`) so the two never drift.
+    public static let opalRimRotationDuration: CFTimeInterval = 7.0
 
     /// Soft green used by the contribution heatmap cells and legend swatches.
     /// Matches the tray icon soft palette. Kept here alongside the other shared
@@ -197,6 +222,11 @@ public enum AccentColor: String, CaseIterable, Sendable {
         case .patina:
             // Base (unused) tone; the live color is resolved via resolvedColor(totalCount:).
             return AccentColor.patinaColor(forTotalCount: 0)
+        case .opal:
+            // Pale pearlescent blue-white. The accent's character lives in the
+            // rotating rim (see `opalSpectrum`); the panel tint and selection
+            // fill stay near-neutral so they don't compete with it.
+            return NSColor(srgbRed: 0.79, green: 0.83, blue: 0.94, alpha: 1.0)
         }
     }
 

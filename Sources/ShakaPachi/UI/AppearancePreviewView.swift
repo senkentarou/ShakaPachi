@@ -68,15 +68,44 @@ struct AppearancePreviewView: View {
     // Used to resolve Theme.system to light or dark base color.
     @Environment(\.colorScheme) private var colorScheme
 
+    /// Drives the `.opal` rim rotation, one full turn per
+    /// `AccentColor.opalRimRotationDuration` — the same period as the real panel.
+    @State private var opalAngle: Double = 0
+
     var body: some View {
         if accent == .patina {
             patinaPreview
+        } else if accent == .opal {
+            opalPreview
         } else {
             standardPreview
         }
     }
 
-    private var standardPreview: some View {
+    private var standardPreview: some View { panelPreview(opalRim: false) }
+
+    /// Opal preview: the standard panel mock with the selected tile's rim
+    /// replaced by the rotating iridescent ring, so the settings screen shows
+    /// the motion the real panel has rather than a still frame of it.
+    private var opalPreview: some View {
+        panelPreview(opalRim: true)
+            .onAppear {
+                // Reset first: on a second appearance the angle is already at
+                // 360, and animating a value to itself starts nothing.
+                opalAngle = 0
+                withAnimation(
+                    .linear(duration: AccentColor.opalRimRotationDuration)
+                        .repeatForever(autoreverses: false)
+                ) {
+                    opalAngle = 360
+                }
+            }
+    }
+
+    /// The panel mock shared by every non-patina accent. `opalRim` swaps the
+    /// selected tile's two-tone hairline for the `.opal` accent's rotating
+    /// iridescent ring; everything else renders identically for all accents.
+    private func panelPreview(opalRim: Bool) -> some View {
         let systemIsDark = colorScheme == .dark
         let base = AppearancePreview.backgroundBaseColor(theme: theme, systemIsDark: systemIsDark)
         let tint = AppearancePreview.tintColor(accent: accent, totalCount: totalCount)
@@ -116,7 +145,9 @@ struct AppearancePreviewView: View {
             VStack(spacing: 6) {
                 HStack(spacing: 8) {
                     ForEach(0..<3, id: \.self) { index in
-                        TileView(isSelected: index == 1, selectionColor: selection, scale: scale)
+                        TileView(
+                            isSelected: index == 1, selectionColor: selection, scale: scale,
+                            opalRim: opalRim, opalAngle: opalAngle)
                     }
                 }
                 Text("ウィンドウ名")
@@ -240,6 +271,12 @@ private struct TileView: View {
     let selectionColor: NSColor
     /// Scale factor derived from the user's icon-size setting (1.0 = 60pt default).
     var scale: CGFloat = 1.0
+    /// When true the rim is the `.opal` accent's rotating iridescent ring
+    /// instead of the two-tone hairline every other accent uses.
+    var opalRim: Bool = false
+    /// Current rotation of the opal rim in degrees, driven by the parent so the
+    /// preview keeps a single clock.
+    var opalAngle: Double = 0
 
     var body: some View {
         let tileEdge = 44 * scale
@@ -249,13 +286,32 @@ private struct TileView: View {
                 // Highlight fill matching SwitcherListView's selection draw path.
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .fill(Color(nsColor: selectionColor))
-                // Two-tone hairline rim, same alphas and stacking order as the
-                // real panel: dark line on the tile edge, light line just inside.
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .strokeBorder(Color.black.opacity(AccentColor.selectionRimDarkAlpha), lineWidth: 1)
-                RoundedRectangle(cornerRadius: cornerRadius - 1)
-                    .strokeBorder(Color.white.opacity(AccentColor.selectionRimLightAlpha), lineWidth: 1)
-                    .padding(1)
+                if opalRim {
+                    // SwiftUI counterpart of SwitcherListView's masked conic
+                    // layer: the gradient rotates, the ring it is masked to does
+                    // not. Oversized before the rotation so a corner of the
+                    // gradient can never turn into the ring, then framed back to
+                    // the tile so the mask lines up.
+                    AngularGradient(
+                        colors: AccentColor.opalSpectrum.map { Color(nsColor: $0) },
+                        center: .center
+                    )
+                    .frame(width: tileEdge * 1.5, height: tileEdge * 1.5)
+                    .rotationEffect(.degrees(opalAngle))
+                    .frame(width: tileEdge, height: tileEdge)
+                    .mask(
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .strokeBorder(Color.black, lineWidth: 1)
+                    )
+                } else {
+                    // Two-tone hairline rim, same alphas and stacking order as the
+                    // real panel: dark line on the tile edge, light line just inside.
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .strokeBorder(Color.black.opacity(AccentColor.selectionRimDarkAlpha), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: cornerRadius - 1)
+                        .strokeBorder(Color.white.opacity(AccentColor.selectionRimLightAlpha), lineWidth: 1)
+                        .padding(1)
+                }
             }
             // Placeholder icon — uses a semantic color so it stays legible on
             // both light and dark base colors without forcing a colorScheme override.
