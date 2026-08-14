@@ -1,7 +1,9 @@
 // SettingsWindow.swift
-// Settings window: NSWindow + NSTabView with five tabs.
-// SwiftUI is embedded via NSHostingView for the control-heavy tabs — the
-// settings screen has no speed requirements so embedding SwiftUI is fine.
+// Settings window: a borderless-titlebar NSWindow hosting a single SwiftUI
+// root view (SettingsRootView). The tab switcher is a custom icon tab bar
+// (SettingsTabBar, defined in SettingsChrome.swift) rather than
+// NSTabViewController, so the header strip can share the card/row visual
+// language the rest of the window uses.
 //
 // Activation policy: switches to .regular on show and back to .accessory on
 // close — but ONLY if the onboarding window is not also open.
@@ -77,64 +79,24 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private func makeWindow() -> NSWindow {
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 560, height: 600),
-            styleMask: [.titled, .closable, .resizable],
+            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         win.title = NSLocalizedString("ShakaPachi 設定", comment: "Settings window title")
         win.isReleasedWhenClosed = false
-        win.minSize = NSSize(width: 460, height: 420)
+        // The content view extends under the title bar (fullSizeContentView) and
+        // the tab bar's surface colour is drawn transparently through it, so the
+        // header strip and the title bar read as one continuous band.
+        win.titlebarAppearsTransparent = true
+        win.minSize = NSSize(width: 520, height: 460)
         return win
     }
 
-    /// Wraps the tab controller with a small top inset so the segmented tab
-    /// control isn't flush against the title bar (user request).
+    /// The window's whole content is one SwiftUI tree (tab bar + page), so this
+    /// just hosts `SettingsRootView` — no NSTabViewController, no inset wrapper.
     private func makeSettingsRootController() -> NSViewController {
-        let tvc = makeTabViewController()
-        let root = NSViewController()
-        root.view = NSView()
-        root.addChild(tvc)
-        tvc.view.translatesAutoresizingMaskIntoConstraints = false
-        root.view.addSubview(tvc.view)
-        NSLayoutConstraint.activate([
-            tvc.view.topAnchor.constraint(equalTo: root.view.topAnchor, constant: 12),
-            tvc.view.leadingAnchor.constraint(equalTo: root.view.leadingAnchor),
-            tvc.view.trailingAnchor.constraint(equalTo: root.view.trailingAnchor),
-            tvc.view.bottomAnchor.constraint(equalTo: root.view.bottomAnchor),
-        ])
-        return root
-    }
-
-    private func makeTabViewController() -> NSTabViewController {
-        let tvc = NSTabViewController()
-        // Modern centered segmented control at the top (like System Settings),
-        // instead of NSTabView's dated `.topTabsBezelBorder` which drew a bezel
-        // box and looked cramped/broken flush against the title bar regardless of
-        // inset. This style has no bezel and manages its own spacing.
-        tvc.tabStyle = .segmentedControlOnTop
-
-        // Give every tab the same min frame so switching tabs never resizes the
-        // window (NSTabViewController otherwise fits each tab's own content).
-        func addTab<V: View>(_ label: String, _ view: V) {
-            let sized = view.frame(
-                minWidth: 520, maxWidth: .infinity,
-                minHeight: 360, maxHeight: .infinity)
-            let item = NSTabViewItem(viewController: NSHostingController(rootView: sized))
-            // NSTabViewItem.label is verbatim AppKit (no LocalizedStringKey), so
-            // localize it explicitly. Keys live in Localizable.strings.
-            item.label = NSLocalizedString(label, comment: "Settings tab label")
-            tvc.addTabViewItem(item)
-        }
-
-        addTab("動作", BehaviorSettingsView())
-        addTab("外観", AppearanceSettingsView())
-        addTab("状態", StatusSettingsView())
-        addTab("統計", StatsSettingsView())
-        addTab("クレジット", AboutSettingsView())
-        #if DEBUG
-            addTab("開発者", DeveloperSettingsView())
-        #endif
-        return tvc
+        NSHostingController(rootView: SettingsRootView())
     }
 }
 
@@ -146,6 +108,61 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 // which persists the value, posts `.settingsDidChange`, and fires
 // `objectWillChange` so the view re-renders. One store, one write path.
 
+// ─── Root ─────────────────────────────────────────────────────────────────────
+
+/// Root of the settings window's SwiftUI tree: the icon tab bar over the
+/// selected tab's scrolling page of cards. A plain `switch` on `selection`
+/// stands in for NSTabViewController's tab items.
+struct SettingsRootView: View {
+
+    @State private var selection: Int = 0
+
+    private static var tabs: [SettingsTabBar.Item] {
+        var items = [
+            SettingsTabBar.Item(id: 0, title: "動作", symbol: "gearshape"),
+            SettingsTabBar.Item(id: 1, title: "外観", symbol: "paintpalette"),
+            SettingsTabBar.Item(id: 2, title: "状態", symbol: "checkmark.shield"),
+            SettingsTabBar.Item(id: 3, title: "統計", symbol: "chart.bar"),
+            SettingsTabBar.Item(id: 4, title: "クレジット", symbol: "info.circle"),
+        ]
+        #if DEBUG
+            items.append(SettingsTabBar.Item(id: 5, title: "開発者", symbol: "hammer"))
+        #endif
+        return items
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            SettingsTabBar(items: Self.tabs, selection: $selection)
+            content
+        }
+        .frame(minWidth: 520, maxWidth: .infinity, minHeight: 400, maxHeight: .infinity)
+        .background(SettingsChrome.background)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch selection {
+        case 0:
+            BehaviorSettingsView()
+        case 1:
+            AppearanceSettingsView()
+        case 2:
+            StatusSettingsView()
+        case 3:
+            StatsSettingsView()
+        case 4:
+            AboutSettingsView()
+        #if DEBUG
+            case 5:
+                DeveloperSettingsView()
+        #endif
+        default:
+            EmptyView()
+        }
+    }
+}
+
 // ─── Behavior tab ─────────────────────────────────────────────────────────────
 
 struct BehaviorSettingsView: View {
@@ -153,27 +170,28 @@ struct BehaviorSettingsView: View {
     @ObservedObject private var settings = Settings.shared
 
     var body: some View {
-        Form {
-            Section {
-                Picker(
-                    "言語",
-                    selection: Binding(
-                        get: { settings.appLanguage },
-                        set: { Settings.shared.appLanguage = $0 }
-                    )
-                ) {
-                    ForEach(AppLanguage.allCases, id: \.self) { lang in
-                        Text(lang.displayName).tag(lang)
+        SettingsPage {
+            SettingsCard {
+                SettingsRow(title: "言語", caption: "メニューやボタンの表示に使う言語") {
+                    Picker(
+                        "",
+                        selection: Binding(
+                            get: { settings.appLanguage },
+                            set: { Settings.shared.appLanguage = $0 }
+                        )
+                    ) {
+                        ForEach(AppLanguage.allCases, id: \.self) { lang in
+                            Text(lang.displayName).tag(lang)
+                        }
                     }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
                 }
-                .pickerStyle(.menu)
 
                 if settings.appLanguage != Settings.launchLanguage {
-                    HStack {
-                        Text("言語の変更は再起動後に反映されます。")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
+                    SettingsRowDivider()
+                    SettingsRow(title: "再起動が必要です", caption: "言語の変更は再起動後に反映されます。") {
                         Button("再起動") {
                             NotificationCenter.default.post(name: .relaunchApp, object: nil)
                         }
@@ -181,67 +199,81 @@ struct BehaviorSettingsView: View {
                 }
             }
 
-            Section {
+            SettingsCard {
                 // Launch-at-login via SMAppService. The system status is the
                 // source of truth; the Settings bool mirrors it for the UI.
                 // Read the live SMAppService status directly (not the cached
                 // mirror) so the toggle always reflects reality; the mirror is
                 // healed on appear (see .onAppear below) and after every write.
-                Toggle(
-                    "ログイン時に起動",
-                    isOn: Binding(
-                        get: { LoginItemManager.isEnabled },
-                        set: { newValue in
-                            do {
-                                try LoginItemManager.setEnabled(newValue)
-                                Settings.shared.launchAtLogin = LoginItemManager.isEnabled
-                            } catch {
-                                // Registration failed — revert the mirror to the real
-                                // status so the toggle reflects reality, and surface it.
-                                Settings.shared.launchAtLogin = LoginItemManager.isEnabled
-                                NSLog(
-                                    "[ShakaPachi] Login item change failed: %@",
-                                    error.localizedDescription)
+                SettingsRow(title: "ログイン時に起動", caption: "macOS にログインすると常駐を始めます") {
+                    Toggle(
+                        "",
+                        isOn: Binding(
+                            get: { LoginItemManager.isEnabled },
+                            set: { newValue in
+                                do {
+                                    try LoginItemManager.setEnabled(newValue)
+                                    Settings.shared.launchAtLogin = LoginItemManager.isEnabled
+                                } catch {
+                                    // Registration failed — revert the mirror to the real
+                                    // status so the toggle reflects reality, and surface it.
+                                    Settings.shared.launchAtLogin = LoginItemManager.isEnabled
+                                    NSLog(
+                                        "[ShakaPachi] Login item change failed: %@",
+                                        error.localizedDescription)
+                                }
                             }
-                        }
-                    ))
+                        )
+                    )
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                }
+
+                SettingsRowDivider()
 
                 // Modifier-only picker: the trigger key is fixed to Tab.
                 // On set, both modifier and key are written so any previously-
                 // stored .grave value is normalized to .tab on first save.
-                Picker(
-                    "トリガー",
-                    selection: Binding(
-                        get: { settings.triggerModifier },
-                        set: { modifier in
-                            Settings.shared.triggerModifier = modifier
-                            Settings.shared.triggerKey = .tab
+                SettingsRow(title: "トリガー", caption: "切替ウィンドウを呼び出すキー") {
+                    Picker(
+                        "",
+                        selection: Binding(
+                            get: { settings.triggerModifier },
+                            set: { modifier in
+                                Settings.shared.triggerModifier = modifier
+                                Settings.shared.triggerKey = .tab
+                            }
+                        )
+                    ) {
+                        ForEach(TriggerModifier.allCases, id: \.self) { modifier in
+                            Text("\(modifier.displayName) + Tab").tag(modifier)
                         }
-                    )
-                ) {
-                    ForEach(TriggerModifier.allCases, id: \.self) { modifier in
-                        Text("\(modifier.displayName) + Tab").tag(modifier)
                     }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
                 }
-                .pickerStyle(.menu)
 
-                Picker(
-                    "並び順",
-                    selection: Binding(
-                        get: { settings.sortMode },
-                        set: { Settings.shared.sortMode = $0 }
-                    )
-                ) {
-                    ForEach([SortMode.mru, .byApp, .byAppMRU], id: \.self) { mode in
-                        Text(mode.displayName).tag(mode)
+                SettingsRowDivider()
+
+                SettingsRow(title: "並び順", caption: "切替リストに並べる順番") {
+                    Picker(
+                        "",
+                        selection: Binding(
+                            get: { settings.sortMode },
+                            set: { Settings.shared.sortMode = $0 }
+                        )
+                    ) {
+                        ForEach([SortMode.mru, .byApp, .byAppMRU], id: \.self) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
                     }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
                 }
-                .pickerStyle(.menu)
             }
         }
-        .formStyle(.grouped)
-        .padding(.top, 12)
-        .padding([.leading, .trailing, .bottom])
         .onAppear {
             // The real login-item state lives in SMAppService, not the cached
             // bool; heal a stale mirror so the persisted value matches reality.
@@ -261,93 +293,113 @@ struct AppearanceSettingsView: View {
     @ObservedObject private var settings = Settings.shared
 
     var body: some View {
-        Form {
-            Section {
-                Picker(
-                    "テーマ",
-                    selection: Binding(
-                        get: { settings.theme },
-                        set: { Settings.shared.theme = $0 }
-                    )
-                ) {
-                    ForEach(Theme.allCases, id: \.self) { t in
-                        Text(t.displayName).tag(t)
+        SettingsPage {
+            SettingsCard {
+                SettingsRow(title: "テーマ", caption: "ウィンドウの明るさ") {
+                    Picker(
+                        "",
+                        selection: Binding(
+                            get: { settings.theme },
+                            set: { Settings.shared.theme = $0 }
+                        )
+                    ) {
+                        ForEach(Theme.allCases, id: \.self) { t in
+                            Text(t.displayName).tag(t)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                }
+
+                SettingsRowDivider()
+
+                SettingsRow(title: "アクセントカラー", caption: "地色と選択行の色") {
+                    Picker(
+                        "",
+                        selection: Binding(
+                            get: { settings.accentColor },
+                            set: { Settings.shared.accentColor = $0 }
+                        )
+                    ) {
+                        ForEach(AccentColor.allCases, id: \.self) { c in
+                            Text(c.displayName).tag(c)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                }
+
+                SettingsRowDivider()
+
+                SettingsStackedRow(title: "アイコンサイズ", caption: "切替リストのアイコンの大きさ") {
+                    HStack(spacing: 12) {
+                        Slider(
+                            value: Binding(
+                                get: { Double(settings.switcherIconSize) },
+                                set: { settings.switcherIconSize = Int($0.rounded()) }
+                            ),
+                            in: 60...96
+                        )
+                        Text("\(settings.switcherIconSize)px")
+                            .font(SettingsChrome.rowCaptionFont)
+                            .foregroundColor(SettingsChrome.secondaryText)
+                            .monospacedDigit()
+                            .frame(minWidth: 44, alignment: .trailing)
                     }
                 }
-                .pickerStyle(.menu)
 
-                Picker(
-                    "アクセントカラー",
-                    selection: Binding(
-                        get: { settings.accentColor },
-                        set: { Settings.shared.accentColor = $0 }
-                    )
-                ) {
-                    ForEach(AccentColor.allCases, id: \.self) { c in
-                        Text(c.displayName).tag(c)
-                    }
-                }
-                .pickerStyle(.menu)
-
-                HStack(spacing: 12) {
-                    Text("アイコンサイズ")
-                        .frame(width: 140, alignment: .leading)
-                    Slider(
-                        value: Binding(
-                            get: { Double(settings.switcherIconSize) },
-                            set: { settings.switcherIconSize = Int($0.rounded()) }
-                        ),
-                        in: 60...96
-                    )
-                    Text("\(settings.switcherIconSize)px")
-                        .foregroundColor(.secondary)
-                        .monospacedDigit()
-                        .frame(minWidth: 44, alignment: .trailing)
-                }
+                SettingsRowDivider()
 
                 // Show live window preview below the title line.
                 // Actual capture is gated on screen-recording permission at show time;
                 // turning this off avoids any CGWindowListCreateImage call entirely.
-                Toggle(
-                    "ウィンドウプレビューを表示",
-                    isOn: Binding(
-                        get: { settings.showWindowPreview },
-                        set: { Settings.shared.showWindowPreview = $0 }
-                    ))
-
-                HStack(spacing: 12) {
-                    Text("ウィンドウプレビュー")
-                        .frame(width: 140, alignment: .leading)
-                    Slider(
-                        value: Binding(
-                            get: { Double(settings.windowPreviewWidth) },
-                            set: { settings.windowPreviewWidth = Int($0.rounded()) }
-                        ),
-                        in: 240...480
+                SettingsRow(title: "ウィンドウプレビューを表示", caption: "選択中のウィンドウの縮小画像を出します") {
+                    Toggle(
+                        "",
+                        isOn: Binding(
+                            get: { settings.showWindowPreview },
+                            set: { Settings.shared.showWindowPreview = $0 }
+                        )
                     )
-                    Text("\(settings.windowPreviewWidth)px")
-                        .foregroundColor(.secondary)
-                        .monospacedDigit()
-                        .frame(minWidth: 44, alignment: .trailing)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                }
+
+                SettingsRowDivider()
+
+                SettingsStackedRow(title: "ウィンドウプレビュー", caption: "プレビュー画像の横幅") {
+                    HStack(spacing: 12) {
+                        Slider(
+                            value: Binding(
+                                get: { Double(settings.windowPreviewWidth) },
+                                set: { settings.windowPreviewWidth = Int($0.rounded()) }
+                            ),
+                            in: 240...480
+                        )
+                        Text("\(settings.windowPreviewWidth)px")
+                            .font(SettingsChrome.rowCaptionFont)
+                            .foregroundColor(SettingsChrome.secondaryText)
+                            .monospacedDigit()
+                            .frame(minWidth: 44, alignment: .trailing)
+                    }
                 }
                 .disabled(!settings.showWindowPreview)
             }
 
-            Section {
+            SettingsSection(header: "プレビュー") {
                 AppearancePreviewView(
                     theme: settings.theme,
                     accent: settings.accentColor,
                     iconSize: settings.switcherIconSize,
                     windowPreviewWidth: settings.windowPreviewWidth,
                     showWindowPreview: settings.showWindowPreview,
-                    totalCount: StatsStore.shared.totalCount)
-            } header: {
-                Text("プレビュー")
+                    totalCount: StatsStore.shared.totalCount
+                )
+                .padding(SettingsChrome.rowHorizontalPadding)
             }
         }
-        .formStyle(.grouped)
-        .padding(.top, 12)
-        .padding([.leading, .trailing, .bottom])
     }
 }
 
@@ -360,44 +412,51 @@ struct StatusSettingsView: View {
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Form {
-                Section {
-                    ForEach(TrayIconState.allCases, id: \.self) { state in
-                        HStack(spacing: 12) {
-                            Image(nsImage: TrayIconRenderer.previewImage(for: state, size: 32))
-                                .frame(width: 32, height: 32)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(state.cardName)
-                                    .font(.body)
-                                Text(state.detail)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
-                } header: {
-                    Text("アイコンの状態")
-                }
-
-                Section {
-                    HStack {
-                        Image(
-                            systemName: accessibilityGranted
-                                ? "checkmark.circle.fill" : "circle.dashed"
-                        )
-                        .foregroundColor(accessibilityGranted ? .green : .secondary)
+        SettingsPage {
+            SettingsSection(header: "アイコンの状態") {
+                let states = Array(TrayIconState.allCases.enumerated())
+                ForEach(states, id: \.offset) { index, state in
+                    // `cardName` / `detail` are already-resolved runtime strings
+                    // (not localization keys), so this row is built by hand
+                    // instead of `SettingsRow`, which would otherwise route them
+                    // through `Text(LocalizedStringKey(...))` and risk a second,
+                    // spurious lookup.
+                    HStack(alignment: .center, spacing: SettingsChrome.rowControlSpacing) {
+                        Image(nsImage: TrayIconRenderer.previewImage(for: state, size: 32))
+                            .frame(width: 32, height: 32)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("アクセシビリティ")
-                                .font(.body)
-                            Text("切替キーの捕捉とウィンドウの前面化に使います。")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            Text(state.cardName)
+                                .font(SettingsChrome.rowTitleFont)
+                                .foregroundColor(SettingsChrome.primaryText)
+                            Text(state.detail)
+                                .font(SettingsChrome.rowCaptionFont)
+                                .foregroundColor(SettingsChrome.secondaryText)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        Spacer()
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, SettingsChrome.rowHorizontalPadding)
+                    .padding(.vertical, SettingsChrome.rowVerticalPadding)
+
+                    if index < states.count - 1 {
+                        SettingsRowDivider()
+                    }
+                }
+            }
+
+            SettingsSection(header: "権限の状態") {
+                SettingsRow(
+                    title: "アクセシビリティ",
+                    caption: "切替キーの捕捉とウィンドウの前面化に使います。",
+                    leading: {
+                        Image(systemName: accessibilityGranted ? "checkmark.circle.fill" : "circle.dashed")
+                            .foregroundColor(accessibilityGranted ? .green : .secondary)
+                    },
+                    trailing: {
                         if accessibilityGranted {
-                            Text("許可済み").foregroundColor(.secondary).font(.caption)
+                            Text("許可済み")
+                                .font(SettingsChrome.rowCaptionFont)
+                                .foregroundColor(SettingsChrome.secondaryText)
                         } else {
                             Button("設定を開く") {
                                 NSWorkspace.shared.open(PermissionManager.accessibilityURL)
@@ -405,23 +464,22 @@ struct StatusSettingsView: View {
                             .buttonStyle(.bordered)
                         }
                     }
+                )
 
-                    HStack {
-                        Image(
-                            systemName: screenRecordingGranted
-                                ? "checkmark.circle.fill" : "circle.dashed"
-                        )
-                        .foregroundColor(screenRecordingGranted ? .green : .secondary)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("画面収録")
-                                .font(.body)
-                            Text("ウィンドウ名の取得と、プレビュー表示に使います。録画やファイルへの保存はしません。")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
+                SettingsRowDivider()
+
+                SettingsRow(
+                    title: "画面収録",
+                    caption: "ウィンドウ名の取得と、プレビュー表示に使います。録画やファイルへの保存はしません。",
+                    leading: {
+                        Image(systemName: screenRecordingGranted ? "checkmark.circle.fill" : "circle.dashed")
+                            .foregroundColor(screenRecordingGranted ? .green : .secondary)
+                    },
+                    trailing: {
                         if screenRecordingGranted {
-                            Text("許可済み").foregroundColor(.secondary).font(.caption)
+                            Text("許可済み")
+                                .font(SettingsChrome.rowCaptionFont)
+                                .foregroundColor(SettingsChrome.secondaryText)
                         } else {
                             Button("設定を開く") {
                                 NSWorkspace.shared.open(PermissionManager.screenRecordingURL)
@@ -429,26 +487,22 @@ struct StatusSettingsView: View {
                             .buttonStyle(.bordered)
                         }
                     }
-                } header: {
-                    Text("権限の状態")
-                }
+                )
             }
-            .formStyle(.grouped)
-            .padding(.top, 12)
-            .padding([.leading, .trailing, .bottom])
 
-            // Plain onboarding button below the form, no section/card wrapper.
-            // A wrapper section containing only a button provides no semantic
+            // Plain onboarding button below the cards, no card wrapper.
+            // A wrapper card containing only a button provides no semantic
             // value — the button alone is sufficient.
-            Button("オンボーディング画面を開く") {
-                // Post a notification that AppDelegate can observe to open
-                // the onboarding window. Using NotificationCenter avoids a
-                // direct dependency from this SwiftUI view to AppDelegate.
-                NotificationCenter.default.post(
-                    name: .showOnboardingWindow, object: nil)
+            HStack {
+                Button("オンボーディング画面を開く") {
+                    // Post a notification that AppDelegate can observe to open
+                    // the onboarding window. Using NotificationCenter avoids a
+                    // direct dependency from this SwiftUI view to AppDelegate.
+                    NotificationCenter.default.post(
+                        name: .showOnboardingWindow, object: nil)
+                }
+                Spacer()
             }
-            .padding(.horizontal)
-            .padding(.bottom, 16)
         }
         .onAppear { refreshPermissions() }
         .onReceive(timer) { _ in refreshPermissions() }
@@ -481,67 +535,68 @@ struct StatsSettingsView: View {
     }()
 
     var body: some View {
-        VStack(spacing: 0) {
-            Form {
-                // ── Recording ──
-                Section {
-                    Toggle("統計を記録", isOn: $statsEnabled)
+        SettingsPage {
+            // ── Recording ──
+            SettingsSection(header: "記録") {
+                SettingsRow(title: "統計を記録", caption: "切替回数を端末内に記録します") {
+                    Toggle("", isOn: $statsEnabled)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
                         .onChange(of: statsEnabled) { newValue in
                             StatsStore.shared.setStatsEnabled(newValue)
                         }
-                } header: {
-                    Text("記録")
-                }
-
-                if statsEnabled {
-                    // ── Switch count ──
-                    Section {
-                        HStack {
-                            Text("今日")
-                            Spacer()
-                            Text(formatted(todayCount))
-                                .foregroundColor(.secondary)
-                        }
-                        HStack {
-                            Text("累計")
-                            Spacer()
-                            Text(formatted(totalCount))
-                                .foregroundColor(.secondary)
-                        }
-                        #if DEBUG
-                            // The developer tab can set an in-memory override; the real
-                            // statistics are never touched. Surface it so the shown
-                            // numbers aren't mistaken for the persisted values.
-                            if StatsStore.shared.previewTotalCountOverride != nil
-                                || StatsStore.shared.previewTodayCountOverride != nil
-                            {
-                                Text("プレビュー中（実際の統計は変更されていません）")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        #endif
-                    } header: {
-                        Text("切替回数")
-                    }
-
-                    // ── Activity (heatmap) ──
-                    Section {
-                        ContributionHeatmap(
-                            dailyCounts: dailyCounts,
-                            firstUseDate: firstUseDate
-                        )
-                        .padding(.vertical, 4)
-                    } header: {
-                        Text("アクティビティ")
-                    }
                 }
             }
-            .formStyle(.grouped)
-            .padding(.top, 12)
-            .padding([.leading, .trailing])
 
-            // Reset button outside the Form — standalone, left-aligned (matches
+            if statsEnabled {
+                // ── Switch count ──
+                SettingsSection(header: "切替回数") {
+                    SettingsRow(title: "今日") {
+                        Text(formatted(todayCount))
+                            .font(SettingsChrome.rowTitleFont)
+                            .foregroundColor(SettingsChrome.secondaryText)
+                    }
+
+                    SettingsRowDivider()
+
+                    SettingsRow(title: "累計") {
+                        Text(formatted(totalCount))
+                            .font(SettingsChrome.rowTitleFont)
+                            .foregroundColor(SettingsChrome.secondaryText)
+                    }
+
+                    #if DEBUG
+                        // The developer tab can set an in-memory override; the real
+                        // statistics are never touched. Surface it so the shown
+                        // numbers aren't mistaken for the persisted values.
+                        if StatsStore.shared.previewTotalCountOverride != nil
+                            || StatsStore.shared.previewTodayCountOverride != nil
+                        {
+                            SettingsRowDivider()
+                            HStack {
+                                Text("プレビュー中（実際の統計は変更されていません）")
+                                    .font(SettingsChrome.rowCaptionFont)
+                                    .foregroundColor(SettingsChrome.secondaryText)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.horizontal, SettingsChrome.rowHorizontalPadding)
+                            .padding(.vertical, SettingsChrome.rowVerticalPadding)
+                        }
+                    #endif
+                }
+
+                // ── Activity (heatmap) ──
+                SettingsSection(header: "アクティビティ") {
+                    ContributionHeatmap(
+                        dailyCounts: dailyCounts,
+                        firstUseDate: firstUseDate
+                    )
+                    .padding(SettingsChrome.rowHorizontalPadding)
+                }
+            }
+
+            // Reset button below the cards — standalone, left-aligned (matches
             // the permissions tab's "Open onboarding" (「オンボーディング画面を開く」) footer button).
             HStack {
                 Button("統計をリセット") {
@@ -563,8 +618,6 @@ struct StatsSettingsView: View {
                 }
                 Spacer()
             }
-            .padding([.leading, .trailing, .bottom])
-            .padding(.top, 8)
         }
         .onAppear { reloadSnapshot() }
     }
@@ -644,8 +697,11 @@ struct AboutSettingsView: View {
 
             Spacer()
         }
-        .frame(maxWidth: .infinity)
         .padding()
+        // Fill the whole tab and match the other tabs' page background, since
+        // this view (unlike the others) isn't wrapped in `SettingsPage`.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(SettingsChrome.background)
     }
 }
 
@@ -653,10 +709,10 @@ struct AboutSettingsView: View {
 
 #if DEBUG
 
-    /// Developer-only tab exposing a few dev knobs in a COMPACT three-row layout.
-    /// `LabeledContent` (macOS 13+) lays out the leading label column and the
-    /// trailing content column natively, so the Form aligns them without a manual
-    /// fixed-width label gutter. Stat overrides are non-destructive (in-memory
+    /// Developer-only tab exposing a few dev knobs in a COMPACT four-row layout.
+    /// `SettingsStackedRow` lays out the label above a full-width control row, so
+    /// each row's (fairly wide) control cluster doesn't have to compete with the
+    /// label for horizontal space. Stat overrides are non-destructive (in-memory
     /// only — UserDefaults is never touched); accent is a real setting write (that
     /// is the point of a dev panel). Wrapped in `#if DEBUG` so it is compiled out
     /// of release builds. Strings are hardcoded Japanese (this tab is
@@ -679,18 +735,20 @@ struct AboutSettingsView: View {
         }()
 
         var body: some View {
-            Form {
-                LabeledContent("統計") { statsControls }
-                LabeledContent("アクセント") { accentControls }
-                LabeledContent("段階") { stagesControls }
-                LabeledContent("並び順") { sortControls }
+            SettingsPage {
+                SettingsCard {
+                    SettingsStackedRow(title: "統計") { statsControls }
+                    SettingsRowDivider()
+                    SettingsStackedRow(title: "アクセント") { accentControls }
+                    SettingsRowDivider()
+                    SettingsStackedRow(title: "段階") { stagesControls }
+                    SettingsRowDivider()
+                    SettingsStackedRow(title: "並び順") { sortControls }
+                }
             }
-            .formStyle(.grouped)
-            .padding(.top, 12)
-            .padding([.leading, .trailing, .bottom])
         }
 
-        // MARK: - Row content (trailing column of each LabeledContent)
+        // MARK: - Row content
 
         /// 統計 — non-destructive total/today overrides + clear.
         private var statsControls: some View {
