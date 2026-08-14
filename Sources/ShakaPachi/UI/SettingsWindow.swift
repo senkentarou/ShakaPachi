@@ -138,6 +138,13 @@ struct SettingsRootView: View {
         }
         .frame(minWidth: 520, maxWidth: .infinity, minHeight: 400, maxHeight: .infinity)
         .background(SettingsChrome.background)
+        // The window is `fullSizeContentView`, so SwiftUI hands this tree a top
+        // safe-area inset the height of the title bar. The tab bar already
+        // reserves that height itself (`SettingsChrome.titleBarHeight`), and
+        // keeping both stacks the two insets — the tabs then sit a title bar's
+        // height too low. Take the whole window and let the tab bar be the only
+        // thing that insets.
+        .ignoresSafeArea()
     }
 
     @ViewBuilder
