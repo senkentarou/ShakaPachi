@@ -56,6 +56,11 @@
 "ShakaPachi — 停止中" = "ShakaPachi — 停止中";
 "ShakaPachi — 設定を開いています" = "ShakaPachi — 設定を開いています";
 "ShakaPachi — アップデート画面を開いています" = "ShakaPachi — アップデート画面を開いています";
+"ShakaPachi 稼働中" = "ShakaPachi 稼働中";
+"ShakaPachi 稼働中（設定画面を表示中）" = "ShakaPachi 稼働中（設定画面を表示中）";
+"ShakaPachi 稼働中（アップデート画面を表示中）" = "ShakaPachi 稼働中（アップデート画面を表示中）";
+"ShakaPachi 停止中（権限が不足しています）" = "ShakaPachi 停止中（権限が不足しています）";
+"ShakaPachi 停止中（一時的に無効）" = "ShakaPachi 停止中（一時的に無効）";
 "ウィンドウ切替を有効化" = "ウィンドウ切替を有効化";
 "ウィンドウ切替を一時的に無効化" = "ウィンドウ切替を一時的に無効化";
 "⚠ ウィンドウ切替を有効化" = "⚠ ウィンドウ切替を有効化";

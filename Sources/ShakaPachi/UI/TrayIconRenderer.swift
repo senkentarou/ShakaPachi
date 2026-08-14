@@ -8,7 +8,7 @@ import AppKit
 
 /// The four menu-bar icon states, framed as coloured "cards" for the user.
 /// Live-icon precedence is permission > restricted > settings > normal
-/// (see StatusItemController.refreshIcon); the case order here is the
+/// (see StatusItemController.refreshStatus); the case order here is the
 /// explanation order shown to the user (normal → blue → yellow → red).
 enum TrayIconState: CaseIterable {
     case normal  // normal card
@@ -54,6 +54,17 @@ enum TrayIconState: CaseIterable {
         case .settings: return NSColor(srgbRed: 0.52, green: 0.68, blue: 0.92, alpha: 1.0)  // soft blue
         case .permission: return NSColor(srgbRed: 0.95, green: 0.81, blue: 0.45, alpha: 1.0)  // soft amber
         case .restricted: return NSColor(srgbRed: 0.92, green: 0.53, blue: 0.51, alpha: 1.0)  // soft coral
+        }
+    }
+
+    /// Colour of the dot beside the menu heading. Coloured states reuse the icon
+    /// fill so the dot and the menu-bar icon always read as the same state; normal
+    /// uses a muted grey instead of `fillColor`'s `.labelColor`, which at full
+    /// strength would make the disabled heading look like a clickable item.
+    var headingDotColor: NSColor {
+        switch self {
+        case .normal: return .tertiaryLabelColor
+        default: return fillColor
         }
     }
 }
