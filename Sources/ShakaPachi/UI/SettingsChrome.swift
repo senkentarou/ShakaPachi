@@ -271,7 +271,14 @@ struct SettingsTabBar: View {
         .frame(maxWidth: .infinity)
         .padding(.top, SettingsChrome.titleBarHeight + 10)
         .padding(.bottom, 10)
-        .background(SettingsChrome.surface)
+        // The strip reads as one band with the title bar, so it drags the
+        // window like one. The handle is scoped to the strip rather than turned
+        // on window-wide (`isMovableByWindowBackground`), which would also move
+        // the window when a drag starts on a card or the page background.
+        .background {
+            WindowDragHandle()
+                .background(SettingsChrome.surface)
+        }
         .overlay(alignment: .bottom) { SettingsRowDivider() }
     }
 
@@ -299,5 +306,27 @@ struct SettingsTabBar: View {
         .buttonStyle(.plain)
         .accessibilityLabel(Text(LocalizedStringKey(item.title)))
         .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
+    }
+}
+
+// MARK: - Window drag
+
+/// An invisible AppKit view that starts a window drag on mouse-down, so the
+/// SwiftUI view it backs can be grabbed like a title bar. Put it in the
+/// `.background` of that view: SwiftUI hit-tests it under the foreground
+/// content, so controls drawn on top keep their own clicks.
+struct WindowDragHandle: NSViewRepresentable {
+
+    func makeNSView(context: Context) -> DragView { DragView() }
+
+    func updateNSView(_ nsView: DragView, context: Context) {}
+
+    /// Draws nothing; it is in the hierarchy only to receive the mouse-down
+    /// that hands the gesture over to the window.
+    final class DragView: NSView {
+
+        override func mouseDown(with event: NSEvent) {
+            window?.performDrag(with: event)
+        }
     }
 }
