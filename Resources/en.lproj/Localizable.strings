@@ -56,6 +56,11 @@
 "ShakaPachi — 停止中" = "ShakaPachi — Paused";
 "ShakaPachi — 設定を開いています" = "ShakaPachi — Settings open";
 "ShakaPachi — アップデート画面を開いています" = "ShakaPachi — Update window open";
+"ShakaPachi 稼働中" = "ShakaPachi is running";
+"ShakaPachi 稼働中（設定画面を表示中）" = "ShakaPachi is running (Settings window open)";
+"ShakaPachi 稼働中（アップデート画面を表示中）" = "ShakaPachi is running (Update window open)";
+"ShakaPachi 停止中（権限が不足しています）" = "ShakaPachi is paused (missing permissions)";
+"ShakaPachi 停止中（一時的に無効）" = "ShakaPachi is paused (temporarily disabled)";
 "ウィンドウ切替を有効化" = "Enable window switching";
 "ウィンドウ切替を一時的に無効化" = "Temporarily disable window switching";
 "⚠ ウィンドウ切替を有効化" = "⚠ Enable window switching";

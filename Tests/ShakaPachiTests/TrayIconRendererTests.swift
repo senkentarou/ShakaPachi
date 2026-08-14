@@ -38,6 +38,16 @@ final class TrayIconRendererTests: XCTestCase {
         XCTAssertEqual(img.size.height, 32, accuracy: 0.01)
     }
 
+    func testHeadingDotColorNormalDiffersFromFillColor() {
+        XCTAssertNotEqual(TrayIconState.normal.headingDotColor, TrayIconState.normal.fillColor)
+    }
+
+    func testHeadingDotColorMatchesFillColorForColouredStates() {
+        for state in [TrayIconState.settings, .permission, .restricted] {
+            XCTAssertEqual(state.headingDotColor, state.fillColor)
+        }
+    }
+
     func testNormalPreviewFrontWindowIsOpaque() {
         // The centre pixel lands inside the filled front window; it must be
         // opaque. Regression guard: the normal card previously rendered as a

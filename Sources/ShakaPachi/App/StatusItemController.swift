@@ -3,7 +3,7 @@ import AppKit
 /// Manages the menu bar status item for ShakaPachi.
 // Created and accessed exclusively from applicationDidFinishLaunching (@MainActor).
 @MainActor
-final class StatusItemController {
+final class StatusItemController: NSObject, NSMenuDelegate {
 
     private let statusItem: NSStatusItem
     private let menu = NSMenu()
@@ -14,6 +14,7 @@ final class StatusItemController {
     private var toggleItem: NSMenuItem?
     private var settingsMenuItem: NSMenuItem?
     private var updateCheckItem: NSMenuItem?
+    private var headingItem: NSMenuItem?
 
     // Tap state mirrored from HotkeyTap for icon/menu rendering.
     private var tapEnabled = false
@@ -47,6 +48,7 @@ final class StatusItemController {
     init(permissionManager: PermissionManager) {
         self.permissionManager = permissionManager
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        super.init()
         setupButton()
         setupMenu()
         updatePermissionWarning()
@@ -58,7 +60,7 @@ final class StatusItemController {
             MainActor.assumeIsolated {
                 self?.settingsOpen = (note.userInfo?["open"] as? Bool) ?? false
                 self?.refreshSettingsMenuItem()
-                self?.refreshIcon()
+                self?.refreshStatus()
             }
         }
 
@@ -68,7 +70,7 @@ final class StatusItemController {
         ) { [weak self] note in
             MainActor.assumeIsolated {
                 self?.updateWindowOpen = (note.userInfo?["open"] as? Bool) ?? false
-                self?.refreshIcon()
+                self?.refreshStatus()
             }
         }
     }
@@ -100,9 +102,11 @@ final class StatusItemController {
         // it or leave a stray separator.
         if let permItem = permissionStatusItem {
             let inMenu = menu.index(of: permItem) >= 0
+            // Indices 0/1 are permanently occupied by the status heading and its
+            // separator (added in setupMenu()), so this item is pinned just below them.
             if !allGranted && !inMenu {
-                menu.insertItem(permItem, at: 0)
-                menu.insertItem(.separator(), at: 1)
+                menu.insertItem(permItem, at: 2)
+                menu.insertItem(.separator(), at: 3)
             } else if allGranted && inMenu {
                 let idx = menu.index(of: permItem)
                 if idx + 1 < menu.numberOfItems,
@@ -115,7 +119,7 @@ final class StatusItemController {
         }
 
         refreshToggleItem()
-        refreshIcon()
+        refreshStatus()
     }
 
     /// Reflect the event-tap state on the toggle item and status icon.
@@ -123,35 +127,68 @@ final class StatusItemController {
         tapEnabled = enabled
         tapStopReason = reason
         refreshToggleItem()
-        refreshIcon()
+        refreshStatus()
     }
 
-    // Icon precedence: permission problem > tap stopped > settings/update window open > normal.
-    private func refreshIcon() {
-        guard let button = statusItem.button else { return }
-        let state: TrayIconState
-        let tooltip: String
+    /// The current icon state together with the copy that describes it. Icon,
+    /// tooltip and menu heading are all derived here so they cannot disagree.
+    /// Precedence: permission problem > tap stopped > settings/update window open > normal.
+    private func currentStatus() -> (state: TrayIconState, tooltip: String, heading: String) {
         if !permissionManager.allPermissionsGranted() {
-            state = .permission
-            tooltip = NSLocalizedString("ShakaPachi — 権限が不足しています", comment: "Tooltip: missing permissions")
+            return (
+                .permission,
+                NSLocalizedString("ShakaPachi — 権限が不足しています", comment: "Tooltip: missing permissions"),
+                NSLocalizedString("ShakaPachi 停止中（権限が不足しています）", comment: "Menu heading: missing permissions")
+            )
         } else if !tapEnabled {
-            state = .restricted
-            tooltip =
+            let tooltip =
                 NSLocalizedString("ShakaPachi — 停止中", comment: "Tooltip: tap is paused")
                 + (tapStopReason.map { " (\($0))" } ?? "")
+            return (
+                .restricted,
+                tooltip,
+                NSLocalizedString("ShakaPachi 停止中（一時的に無効）", comment: "Menu heading: tap temporarily disabled")
+            )
         } else if settingsOpen || updateWindowOpen {
             // Both the Settings and Update windows use the blue "info" icon.
-            state = .settings
-            tooltip =
+            let tooltip =
                 settingsOpen
                 ? NSLocalizedString("ShakaPachi — 設定を開いています", comment: "Tooltip: settings window is open")
                 : NSLocalizedString("ShakaPachi — アップデート画面を開いています", comment: "Tooltip: update window is open")
+            let heading =
+                settingsOpen
+                ? NSLocalizedString("ShakaPachi 稼働中（設定画面を表示中）", comment: "Menu heading: settings window open")
+                : NSLocalizedString("ShakaPachi 稼働中（アップデート画面を表示中）", comment: "Menu heading: update window open")
+            return (.settings, tooltip, heading)
         } else {
-            state = .normal
-            tooltip = "ShakaPachi"
+            return (
+                .normal,
+                "ShakaPachi",
+                NSLocalizedString("ShakaPachi 稼働中", comment: "Menu heading: running normally")
+            )
         }
-        button.image = TrayIconRenderer.menuBarImage(for: state)
-        button.toolTip = tooltip
+    }
+
+    /// Update the status icon, its tooltip and the menu heading from `currentStatus()`
+    /// so the three never fall out of sync with each other.
+    private func refreshStatus() {
+        let (state, tooltip, heading) = currentStatus()
+        if let button = statusItem.button {
+            button.image = TrayIconRenderer.menuBarImage(for: state)
+            button.toolTip = tooltip
+        }
+        refreshHeadingItem(state: state, heading: heading)
+    }
+
+    /// Apply the heading text and coloured dot to the non-clickable menu heading item.
+    private func refreshHeadingItem(state: TrayIconState, heading: String) {
+        headingItem?.title = heading
+        let config = NSImage.SymbolConfiguration(pointSize: 8, weight: .regular)
+            .applying(NSImage.SymbolConfiguration(hierarchicalColor: state.headingDotColor))
+        let dot = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)?
+            .withSymbolConfiguration(config)
+        dot?.isTemplate = false
+        headingItem?.image = dot
     }
 
     // MARK: - Private: button
@@ -168,6 +205,16 @@ final class StatusItemController {
         // are honored without being overridden by AppKit's automatic validation pass.
         // Required for Fix #3 (gray out toggle when permissions missing).
         menu.autoenablesItems = false
+
+        // Non-clickable status heading — a coloured dot plus a short state
+        // sentence, pinned to the very top of the menu. Its title/image are
+        // filled in by refreshStatus() (via updatePermissionWarning()).
+        let heading = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        heading.isEnabled = false
+        menu.addItem(heading)
+        headingItem = heading
+
+        menu.addItem(.separator())
 
         // Tap enable/disable toggle — also the recovery path after an
         // emergency stop or deadman fire without relaunching the app.
@@ -225,7 +272,14 @@ final class StatusItemController {
         quitItem.target = self
         menu.addItem(quitItem)
 
+        menu.delegate = self
         statusItem.menu = menu
+    }
+
+    /// Permissions can be changed in System Settings while the app is idle and there
+    /// is no polling, so the state is re-read at the moment the menu is read.
+    func menuWillOpen(_ menu: NSMenu) {
+        updatePermissionWarning()
     }
 
     /// Reflect the Settings-window open state on the settings menu item: while
