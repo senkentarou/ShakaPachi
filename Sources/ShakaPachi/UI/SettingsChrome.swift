@@ -37,6 +37,9 @@ enum SettingsChrome {
     /// Page margin around the stack of cards.
     static let pagePadding: CGFloat = 20
     /// Height reserved for the transparent title bar the header is drawn under.
+    /// `SettingsTabBar` is the single place that pays this inset, which is why
+    /// the root view ignores the safe area — otherwise the system inset and
+    /// this one stack up.
     static let titleBarHeight: CGFloat = 28
     /// Size of one tab-bar button.
     static let tabSize = CGSize(width: 76, height: 50)
