@@ -126,3 +126,18 @@
 "update.error.checkFailed" = "Failed to check for updates";
 "update.error.noReleaseAvailable" = "No update is available to install";
 "update.error.installFailed" = "Failed to install the update";
+
+/* Settings rows — captions under each row title */
+"メニューやボタンの表示に使う言語" = "Language used for menus and buttons";
+"再起動が必要です" = "Restart Required";
+"macOS にログインすると常駐を始めます" = "Runs in the background once you log in to macOS";
+"切替ウィンドウを呼び出すキー" = "Key combination that opens the switcher";
+"切替リストに並べる順番" = "Order of windows in the switcher list";
+"ウィンドウの明るさ" = "Brightness of the window";
+"地色と選択行の色" = "Background tint and selection color";
+"アイコンサイズ" = "Icon Size";
+"切替リストのアイコンの大きさ" = "Size of the icons in the switcher list";
+"選択中のウィンドウの縮小画像を出します" = "Shows a thumbnail of the selected window";
+"ウィンドウプレビュー" = "Window Preview";
+"プレビュー画像の横幅" = "Width of the preview image";
+"切替回数を端末内に記録します" = "Records switch counts on this Mac only";
