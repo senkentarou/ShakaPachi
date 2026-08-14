@@ -83,12 +83,16 @@ final class AccentColorTests: XCTestCase {
             AccentColor.patinaColor(forTotalCount: count).usingColorSpace(.sRGB)!.redComponent
         }
         XCTAssertEqual(red(0), 0.549, accuracy: 0.001)
-        XCTAssertEqual(red(999), 0.549, accuracy: 0.001)
-        XCTAssertEqual(red(1_000), 0.667, accuracy: 0.001)
-        XCTAssertEqual(red(9_999), 0.667, accuracy: 0.001)
-        XCTAssertEqual(red(10_000), 0.784, accuracy: 0.001)
-        XCTAssertEqual(red(100_000), 0.878, accuracy: 0.001)
-        XCTAssertEqual(red(1_000_000), 0.933, accuracy: 0.001)
+        XCTAssertEqual(red(4_999), 0.549, accuracy: 0.001)
+        XCTAssertEqual(red(5_000), 0.608, accuracy: 0.001)
+        XCTAssertEqual(red(9_999), 0.608, accuracy: 0.001)
+        XCTAssertEqual(red(10_000), 0.667, accuracy: 0.001)
+        XCTAssertEqual(red(19_999), 0.667, accuracy: 0.001)
+        XCTAssertEqual(red(20_000), 0.784, accuracy: 0.001)
+        XCTAssertEqual(red(49_999), 0.784, accuracy: 0.001)
+        XCTAssertEqual(red(50_000), 0.878, accuracy: 0.001)
+        XCTAssertEqual(red(99_999), 0.878, accuracy: 0.001)
+        XCTAssertEqual(red(100_000), 0.933, accuracy: 0.001)
         XCTAssertEqual(red(50_000_000), 0.933, accuracy: 0.001)
     }
 

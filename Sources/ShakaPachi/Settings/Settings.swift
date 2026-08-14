@@ -235,8 +235,8 @@ public enum AccentColor: String, CaseIterable, Sendable {
     public var evolvesWithUsage: Bool { self == .patina }
 
     /// The accent color resolved for a given lifetime switch count.
-    /// Static accents ignore `totalCount`; `.patina` steps up through five
-    /// discrete stages as the count crosses 1k / 10k / 100k / 1M.
+    /// Static accents ignore `totalCount`; `.patina` steps up through six
+    /// discrete stages as the count crosses 5k / 10k / 20k / 50k / 100k.
     public func resolvedColor(totalCount: Int) -> NSColor {
         guard self == .patina else { return nsColor }
         return AccentColor.patinaColor(forTotalCount: totalCount)
@@ -254,30 +254,33 @@ public enum AccentColor: String, CaseIterable, Sendable {
         public let label: String
     }
 
-    /// The five patina stages in ascending order. Raw pewter → vivid gold, keyed
-    /// to log-scale milestones. The spread is wide (saturation climbs steeply
-    /// toward the top) so each milestone reads as a distinct step even at the
-    /// panel's low tint/selection alpha, where a tightly-packed ramp would be
-    /// indistinguishable in real use.
+    /// The six patina stages in ascending order. Raw pewter → vivid gold; the
+    /// steps are spaced so consecutive stages differ by a comparable amount
+    /// (the previous ramp jumped hardest at the bottom), so every milestone
+    /// reads as a distinct step even at the panel's low tint/selection alpha.
     public static let patinaStages: [PatinaStage] = [
         .init(
             minCount: 0,
             color: NSColor(srgbRed: 0.549, green: 0.541, blue: 0.510, alpha: 1.0),  // #8C8A82 raw pewter-grey
             label: "ピューター灰"),
         .init(
-            minCount: 1_000,
+            minCount: 5_000,
+            color: NSColor(srgbRed: 0.608, green: 0.561, blue: 0.420, alpha: 1.0),  // #9B8F6B aged copper
+            label: "古銅"),
+        .init(
+            minCount: 10_000,
             color: NSColor(srgbRed: 0.667, green: 0.580, blue: 0.333, alpha: 1.0),  // #AA9455 bronze
             label: "ブロンズ"),
         .init(
-            minCount: 10_000,
+            minCount: 20_000,
             color: NSColor(srgbRed: 0.784, green: 0.651, blue: 0.235, alpha: 1.0),  // #C8A63C brass gold
             label: "真鍮"),
         .init(
-            minCount: 100_000,
+            minCount: 50_000,
             color: NSColor(srgbRed: 0.878, green: 0.714, blue: 0.165, alpha: 1.0),  // #E0B62A rich gold
             label: "リッチゴールド"),
         .init(
-            minCount: 1_000_000,
+            minCount: 100_000,
             color: NSColor(srgbRed: 0.933, green: 0.784, blue: 0.078, alpha: 1.0),  // #EEC814 vivid gold
             label: "ヴィヴィッドゴールド"),
     ]
