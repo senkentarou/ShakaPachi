@@ -171,7 +171,7 @@ struct AppearancePreviewView: View {
     }
 
     /// Patina preview: keeps the switcher panel mock (tiles) but splits the
-    /// accent tint into five vertical bands — one per milestone — so the whole
+    /// accent tint into six vertical bands — one per milestone — so the whole
     /// dull-bronze → gold evolution is shown across the real preview. Each band
     /// is annotated with the switch count that reaches that stage, and the stage
     /// the user has currently reached is marked. Bands use the real panel tint
@@ -191,10 +191,11 @@ struct AppearancePreviewView: View {
         // Milestones the patina accent steps through, labelled by switch count.
         let stages: [(label: String, lower: Int)] = [
             ("0回", 0),
-            ("1,000回", 1_000),
+            ("5,000回", 5_000),
             ("10,000回", 10_000),
+            ("20,000回", 20_000),
+            ("50,000回", 50_000),
             ("100,000回", 100_000),
-            ("1,000,000回", 1_000_000),
         ]
         // The selection tile reflects the user's actual current stage.
         let selection = AccentColor.patinaColor(forTotalCount: totalCount)
@@ -203,7 +204,7 @@ struct AppearancePreviewView: View {
         return ZStack {
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color(nsColor: base))
-                // Tint split into five vertical bands at the real panel alpha, so
+                // Tint split into six vertical bands at the real panel alpha, so
                 // this reads as the actual panel aged across each milestone.
                 .overlay(
                     HStack(spacing: 0) {
@@ -224,7 +225,7 @@ struct AppearancePreviewView: View {
                     .font(.system(size: 9))
                     .foregroundColor(.secondary)
 
-                // Switch-count labels aligned to the five tint bands.
+                // Switch-count labels aligned to the six tint bands.
                 HStack(spacing: 0) {
                     ForEach(0..<stages.count, id: \.self) { i in
                         Text(stages[i].label)

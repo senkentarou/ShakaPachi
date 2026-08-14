@@ -742,7 +742,7 @@ struct AboutSettingsView: View {
                         )
                         .onTapGesture { setTotal(stage.minCount) }
                 }
-                Text("0 / 1k / 10k / 100k / 1M")
+                Text("0 / 5k / 10k / 20k / 50k / 100k")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .monospacedDigit()
@@ -849,9 +849,9 @@ struct AboutSettingsView: View {
 
         // MARK: - Formatting
 
-        /// A compact per-stage label for the "現在" readout (0 / 1k / 10k / …).
+        /// A compact per-stage label for the "現在" readout (0 / 5k / 10k / …).
         private func stageShortLabel(_ index: Int) -> String {
-            ["0", "1k", "10k", "100k", "1M"][safe: index] ?? "0"
+            ["0", "5k", "10k", "20k", "50k", "100k"][safe: index] ?? "0"
         }
 
         /// "#RRGGBB" for an sRGB NSColor.
