@@ -179,7 +179,8 @@ struct UpdateView: View {
     /// a bottom action bar (skip on the left as a subtle link; Later + the primary
     /// Install button on the right, following macOS convention).
     private func availableContent(release: ReleaseInfo) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        let notesBlocks = ReleaseNotesMarkdown.parse(releaseNotesText(release))
+        return VStack(alignment: .leading, spacing: 14) {
             // Compact version transition.
             HStack(spacing: 8) {
                 Text(UpdateManager.shared.currentVersion.description)
@@ -209,7 +210,9 @@ struct UpdateView: View {
             // Release notes (markdown-rendered) in a subtle inset that grows to fill.
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
-                    ForEach(noteBlocks(releaseNotesText(release))) { block in
+                    // ReleaseNoteBlock is not Identifiable, so key the ForEach off
+                    // the array offset — blocks never reorder within one render.
+                    ForEach(Array(notesBlocks.enumerated()), id: \.offset) { _, block in
                         blockView(block)
                     }
                 }
@@ -368,38 +371,10 @@ struct UpdateView: View {
 
     // MARK: - Release-notes markdown
 
-    /// One rendered line of the release notes. We render markdown ourselves
-    /// (line by line) rather than pull in a dependency: Foundation's
-    /// AttributedString handles the inline syntax (**bold**, links, `code`),
-    /// and we recognise `#` headings and `-`/`*` bullets as block elements.
-    private struct NoteBlock: Identifiable {
-        enum Kind { case heading, bullet, paragraph, blank }
-        let id: Int
-        let kind: Kind
-        let text: AttributedString
-    }
-
-    private func noteBlocks(_ notes: String) -> [NoteBlock] {
-        notes.components(separatedBy: "\n").enumerated().map { index, rawLine in
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
-            if line.isEmpty {
-                return NoteBlock(id: index, kind: .blank, text: AttributedString())
-            }
-            if let hashes = line.range(of: "^#{1,6}\\s+", options: .regularExpression) {
-                return NoteBlock(
-                    id: index, kind: .heading,
-                    text: inlineMarkdown(String(line[hashes.upperBound...])))
-            }
-            if line.hasPrefix("- ") || line.hasPrefix("* ") || line.hasPrefix("• ") {
-                return NoteBlock(
-                    id: index, kind: .bullet, text: inlineMarkdown(String(line.dropFirst(2))))
-            }
-            return NoteBlock(id: index, kind: .paragraph, text: inlineMarkdown(line))
-        }
-    }
-
     /// Parse a single line's inline markdown (bold/italic/links/code), preserving
-    /// whitespace and never interpreting block syntax (we handle that ourselves).
+    /// whitespace. Block-level structure (headings, lists, tables, ...) is
+    /// resolved beforehand by ReleaseNotesMarkdown.parse; this only handles the
+    /// text inside one block.
     private func inlineMarkdown(_ string: String) -> AttributedString {
         (try? AttributedString(
             markdown: string,
@@ -408,26 +383,121 @@ struct UpdateView: View {
     }
 
     @ViewBuilder
-    private func blockView(_ block: NoteBlock) -> some View {
-        switch block.kind {
-        case .heading:
-            Text(block.text)
+    private func blockView(_ block: ReleaseNoteBlock) -> some View {
+        switch block {
+        case .heading(_, let text):
+            Text(inlineMarkdown(text))
                 .font(.callout)
                 .fontWeight(.bold)
                 .padding(.top, 6)
-        case .bullet:
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("•").foregroundColor(.secondary)
-                Text(block.text)
-                    .font(.callout)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        case .paragraph:
-            Text(block.text)
+        case .listItem(let indent, let marker, let text):
+            listItemView(indent: indent, marker: marker, text: text)
+        case .paragraph(let text):
+            Text(inlineMarkdown(text))
                 .font(.callout)
                 .frame(maxWidth: .infinity, alignment: .leading)
+        case .quote(let lines):
+            quoteView(lines)
+        case .table(let table):
+            tableView(table)
+        case .code(let raw):
+            codeView(raw)
+        case .rule:
+            Divider().padding(.vertical, 4)
         case .blank:
             Color.clear.frame(height: 2)
+        }
+    }
+
+    /// `•` for a bullet, or `"n."` for an ordered item, indented per nesting level.
+    private func listItemView(indent: Int, marker: ReleaseNoteListMarker, text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(marker.label).foregroundColor(.secondary)
+            Text(inlineMarkdown(text))
+                .font(.callout)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.leading, CGFloat(indent) * 16)
+    }
+
+    /// A left-hand accent bar (stretched to the text height by the HStack)
+    /// followed by the quoted lines, dimmed to read as secondary content.
+    private func quoteView(_ lines: [String]) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(Color(nsColor: .separatorColor))
+                .frame(width: 3)
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                    Text(inlineMarkdown(line))
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    /// GFM table rendered with a native Grid: bold header row, a full-width
+    /// divider, then one GridRow per body row. Column alignment comes from the
+    /// delimiter row and is applied once via the header cells.
+    private func tableView(_ table: ReleaseNoteTable) -> some View {
+        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
+            GridRow {
+                ForEach(Array(table.header.enumerated()), id: \.offset) { columnIndex, cell in
+                    Text(inlineMarkdown(cell))
+                        .font(.callout)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .gridColumnAlignment(table.alignments[columnIndex].horizontalAlignment)
+                }
+            }
+            GridRow {
+                // Unsized on the horizontal axis so the full-width divider does
+                // not itself dictate a column's width.
+                Divider()
+                    .gridCellColumns(table.header.count)
+                    .gridCellUnsizedAxes(.horizontal)
+            }
+            ForEach(Array(table.rows.enumerated()), id: \.offset) { _, row in
+                GridRow {
+                    ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
+                        Text(inlineMarkdown(cell))
+                            .font(.callout)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Fenced code block: monospaced, unparsed, on a subtle full-width backing.
+    private func codeView(_ raw: String) -> some View {
+        Text(raw)
+            .font(.system(.caption, design: .monospaced))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
+            .background(Color(nsColor: .quaternaryLabelColor).opacity(0.25))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+extension ReleaseNoteListMarker {
+    fileprivate var label: String {
+        switch self {
+        case .bullet: return "•"
+        case .ordered(let n): return "\(n)."
+        }
+    }
+}
+
+extension ReleaseNoteTableAlignment {
+    fileprivate var horizontalAlignment: HorizontalAlignment {
+        switch self {
+        case .leading: return .leading
+        case .center: return .center
+        case .trailing: return .trailing
         }
     }
 }
