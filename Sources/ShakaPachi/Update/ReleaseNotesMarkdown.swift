@@ -162,6 +162,80 @@ enum ReleaseNotesMarkdown {
         return blocks
     }
 
+    // MARK: - Language sections
+
+    /// Extracts the section of `body` written in `language`, using invisible
+    /// `<!-- lang:XX -->` marker comments to pack multiple languages into one
+    /// GitHub release body (GitHub has no native per-language release field).
+    ///
+    /// Marker convention (source of truth for release-note authors):
+    /// - A marker is its own line, `<!-- lang:XX -->` (surrounding whitespace
+    ///   and the casing of `lang:`/`XX` are ignored). English goes first,
+    ///   then `<!-- lang:ja -->` followed by the Japanese section.
+    /// - Text before the first marker is a shared preamble; it is kept and
+    ///   prepended to whichever section is selected, never dropped.
+    /// - Each marker's section runs from the line after it up to (but not
+    ///   including) the next marker, or the end of the body.
+    /// - No markers at all → `body` is returned unchanged. This keeps
+    ///   pre-v1.5.0 release bodies (Japanese-only, unmarked) working as-is.
+    /// - No section matches `language` → the first section in document
+    ///   order is returned (English, by the convention above).
+    /// - Marker lines are stripped from the result, and the result is
+    ///   trimmed of leading/trailing blank lines.
+    static func localizedSection(from body: String, language: String) -> String {
+        let wantedCode = normalizedLanguageCode(language)
+
+        var preambleLines: [String] = []
+        var sections: [(code: String, lines: [String])] = []
+        var currentCode: String?
+        var currentLines: [String] = []
+
+        for line in body.components(separatedBy: "\n") {
+            guard let markerCode = markerLanguageCode(line) else {
+                currentLines.append(line)
+                continue
+            }
+            if let code = currentCode {
+                sections.append((code: code, lines: currentLines))
+            } else {
+                preambleLines = currentLines
+            }
+            currentCode = markerCode
+            currentLines = []
+        }
+        if let code = currentCode {
+            sections.append((code: code, lines: currentLines))
+        } else {
+            preambleLines = currentLines
+        }
+
+        guard !sections.isEmpty else { return body }
+
+        let matched = sections.first(where: { $0.code == wantedCode }) ?? sections[0]
+        let combined = (preambleLines + matched.lines).joined(separator: "\n")
+        return combined.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Returns the normalized language code carried by a `<!-- lang:XX -->`
+    /// marker line, or nil if `line` is not such a marker.
+    private static func markerLanguageCode(_ line: String) -> String? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("<!--"), trimmed.hasSuffix("-->") else { return nil }
+        let inner = trimmed.dropFirst(4).dropLast(3).trimmingCharacters(in: .whitespaces)
+        guard let colon = inner.firstIndex(of: ":") else { return nil }
+        let key = inner[inner.startIndex..<colon].trimmingCharacters(in: .whitespaces)
+        guard key.lowercased() == "lang" else { return nil }
+        let code = inner[inner.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+        guard !code.isEmpty else { return nil }
+        return normalizedLanguageCode(code)
+    }
+
+    /// Lower-cases a language code and drops any region subtag, so `"ja-JP"`
+    /// and `"JA"` both compare equal to `"ja"`.
+    private static func normalizedLanguageCode(_ code: String) -> String {
+        String(code.split(separator: "-").first ?? Substring(code)).lowercased()
+    }
+
     // MARK: - Line classifiers
 
     /// Returns the fence string (e.g. "```" or "~~~~") if `line` opens a

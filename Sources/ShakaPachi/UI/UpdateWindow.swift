@@ -353,6 +353,9 @@ struct UpdateView: View {
     /// Release notes with a redundant leading "ShakaPachi vX.Y.Z" title (and any
     /// following dash/separator) stripped — the header and version row already
     /// convey the app name and version, so repeating them in the notes is noise.
+    /// The remainder is then narrowed to the section matching the app's current
+    /// language (see ReleaseNotesMarkdown.localizedSection), so a bilingual
+    /// release body only shows the reader's language.
     private func releaseNotesText(_ release: ReleaseInfo) -> String {
         let trimmed = release.notes.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -360,13 +363,28 @@ struct UpdateView: View {
                 "（リリースノートはありません）", comment: "Placeholder when a release has no notes")
         }
         let prefix = "\(appName) v\(release.version.description)"
-        guard trimmed.hasPrefix(prefix) else { return trimmed }
-        let separators = CharacterSet(charactersIn: " -—–ー・:：\t")
-        let remainder = trimmed.dropFirst(prefix.count).drop { ch in
-            ch.unicodeScalars.allSatisfy { separators.contains($0) }
+        let titleStripped: String
+        if trimmed.hasPrefix(prefix) {
+            let separators = CharacterSet(charactersIn: " -—–ー・:：\t")
+            let remainder = trimmed.dropFirst(prefix.count).drop { ch in
+                ch.unicodeScalars.allSatisfy { separators.contains($0) }
+            }
+            let result = String(remainder).trimmingCharacters(in: .whitespacesAndNewlines)
+            titleStripped = result.isEmpty ? trimmed : result
+        } else {
+            titleStripped = trimmed
         }
-        let result = String(remainder).trimmingCharacters(in: .whitespacesAndNewlines)
-        return result.isEmpty ? trimmed : result
+        return ReleaseNotesMarkdown.localizedSection(
+            from: titleStripped, language: releaseNotesLanguageCode)
+    }
+
+    /// The app's current UI language, for picking a release-notes section.
+    /// This app switches language by writing `AppleLanguages` and letting
+    /// `Bundle.main` resolve it, so `Locale.current` would not reflect an
+    /// in-app override — `Bundle.main.preferredLocalizations` does.
+    private var releaseNotesLanguageCode: String {
+        let preferred = Bundle.main.preferredLocalizations.first ?? "en"
+        return String(preferred.split(separator: "-").first ?? Substring(preferred))
     }
 
     // MARK: - Release-notes markdown
