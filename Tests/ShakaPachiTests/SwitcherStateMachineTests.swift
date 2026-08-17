@@ -556,7 +556,7 @@ final class SwitcherStateMachineTests: XCTestCase {
 
     func testInitialIndexProviderOverridesTheDefaultStartingIndex() {
         let m = makeMachine()
-        m.initialIndexProvider = { count in
+        m.initialIndexProvider = { count, _ in
             XCTAssertEqual(count, 6)
             return 4
         }
@@ -564,5 +564,67 @@ final class SwitcherStateMachineTests: XCTestCase {
         let (action, _) = m.handle(.trigger(shift: false), itemCount: 6)
         XCTAssertEqual(action, .showPanel(initialIndex: 4))
         XCTAssertEqual(m.activeIndex, 4)
+    }
+
+    func testInitialIndexProviderReceivesTheShiftFlagVerbatim() {
+        // Stands in for app-unit mode: the provider decides the starting
+        // group/window purely from the shift flag it is handed.
+        let m = makeMachine()
+        var seenShift: Bool?
+        m.initialIndexProvider = { _, shift in
+            seenShift = shift
+            return shift ? 0 : 4
+        }
+
+        m.handle(.modifierDown)
+        let (shiftAction, _) = m.handle(.trigger(shift: true), itemCount: 6)
+        XCTAssertEqual(seenShift, true)
+        XCTAssertEqual(shiftAction, .showPanel(initialIndex: 0))
+
+        m.handle(.escape)
+        m.handle(.modifierDown)
+        let (noShiftAction, _) = m.handle(.trigger(shift: false), itemCount: 6)
+        XCTAssertEqual(seenShift, false)
+        XCTAssertEqual(noShiftAction, .showPanel(initialIndex: 4))
+    }
+
+    // MARK: - Shift+Tab initial selection (flat mode)
+
+    func testShiftTriggerStartsOnTheCurrentItemInFlatMode() {
+        let m = makeMachine()
+        m.handle(.modifierDown)
+        let (action, consumed) = m.handle(.trigger(shift: true), itemCount: 4)
+        XCTAssertEqual(
+            action, .showPanel(initialIndex: 0),
+            "Cmd+Shift+Tab must open on the current item, not the next one")
+        XCTAssertTrue(consumed)
+        XCTAssertEqual(m.activeIndex, 0)
+    }
+
+    func testNonShiftTriggerStartsOnTheNextItemInFlatMode() {
+        let m = makeMachine()
+        m.handle(.modifierDown)
+        let (action, consumed) = m.handle(.trigger(shift: false), itemCount: 4)
+        XCTAssertEqual(action, .showPanel(initialIndex: 1))
+        XCTAssertTrue(consumed)
+        XCTAssertEqual(m.activeIndex, 1)
+    }
+
+    func testShiftTriggerWithSingleWindowStartsAtZero() {
+        let m = makeMachine()
+        m.handle(.modifierDown)
+        let (action, _) = m.handle(.trigger(shift: true), itemCount: 1)
+        XCTAssertEqual(
+            action, .showPanel(initialIndex: 0),
+            "single window: index 0 regardless of shift")
+    }
+
+    func testNonShiftTriggerWithSingleWindowStartsAtZero() {
+        let m = makeMachine()
+        m.handle(.modifierDown)
+        let (action, _) = m.handle(.trigger(shift: false), itemCount: 1)
+        XCTAssertEqual(
+            action, .showPanel(initialIndex: 0),
+            "single window: index 0 regardless of shift")
     }
 }

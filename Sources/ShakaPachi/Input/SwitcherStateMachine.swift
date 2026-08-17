@@ -3,16 +3,17 @@
 // No AppKit or CoreGraphics dependency — fully unit-testable.
 //
 // Transition diagram:
-//   IDLE + modifierDown         → MODIFIER_HELD          (not consumed)
-//   MODIFIER_HELD + trigger     → ACTIVE(index, count)   (consumed)
-//   MODIFIER_HELD + modifierUp  → IDLE                   (not consumed)
-//   ACTIVE + trigger            → advance index           (consumed)
-//   ACTIVE + trigger(shift)     → retreat index           (consumed)
-//   ACTIVE + arrowForward/Back  → advance/retreat index   (consumed)
-//   ACTIVE + escape             → cancel → IDLE           (consumed)
-//   ACTIVE + sameAppJump        → jump via resolver       (consumed)
-//   ACTIVE + otherKey           → no-op, NOT consumed
-//   ACTIVE + modifierUp         → confirmSelection → IDLE (not consumed)
+//   IDLE + modifierDown            → MODIFIER_HELD                (not consumed)
+//   MODIFIER_HELD + trigger        → ACTIVE(index=next, count)    (consumed)
+//   MODIFIER_HELD + trigger(shift) → ACTIVE(index=current, count) (consumed)
+//   MODIFIER_HELD + modifierUp     → IDLE                         (not consumed)
+//   ACTIVE + trigger               → advance index                (consumed)
+//   ACTIVE + trigger(shift)        → retreat index                (consumed)
+//   ACTIVE + arrowForward/Back     → advance/retreat index        (consumed)
+//   ACTIVE + escape                → cancel → IDLE                (consumed)
+//   ACTIVE + sameAppJump           → jump via resolver            (consumed)
+//   ACTIVE + otherKey              → no-op, NOT consumed
+//   ACTIVE + modifierUp            → confirmSelection → IDLE      (not consumed)
 
 import Foundation
 
@@ -105,10 +106,12 @@ final class SwitcherStateMachine {
     var sameAppResolver: ((Int) -> Int?)?
 
     /// Overrides where the selection starts when the panel is shown, given the
-    /// item count. Injected by the caller for app-unit mode, where "one tap
-    /// returns to the previous thing" means the previous APP rather than the
-    /// previous window, and that item is not at flat index 1.
-    var initialIndexProvider: ((Int) -> Int)?
+    /// item count and whether the show was triggered with Shift held (Shift =
+    /// start on the current item; no Shift = start on the next one). Injected
+    /// by the caller for app-unit mode, where "one tap returns to the previous
+    /// thing" means the previous APP rather than the previous window, and that
+    /// item is not at flat index 1.
+    var initialIndexProvider: ((Int, Bool) -> Int)?
 
     /// Takes over every movement input while set, mapping an input and the
     /// current flat index to a new flat index (nil = stay put).
@@ -161,17 +164,16 @@ final class SwitcherStateMachine {
             switch input {
             case .trigger(let shift):
                 // Build the list and show the panel.
-                // Initial index = 1 when count ≥ 2, else 0 (skip the current window).
+                // Shift+Tab starts on the current item (index 0 — "where am I");
+                // Tab starts on the next one (index 1 when count ≥ 2, else 0 —
+                // there is nowhere else to go with a single window).
                 let count = itemCount
                 guard count > 0 else {
                     // No windows — stay in MODIFIER_HELD, consume the key.
                     return (.none, true)
                 }
-                let initialIndex = initialIndexProvider.map { $0(count) } ?? (count >= 2 ? 1 : 0)
-                // Shift has no effect on the initial show transition, but
-                // we honour it for future extensibility (same as forward).
-                // The spec diagram shows trigger → index=1 with no shift branch here.
-                _ = shift
+                let initialIndex =
+                    initialIndexProvider.map { $0(count, shift) } ?? (shift ? 0 : (count >= 2 ? 1 : 0))
                 state = .active(index: initialIndex, count: count)
                 return (.showPanel(initialIndex: initialIndex), true)
 

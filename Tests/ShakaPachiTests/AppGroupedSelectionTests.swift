@@ -274,4 +274,43 @@ final class AppGroupedSelectionTests: XCTestCase {
         XCTAssertNil(selection.flatIndex)
         XCTAssertEqual(selection.strip, WindowStrip(visible: [], hiddenLeft: 0, hiddenRight: 0))
     }
+
+    // MARK: - SwitchCoordinator.appGroupedInitialIndex(groups:shift:)
+
+    func testAppGroupedInitialIndexWithoutShiftStartsOnTheNextApp() {
+        let windows = [
+            makeWindow(id: 1, bundleID: "com.a", appName: "A"),
+            makeWindow(id: 2, bundleID: "com.b", appName: "B"),
+            makeWindow(id: 3, bundleID: "com.c", appName: "C"),
+        ]
+        let groups = AppGroupedSelection.groups(from: windows)
+        let index = SwitchCoordinator.appGroupedInitialIndex(groups: groups, shift: false)
+        XCTAssertEqual(index, 1, "no shift: land on the second group (the previous app)")
+    }
+
+    func testAppGroupedInitialIndexWithShiftStartsOnTheCurrentApp() {
+        let windows = [
+            makeWindow(id: 1, bundleID: "com.a", appName: "A"),
+            makeWindow(id: 2, bundleID: "com.b", appName: "B"),
+            makeWindow(id: 3, bundleID: "com.c", appName: "C"),
+        ]
+        let groups = AppGroupedSelection.groups(from: windows)
+        let index = SwitchCoordinator.appGroupedInitialIndex(groups: groups, shift: true)
+        XCTAssertEqual(index, 0, "shift: land on the first group (the current app)")
+    }
+
+    func testAppGroupedInitialIndexWithSingleAppIsZeroRegardlessOfShift() {
+        let windows = [
+            makeWindow(id: 1, bundleID: "com.a", appName: "A"),
+            makeWindow(id: 2, bundleID: "com.a", appName: "A"),
+        ]
+        let groups = AppGroupedSelection.groups(from: windows)
+        XCTAssertEqual(SwitchCoordinator.appGroupedInitialIndex(groups: groups, shift: false), 0)
+        XCTAssertEqual(SwitchCoordinator.appGroupedInitialIndex(groups: groups, shift: true), 0)
+    }
+
+    func testAppGroupedInitialIndexWithEmptyGroupsIsZero() {
+        XCTAssertEqual(SwitchCoordinator.appGroupedInitialIndex(groups: [], shift: false), 0)
+        XCTAssertEqual(SwitchCoordinator.appGroupedInitialIndex(groups: [], shift: true), 0)
+    }
 }

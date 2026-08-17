@@ -162,8 +162,9 @@ final class SwitchCoordinator {
             // hands the machine's flat ±1 movement over wholesale.
             if Settings.shared.switcherDisplayMode == .app {
                 self.appGroups = AppGroupedSelection.groups(from: infos)
-                self.machine.initialIndexProvider = { [weak self] _ in
-                    self?.appGroupedInitialIndex() ?? 0
+                self.machine.initialIndexProvider = { [weak self] _, shift in
+                    guard let self else { return 0 }
+                    return Self.appGroupedInitialIndex(groups: self.appGroups, shift: shift)
                 }
                 self.machine.navigator = { [weak self] input, index in
                     self?.appGroupedNavigate(input, from: index)
@@ -297,14 +298,24 @@ final class SwitchCoordinator {
 
     // MARK: - App-unit mode
 
-    /// Where the selection starts in app-unit mode.
+    /// Where the selection starts in app-unit mode, given the grouped snapshot.
     ///
     /// One tap and release should land on the previous APP, matching what the
     /// system switcher does. Flat index 1 would not: when the front app has
     /// several windows, its own second window sits there.
-    private func appGroupedInitialIndex() -> Int {
-        guard !appGroups.isEmpty else { return 0 }
-        let group = appGroups.count >= 2 ? appGroups[1] : appGroups[0]
+    ///
+    /// Static, `nonisolated`, and free of `self` so this logic can be
+    /// unit-tested directly without a MainActor context — the rest of
+    /// SwitchCoordinator needs AppKit-backed collaborators (WindowStore,
+    /// SwitcherPanel, ...) to construct, which this does not.
+    ///
+    /// - Parameters:
+    ///   - groups: The app-grouped view of the current snapshot.
+    ///   - shift: True when the panel was raised with Cmd+Shift+Tab, which
+    ///     starts on the current app (the first group) instead of the next one.
+    nonisolated static func appGroupedInitialIndex(groups: [AppGroup], shift: Bool) -> Int {
+        guard !groups.isEmpty else { return 0 }
+        let group = shift ? groups[0] : (groups.count >= 2 ? groups[1] : groups[0])
         return group.windowIndices.first ?? 0
     }
 
