@@ -60,6 +60,13 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(settings.sortMode, .mru)
     }
 
+    func testDefault_switcherDisplayMode_isWindow() {
+        let (_, settings) = makeSuite()
+        XCTAssertEqual(
+            settings.switcherDisplayMode, .window,
+            "Default switcherDisplayMode is .window — preserves existing users' behavior")
+    }
+
     func testDefault_excludedBundleIDs_isEmpty() {
         let (_, settings) = makeSuite()
         XCTAssertTrue(settings.excludedBundleIDs.isEmpty)
@@ -155,6 +162,30 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(
             settings.sortMode, .mru,
             "Unrecognized raw value must fall back to the default (.mru)")
+    }
+
+    // MARK: - SwitcherDisplayMode round-trip
+
+    func testRoundTrip_switcherDisplayMode_window() {
+        let (_, settings) = makeSuite()
+        settings.switcherDisplayMode = .window
+        XCTAssertEqual(settings.switcherDisplayMode, .window)
+    }
+
+    func testRoundTrip_switcherDisplayMode_app() {
+        let (_, settings) = makeSuite()
+        settings.switcherDisplayMode = .app
+        XCTAssertEqual(settings.switcherDisplayMode, .app)
+    }
+
+    func testFallback_switcherDisplayMode_unknownRawValueDefaultsToWindow() {
+        // Verifies DefaultsEnum falls back to .window when the stored string is
+        // unrecognized — e.g. a value from a future version this build doesn't know.
+        let (defaults, settings) = makeSuite()
+        defaults.set("perMonitor", forKey: "switcherDisplayMode")
+        XCTAssertEqual(
+            settings.switcherDisplayMode, .window,
+            "Unrecognized raw value must fall back to the default (.window)")
     }
 
     // MARK: - Theme round-trip
@@ -344,5 +375,11 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(Theme.allCases.contains(.light))
         XCTAssertTrue(Theme.allCases.contains(.dark))
         XCTAssertTrue(Theme.allCases.contains(.system))
+    }
+
+    func testCaseIterable_switcherDisplayMode_hasBothCases() {
+        XCTAssertEqual(SwitcherDisplayMode.allCases.count, 2)
+        XCTAssertTrue(SwitcherDisplayMode.allCases.contains(.window))
+        XCTAssertTrue(SwitcherDisplayMode.allCases.contains(.app))
     }
 }

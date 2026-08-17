@@ -197,9 +197,10 @@ flowchart TD
     SW --> OW
 ```
 
-The **pure-logic** parts (`SwitcherStateMachine`, `SafetyGuard`, `StreakStats`,
-plus the static helpers inside `WindowStore` / `Activator`) have no AppKit
-dependency, so they are unit-tested directly without a display connection.
+The **pure-logic** parts (`SwitcherStateMachine`, `AppGroupedSelection`,
+`SafetyGuard`, `StreakStats`, plus the static helpers inside `WindowStore` /
+`Activator` and the geometry in `SwitcherLayout`) have no AppKit dependency, so
+they are unit-tested directly without a display connection.
 
 ---
 
@@ -335,7 +336,9 @@ stateDiagram-v2
 
     active --> active : trigger -> move forward (consumed)
     active --> active : trigger+shift -> move backward (consumed)
-    active --> active : arrowForward / arrowBackward -> move (consumed)
+    active --> active : arrowRight / arrowDown -> advance (consumed)
+    active --> active : arrowLeft / arrowUp -> retreat (consumed)
+    active --> active : digit -> no-op in window mode (NOT consumed)
     active --> active : sameAppJump -> next same-PID window (consumed)
     active --> active : otherKey (NOT consumed)
     active --> idle : modifierUp -> confirmSelection (not consumed)
@@ -346,6 +349,46 @@ The window count is only meaningful on the `modifierHeld → active` (show)
 transition; every other input passes `0` and the machine ignores it. The
 `sameAppResolver` closure — wired by the coordinator to walk its `lastWindowInfos`
 snapshot — finds the next window belonging to the same app as the highlighted one.
+
+Arrows reach the machine as physical directions rather than as forward/backward.
+The tap has no idea which display mode is active, and the two modes read the
+vertical axis differently, so collapsing the axes in the tap would throw away the
+information the machine needs. Window-unit mode collapses them again immediately,
+which is why its behaviour is unchanged.
+
+## App-unit display mode
+
+`Settings.switcherDisplayMode` selects between listing every window flat
+(`.window`, the default) and grouping by app (`.app`). The grouped mode is a
+**derived view over the same snapshot**, not a second pipeline:
+
+| Type | Role |
+| --- | --- |
+| `AppGroup` | One app's windows, held as *indices into the flat snapshot* |
+| `WindowStrip` | The ≤3 panes currently drawn, plus how many are folded away on each side |
+| `AppGroupedSelection` | The two-axis cursor (which app, which window, which row), and the per-app memory of where the cursor last was |
+
+Because groups carry indices rather than copies, `confirmSelection` still receives
+a flat index and the activation path is untouched by this mode.
+
+The state machine is not rebuilt for two axes. Instead the coordinator injects two
+closures while the mode is on, in the same spirit as `sameAppResolver`:
+
+- `navigator` takes over every movement input, mapping (input, current flat index)
+  to a new flat index. The flat ±1 arithmetic inside `active` cannot express a
+  cursor that moves across two axes; delegating it wholesale keeps window-unit
+  mode's code path literally unchanged.
+- `initialIndexProvider` overrides where the selection starts. One tap and release
+  should land on the previous *app*, and that window is not at flat index 1 —
+  when the front app has several windows, its own second window sits there.
+
+Key meanings follow the two rows on screen: the trigger key crosses apps from
+either row, left/right move within the current row, down descends into the window
+strip, up returns to the app row, and the trigger modifier plus `1`…`3` jumps
+straight to a visible pane. Digits address panes rather than windows, so their
+meaning moves with the strip; they are deliberately limited to what is on screen.
+An app with a single window has nothing to descend into, so the mode collapses to
+the same panel window-unit mode would have drawn.
 
 ---
 

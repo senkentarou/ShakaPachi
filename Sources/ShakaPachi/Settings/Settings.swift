@@ -48,6 +48,16 @@ public enum TriggerModifier: String, CaseIterable, Sendable {
         case .control: return "Control (^)"
         }
     }
+
+    /// Bare glyph for the switcher's own shortcut badges, where the name would
+    /// not fit and the surrounding context already says what it is.
+    public var symbol: String {
+        switch self {
+        case .command: return "⌘"
+        case .option: return "⌥"
+        case .control: return "^"
+        }
+    }
 }
 
 /// The key (in combination with the modifier) that triggers the switcher.
@@ -90,6 +100,24 @@ public enum SortMode: String, CaseIterable, Sendable {
         case .byApp: return NSLocalizedString("アプリ別", comment: "Sort mode: by app")
         case .byAppMRU:
             return NSLocalizedString("最近使ったアプリ順", comment: "Sort mode: by recently used app")
+        }
+    }
+}
+
+/// How the switcher groups windows for display.
+public enum SwitcherDisplayMode: String, CaseIterable, Sendable {
+    /// All windows in a single flat list (the historical behavior).
+    case window
+    /// Windows grouped by app; the selected app's windows expand.
+    case app
+
+    /// Human-readable label for UI display.
+    public var displayName: String {
+        switch self {
+        case .window:
+            return NSLocalizedString("ウィンドウ単位", comment: "Switcher display mode: flat list of all windows")
+        case .app:
+            return NSLocalizedString("アプリ単位", comment: "Switcher display mode: grouped by app")
         }
     }
 }
@@ -456,6 +484,7 @@ final class Settings: ObservableObject {
         static let triggerModifier = "triggerModifier"
         static let triggerKey = "triggerKey"
         static let sortMode = "sortMode"
+        static let switcherDisplayMode = "switcherDisplayMode"
         static let theme = "theme"
         static let maxRows = "maxRows"
         static let showDelayMs = "showDelayMs"
@@ -482,6 +511,8 @@ final class Settings: ObservableObject {
         _triggerModifier = DefaultsEnum(key: Key.triggerModifier, defaultValue: .command, defaults: defaults)
         _triggerKey = DefaultsEnum(key: Key.triggerKey, defaultValue: .tab, defaults: defaults)
         _sortMode = DefaultsEnum(key: Key.sortMode, defaultValue: .mru, defaults: defaults)
+        _switcherDisplayMode = DefaultsEnum(
+            key: Key.switcherDisplayMode, defaultValue: .window, defaults: defaults)
         _theme = DefaultsEnum(key: Key.theme, defaultValue: .system, defaults: defaults)
         _maxRows = DefaultsInt(key: Key.maxRows, defaultValue: 20, defaults: defaults)
         _showDelayMs = DefaultsInt(key: Key.showDelayMs, defaultValue: 0, defaults: defaults)
@@ -595,6 +626,17 @@ final class Settings: ObservableObject {
     var sortMode: SortMode {
         get { _sortMode.wrappedValue }
         set { _sortMode.wrappedValue = newValue }
+    }
+
+    // -- Display mode --
+
+    /// How the switcher groups windows: a flat per-window list, or grouped by app.
+    /// Default: .window — this ships to existing users, so the default preserves
+    /// the flat-list behavior they already know rather than changing it under them.
+    private var _switcherDisplayMode: DefaultsEnum<SwitcherDisplayMode>
+    var switcherDisplayMode: SwitcherDisplayMode {
+        get { _switcherDisplayMode.wrappedValue }
+        set { _switcherDisplayMode.wrappedValue = newValue }
     }
 
     // -- Exclusion --

@@ -238,16 +238,30 @@ final class HotkeyTap {
             switch keyCode {
             case configuredKeyCode where hasTriggerModifier:
                 switcherInput = .trigger(shift: hasShift)
-            case KeyCode.rightArrow, KeyCode.downArrow:
-                switcherInput = .arrowForward
-            case KeyCode.leftArrow, KeyCode.upArrow:
-                switcherInput = .arrowBackward
+            // Arrows are reported by direction, not by meaning: the tap has no
+            // idea which display mode is active, and the two modes read the
+            // vertical axis differently. The state machine decides.
+            case KeyCode.rightArrow:
+                switcherInput = .arrowRight
+            case KeyCode.leftArrow:
+                switcherInput = .arrowLeft
+            case KeyCode.downArrow:
+                switcherInput = .arrowDown
+            case KeyCode.upArrow:
+                switcherInput = .arrowUp
             case KeyCode.escape:
                 switcherInput = .escape
             case KeyCode.grave:
                 switcherInput = .sameAppJump
             default:
-                switcherInput = .otherKey
+                // Digits only mean something while the switcher is up; the
+                // machine returns them unconsumed otherwise, so the front app
+                // still sees its own modifier+digit shortcuts.
+                if let digit = KeyCode.digit(for: keyCode) {
+                    switcherInput = .digit(digit)
+                } else {
+                    switcherInput = .otherKey
+                }
             }
         case .keyUp:
             // Consume the trigger key's keyUp so an orphan keyUp doesn't reach

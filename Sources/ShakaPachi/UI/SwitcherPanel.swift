@@ -181,15 +181,12 @@ final class SwitcherPanel {
     /// Number of items in the currently shown snapshot.
     var itemCount: Int { listView.count }
 
-    /// Show the panel with the given items, placing the initial selection at
-    /// `selectedIndex`. Repositions to the screen containing the mouse cursor,
-    /// shrinking the tiles when the natural width would overflow that screen.
-    ///
-    /// - Parameter previewEnabled: When true (and screen-recording permission is
-    ///   granted by the caller), a live window preview is drawn below the title.
-    ///   Defaults to false so existing call sites without the parameter still work.
+    /// Per-show appearance work shared by both display modes: accent colour,
+    /// the opal and patina treatments, the preview flag, and the preview pane
+    /// size. Returns the pane size so the caller can pass it to the layout.
     @MainActor
-    func show(items: [SwitcherItem], selectedIndex: Int, previewEnabled: Bool = false) {
+    @discardableResult
+    private func applyPerShowAppearance(previewEnabled: Bool) -> NSSize {
         // Read accent color once per show — runs once per trigger, not on the
         // hot selection-move path, so calling into Settings here is fine.
         let accent = Settings.shared.accentColor.resolvedColor(
@@ -246,6 +243,19 @@ final class SwitcherPanel {
             forWidth: CGFloat(Settings.shared.windowPreviewWidth))
         listView.previewPaneWidth = paneSize.width
         listView.previewPaneHeight = paneSize.height
+        return paneSize
+    }
+
+    /// Show the panel with the given items, placing the initial selection at
+    /// `selectedIndex`. Repositions to the screen containing the mouse cursor,
+    /// shrinking the tiles when the natural width would overflow that screen.
+    ///
+    /// - Parameter previewEnabled: When true (and screen-recording permission is
+    ///   granted by the caller), a live window preview is drawn below the title.
+    ///   Defaults to false so existing call sites without the parameter still work.
+    @MainActor
+    func show(items: [SwitcherItem], selectedIndex: Int, previewEnabled: Bool = false) {
+        let paneSize = applyPerShowAppearance(previewEnabled: previewEnabled)
 
         let screenFrame = targetScreenFrame()
         let availableWidth = screenFrame.width - Self.screenEdgeInset * 2
@@ -273,6 +283,57 @@ final class SwitcherPanel {
     /// Move the highlight to a different row without reloading the table.
     func updateSelection(to newIndex: Int) {
         listView.moveSelection(to: newIndex)
+    }
+
+    /// Show — or re-render — the panel in app-unit mode.
+    ///
+    /// There is no `updateSelection` counterpart for this mode: the panel's own
+    /// width changes whenever a `+n` chip appears or disappears, so there is no
+    /// stable frame to move a highlight inside. Pass `orderFront: false` to
+    /// re-render a panel that is already on screen.
+    @MainActor
+    func showAppGrouped(
+        items: [SwitcherItem],
+        groups: [AppGroup],
+        appIndex: Int,
+        strip: WindowStrip,
+        currentFlatIndex: Int,
+        focusRow: SwitcherFocusRow,
+        previewEnabled: Bool,
+        orderFront: Bool
+    ) {
+        applyPerShowAppearance(previewEnabled: previewEnabled)
+
+        let screenFrame = targetScreenFrame()
+        let availableWidth = screenFrame.width - Self.screenEdgeInset * 2
+        let baseTile = SwitcherLayout.nominalTile(
+            forIconSize: CGFloat(Settings.shared.switcherIconSize))
+
+        listView.setAppGrouped(
+            items: items,
+            groups: groups,
+            appIndex: appIndex,
+            strip: strip,
+            currentFlatIndex: currentFlatIndex,
+            focusRow: focusRow,
+            modifierSymbol: Settings.shared.triggerModifier.symbol,
+            availableWidth: availableWidth,
+            baseTile: baseTile)
+
+        let effectiveTile = SwitcherLayout.effectiveTileSize(
+            itemCount: groups.count, availableWidth: availableWidth, baseTile: baseTile)
+        let size = SwitcherLayout.appGroupedPanelSize(
+            groupCount: groups.count,
+            visiblePaneCount: strip.visible.count,
+            hasLeftChip: strip.hiddenLeft > 0,
+            hasRightChip: strip.hiddenRight > 0,
+            effectiveTile: effectiveTile)
+        setPanelFrame(size: size, screenFrame: screenFrame)
+
+        if orderFront {
+            panel.orderFrontRegardless()
+            listView.startOpalRimAnimation()
+        }
     }
 
     /// Hide the panel without destroying it (the panel is reused across sessions).
@@ -314,6 +375,12 @@ final class SwitcherPanel {
             previewEnabled: previewEnabled,
             previewPaneWidth: previewPaneWidth,
             previewPaneHeight: previewPaneHeight)
+        setPanelFrame(size: size, screenFrame: screenFrame)
+    }
+
+    /// Centre the panel on `screenFrame` at `size`, capping the width to the
+    /// screen and resizing the effect view's layers without implicit animation.
+    private func setPanelFrame(size: NSSize, screenFrame: NSRect) {
         // Tiles are shrunk to fit; if the count is so large they hit the 40pt
         // floor, the panel is still capped to the screen and the overflow
         // clips at the panel edge (acceptable, rare edge case).

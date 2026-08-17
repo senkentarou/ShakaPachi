@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShakaPachi — アプリ単位グルーピング：展開レイアウト案A〜D比較</title>
+<style>
+  /* --------------------------------------------------------------------
+     Geometry constants, copied 1:1 (px = pt) from SwitcherLayout /
+     AccentColor so this mock reads exactly like the real panel.
+     -------------------------------------------------------------------- */
+  :root {
+    --accent-rgb: 76, 128, 191; /* AccentColor.blue-ish, single fixed accent for this mock */
+    --tile: 76px;
+    --icon: 60px;
+    --gap: 8px;
+    --margin: 20px;
+    --radius-panel: 24px;
+    --radius-tile: 14px;      /* SwitcherLayout.selectionCornerRadius */
+    --mini: 56px;
+    --mini-icon: 44px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    color: #e9e9ef;
+    background: #14141c;
+    position: relative;
+  }
+  button { font: inherit; background: none; border: none; padding: 0; margin: 0; color: inherit; cursor: pointer; }
+
+  /* fake desktop, with window-ish edges so the blur has something to smear
+     (same convention as iridescent-02: a flat backdrop flatters
+     .behindWindow blur and leads to the wrong call about legibility) */
+  .desktop { position: fixed; inset: 0; z-index: 0; }
+  .desktop::before {
+    content: ""; position: absolute; inset: -10%;
+    background:
+      radial-gradient(50% 55% at 18% 22%, #3b6ea5 0%, transparent 60%),
+      radial-gradient(45% 50% at 82% 18%, #8c4a7a 0%, transparent 62%),
+      radial-gradient(60% 60% at 70% 85%, #2f6b5e 0%, transparent 65%),
+      linear-gradient(160deg, #171722 0%, #0e0e16 100%);
+  }
+  .desktop::after {
+    content: ""; position: absolute; inset: 0; mix-blend-mode: overlay;
+    background:
+      linear-gradient(90deg, transparent 6%, rgba(255,255,255,.10) 6% 34%, transparent 34%),
+      linear-gradient(0deg, transparent 18%, rgba(0,0,0,.28) 18% 74%, transparent 74%),
+      linear-gradient(90deg, transparent 58%, rgba(255,255,255,.07) 58% 92%, transparent 92%);
+  }
+
+  .page { position: relative; z-index: 1; max-width: 1040px; margin: 0 auto; padding: 36px 24px 90px; }
+  h1 { font-size: 20px; font-weight: 650; margin: 0 0 6px; }
+  .lede { margin: 0; font-size: 13px; line-height: 1.8; color: rgba(233,233,239,.62); max-width: 78ch; }
+  .lede strong { color: rgba(233,233,239,.86); font-weight: 620; }
+
+  /* sticky control bar: badge-format toggle, applied to every panel below */
+  .bar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center;
+    margin: 20px 0 0; padding: 12px 16px;
+    border-radius: 14px;
+    background: rgba(22,22,32,.78);
+    border: 1px solid rgba(255,255,255,.13);
+    backdrop-filter: blur(24px) saturate(1.4);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4);
+    font-size: 12px;
+  }
+  .bar .grp { display: flex; align-items: center; gap: 6px; }
+  .bar .grp > span { color: rgba(233,233,239,.5); margin-right: 2px; }
+  .bar button {
+    padding: 5px 11px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,.16);
+    background: rgba(255,255,255,.06); color: #e9e9ef;
+  }
+  .bar button:hover { background: rgba(255,255,255,.12); }
+  .bar button.on {
+    background: rgb(var(--accent-rgb)); border-color: transparent; color: #0d1420; font-weight: 650;
+  }
+
+  /* case blocks (one per layout option) */
+  .case { margin: 44px 0 0; }
+  .case-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 5px; }
+  .case-head h2 { font-size: 15px; margin: 0; font-weight: 640; }
+  .badge-tag { font-size: 10.5px; padding: 2px 8px; border-radius: 999px; letter-spacing: .04em; background: rgba(255,255,255,.08); color: rgba(233,233,239,.6); border: 1px solid rgba(255,255,255,.14); }
+  .note { font-size: 12px; line-height: 1.8; color: rgba(233,233,239,.58); margin: 0 0 16px; max-width: 80ch; }
+
+  .pros-cons { margin: 12px 0 4px; padding-left: 1.3em; font-size: 12px; line-height: 1.85; color: rgba(233,233,239,.72); max-width: 82ch; }
+  .pros-cons li { margin-bottom: 3px; }
+  .pros-cons li.pro::marker { color: #8ff0c4; }
+  .pros-cons li.con::marker { color: #ff9fb0; }
+  .pros-cons li.cost::marker { color: rgba(233,233,239,.5); }
+  .pros-cons b { color: rgba(233,233,239,.92); font-weight: 620; }
+
+  /* ================= panel chrome ================= */
+  .stage { display: flex; justify-content: center; padding: 10px 0 2px; overflow-x: auto; }
+  .duo { display: flex; gap: 26px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+  .duo figure { margin: 0; }
+  .duo figcaption { text-align: center; font-size: 11.5px; margin-top: 10px; color: rgba(233,233,239,.55); }
+
+  .panel {
+    position: relative; display: inline-block; border-radius: var(--radius-panel);
+  }
+  .panelbg {
+    position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    border-radius: var(--radius-panel); overflow: hidden;
+    backdrop-filter: blur(34px) saturate(1.5);
+    -webkit-backdrop-filter: blur(34px) saturate(1.5);
+    background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.18); /* AccentColor.glassBorderAlpha */
+    box-shadow: 0 26px 70px rgba(0,0,0,.46);
+  }
+  .panelbg::after { /* liquid-glass top sheen, same as SwitcherPanel's sheenLayer */
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.04) 40%, transparent 75%);
+  }
+
+  .content { position: relative; z-index: 1; padding-bottom: 14px; } /* SwitcherLayout.bottomPadding, applies after whichever row is last */
+
+  /* ---- app row (top row, present in all four options) ---- */
+  .approw { display: flex; gap: var(--gap); padding: 20px 20px 0; } /* topPadding=20, horizontalMargin=20 */
+  .apptile {
+    width: var(--tile); height: var(--tile); border-radius: var(--radius-tile);
+    display: flex; align-items: center; justify-content: center;
+    position: relative; flex: none;
+  }
+  .apptile.sel {
+    background: rgba(var(--accent-rgb), .30); /* AccentColor.selectionHighlightAlpha */
+    /* Two-tone hairline rim, ordered to match the real draw(_:): darkRim is
+       stroked at the smaller inset (0.5pt, i.e. outer), lightRim at the
+       larger inset (1.5pt, i.e. inner). box-shadow paints top-to-bottom in
+       list order, so the outer (smaller-inset) ring must be listed first. */
+    box-shadow:
+      inset 0 0 0 1px rgba(0,0,0,.28),   /* outer ring: selectionRimDarkAlpha */
+      inset 0 0 0 2px rgba(255,255,255,.55); /* inner ring: selectionRimLightAlpha */
+  }
+  .iconwrap { position: relative; overflow: hidden; flex: none; box-shadow: 0 2px 5px rgba(0,0,0,.34); }
+
+  /* ---- selected window title line (13px, centered, middle-truncated) ---- */
+  .titlerow {
+    margin-top: 6px; height: 20px; line-height: 20px; /* titleGap=6, titleHeight=20 */
+    padding: 0 20px; font-size: 13px; text-align: center;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    text-shadow: 0 1px 2px rgba(0,0,0,.4);
+  }
+
+  /* ---- shared "badge" chip for numbered/⌘-numbered windows ---- */
+  .badge {
+    position: absolute; right: -3px; bottom: -3px; min-width: 15px; height: 15px; padding: 0 3px;
+    border-radius: 8px; background: rgba(18,18,26,.88); color: #fff; font-size: 9px; font-weight: 700;
+    line-height: 15px; text-align: center; box-shadow: 0 0 0 1.5px rgba(255,255,255,.4);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ================= 案A: 下段ドロワー ================= */
+  .drawer { display: flex; justify-content: center; gap: var(--gap); padding: 0 20px; margin-top: 6px; }
+  .minitile {
+    width: var(--mini); height: var(--mini); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; position: relative; flex: none;
+  }
+  .minitile.sel {
+    background: rgba(var(--accent-rgb), .30);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.28), inset 0 0 0 1.5px rgba(255,255,255,.5);
+  }
+
+  /* ================= 案B: インライン展開 ================= */
+  .apptile.expand { width: auto; padding: 0 8px; }
+  .expandwrap { display: flex; align-items: center; gap: 6px; height: 100%; }
+  .minitile.inlinemini { width: 48px; height: 48px; border-radius: 9px; }
+  .minitile.inlinemini.focus {
+    background: rgba(255,255,255,.14);
+    box-shadow: inset 0 0 0 2px rgba(255,255,255,.55);
+  }
+
+  /* ================= 案C: 下段ライブプレビュー並置 ================= */
+  .previewstrip { display: flex; justify-content: center; gap: 10px; padding: 0 20px; margin-top: 10px; } /* previewTopGap=10 */
+  .pane {
+    border-radius: 10px; border: 1px solid rgba(255,255,255,.20); overflow: hidden;
+    position: relative; box-shadow: 0 8px 18px rgba(0,0,0,.35); flex: none;
+  }
+  .pane.sel { outline: 2px solid rgba(var(--accent-rgb), .95); outline-offset: 1px; }
+  .pane::before {
+    content: ""; position: absolute; inset: 0;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.13) 0 18px, transparent 18px),
+      repeating-linear-gradient(180deg, transparent 0 26px, rgba(255,255,255,.045) 26px 27px),
+      linear-gradient(135deg, #26263a, #171722);
+  }
+  .pane::after { /* fake traffic-light dots, fixed px like the reference mock's .shot::after */
+    content: ""; position: absolute; left: 8px; top: 6px;
+    width: 24px; height: 5px; border-radius: 99px; background: rgba(255,255,255,.34);
+    box-shadow: 32px 0 0 rgba(255,255,255,.18), 46px 0 0 rgba(255,255,255,.18);
+  }
+  .pane .badge { left: 7px; right: auto; top: auto; bottom: 7px; box-shadow: none; background: rgba(0,0,0,.6); }
+
+  /* ================= 案D: 縦ドロップダウン ================= */
+  .rowwrap { position: relative; }
+  .dropdown {
+    position: absolute; min-width: 76px; max-width: 300px;
+    background: rgba(30,30,42,.92);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-radius: 12px; border: 1px solid rgba(255,255,255,.16);
+    box-shadow: 0 14px 34px rgba(0,0,0,.45); padding: 6px; z-index: 5;
+  }
+  .ddrow { display: flex; align-items: center; gap: 12px; padding: 6px 8px; border-radius: 8px; font-size: 12.5px; }
+  .ddrow.sel { background: rgba(var(--accent-rgb), .28); }
+  .ddtitle { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ddbadge {
+    flex: none; font-size: 11px; color: rgba(233,233,239,.62);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums;
+  }
+
+  .hint { font-size: 11.5px; color: rgba(233,233,239,.42); text-align: center; margin-top: 12px; }
+  footer { margin-top: 54px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,.12); font-size: 12px; line-height: 1.9; color: rgba(233,233,239,.55); }
+  footer code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px;
+    padding: 1px 5px; border-radius: 4px; background: rgba(255,255,255,.10);
+  }
+</style>
+</head>
+<body>
+<div class="desktop"></div>
+
+<div class="page">
+  <h1>アプリ単位グルーピング：選択中アプリのウィンドウをその場で展開する4案</h1>
+  <p class="lede">
+    スイッチャーを「上段=アプリ」に切り替えたとき、<strong>選択中アプリの複数ウィンドウをどこにどう展開するか</strong>を
+    4案並べて比較します。共通の題材データ（8アプリ・ウィンドウ枚数はばらつき）を全案で使い、上段のアプリタイルをクリックすると
+    実際にその案の展開先が切り替わります。<strong>選択中アプリのウィンドウが1枚のときは、4案とも今日のパネルと完全に同一の見た目に
+    収束します</strong>（差が出るのは複数ウィンドウを持つアプリを選んだときだけ）。バッジの表記は下のバーで切り替えると全案に同時反映されます。
+  </p>
+
+  <div class="bar">
+    <div class="grp">
+      <span>ウィンドウ選択バッジ</span>
+      <button data-badge="num" class="on">1 2 3</button>
+      <button data-badge="cmd">⌘1 ⌘2 ⌘3</button>
+      <button data-badge="none">バッジなし（矢印キーのみ）</button>
+    </div>
+  </div>
+
+  <!-- ============ 案A: 下段ドロワー ============ -->
+  <section class="case">
+    <div class="case-head">
+      <h2>案A：下段ドロワー</h2>
+      <span class="badge-tag">アプリ行の下に小タイル行を足す</span>
+    </div>
+    <p class="note">
+      上段はアプリタイル（76px）のまま。選択中アプリのウィンドウが複数あるときだけ、その下に56px程度の小タイルを横並びで足す。
+      1枚のときは下段自体を出さず、今日のパネルと同一になる。
+    </p>
+    <div class="stage">
+      <div class="duo">
+        <figure><div class="panel" id="a-1"><div class="panelbg"></div><div class="content"></div></div><figcaption>(a) Slack（1枚）を選択中</figcaption></figure>
+        <figure><div class="panel" id="a-2"><div class="panelbg"></div><div class="content"></div></div><figcaption>(b) VS Code（3枚）を選択中</figcaption></figure>
+      </div>
+    </div>
+    <p class="hint">↑ 上段のアプリタイルをクリックすると、その案の中だけで選択が切り替わります</p>
+    <ul class="pros-cons">
+      <li class="pro"><b>長所:</b> 1枚のときは今日のパネルと完全に同じ見た目で、差分が最小。小タイルは常にアイコンなので「複数ウィンドウがある」ことが一目でわかる。</li>
+      <li class="con"><b>短所:</b> 3枚選択時は縦に約64px（56pxタイル＋6pxギャップ）パネルが伸びる。中央固定表示のため、選択を跨ぐたびにパネルが上下に伸縮して視線が追いづらい。小タイルにはタイトルが乗らず、読めるタイトルは下1行だけなのでフォーカス移動のたびに読み直しが要る。</li>
+      <li class="cost"><b>実装コスト:</b> `SwitcherLayout.panelSize` に「ドロワー行の有無」を足す程度で済み、ドロワーは既存のタイル描画（角丸+アイコン+バッジ）をそのまま複製できる。ただし `draw(_:)` の差分再描画は、選択移動でドロワー行ごと出現/消滅するケースがあるため2タイル分の矩形無効化では足りず、ドロワー行とタイトル行を含む帯全体を無効化する必要がある。</li>
+    </ul>
+  </section>
+
+  <!-- ============ 案B: インライン展開 ============ -->
+  <section class="case">
+    <div class="case-head">
+      <h2>案B：インライン展開（アコーディオン）</h2>
+      <span class="badge-tag">段は1段のまま、選択タイルが横に伸びる</span>
+    </div>
+    <p class="note">
+      段は増やさない。選択中アプリのタイルがその場で横に伸び、内側にウィンドウのミニタイル（48px）が並ぶ。左右のアプリタイルは押しのけられる。
+    </p>
+    <div class="stage">
+      <div class="duo">
+        <figure><div class="panel" id="b-1"><div class="panelbg"></div><div class="content"></div></div><figcaption>(a) Slack（1枚）を選択中</figcaption></figure>
+        <figure><div class="panel" id="b-2"><div class="panelbg"></div><div class="content"></div></div><figcaption>(b) VS Code（3枚）を選択中</figcaption></figure>
+      </div>
+    </div>
+    <p class="hint">↑ 上段のアプリタイルをクリックすると、その案の中だけで選択が切り替わります</p>
+    <ul class="pros-cons">
+      <li class="pro"><b>長所:</b> 段が増えないのでパネルの「高さ」は状態に関わらず一定。展開が選択タイルの直近で起きるので、視線移動が横方向だけで済む。</li>
+      <li class="con"><b>短所:</b> 3枚選択時は横に120px前後パネルが伸び、隣のアプリタイルの位置が選択のたびに変わる。押しのけられた側のタイルはクリック/矢印キーで狙い撃ちしづらくなる。展開後のミニタイルは48px程度まで縮むためタイトルは乗せられず、視認性は4案中最も低い。</li>
+      <li class="cost"><b>実装コスト:</b> `tileRect(index:)` は現状「index だけの純粋関数」だが、この案では「他の全タイルの位置が選択インデックスと選択アプリのウィンドウ数に依存する」関数に変わる。`draw(_:)` の2タイル分だけの差分再描画は成立しなくなり、選択より右側のタイルを全部再描画する必要が出る — 4案の中で実装コストは最大。</li>
+    </ul>
+  </section>
+
+  <!-- ============ 案C: 下段ライブプレビュー並置 ============ -->
+  <section class="case">
+    <div class="case-head">
+      <h2>案C：下段ライブプレビュー並置</h2>
+      <span class="badge-tag">既存の320×200プレビューをN枚に分割</span>
+    </div>
+    <p class="note">
+      既存のライブプレビューペインを、選択中アプリのウィンドウ枚数ぶん横に並べる。枚数に応じて1枚あたりの幅を縮小し、
+      1枚なら現状どおり320×200のまま。
+    </p>
+    <div class="stage">
+      <div class="duo">
+        <figure><div class="panel" id="c-1"><div class="panelbg"></div><div class="content"></div></div><figcaption>(a) Slack（1枚）を選択中</figcaption></figure>
+        <figure><div class="panel" id="c-2"><div class="panelbg"></div><div class="content"></div></div><figcaption>(b) VS Code（3枚）を選択中</figcaption></figure>
+      </div>
+    </div>
+    <p class="hint">↑ 上段のアプリタイルをクリックすると、その案の中だけで選択が切り替わります</p>
+    <ul class="pros-cons">
+      <li class="pro"><b>長所:</b> 1枚のときは既存の320×200プレビューと完全に同一。タイトル行とプレビュー画像の両方が見えるので、ウィンドウ識別に使える情報量は4案中最大。</li>
+      <li class="con"><b>短所:</b> 3枚時は各ペインが320×200から約215×134まで縮み、プレビュー内の文字は事実上読めなくなる（色味とレイアウトの記憶で当てるしかない）。パネル幅は一定に保てるが、高さは1枚時と複数枚時でプレビュー段の縦幅ぶん変わる。</li>
+      <li class="cost"><b>実装コスト:</b> 既存の `previewRect` / `drawPreview` をN枚ぶん複製し、幅を `(availableWidth - gap*(n-1)) / n` で再計算するだけで済み、ジオメトリ自体は既存の `previewPaneSize(forWidth:)` を再利用できる。ただし `WindowPreviewCache` は現状「選択中の1ウィンドウだけキャプチャする」前提なので、選択中アプリの全ウィンドウを同時にキャプチャ・キャッシュする必要が生まれ、レイアウトだけでなくキャプチャ経路にも手を入れることになる。</li>
+    </ul>
+  </section>
+
+  <!-- ============ 案D: 縦ドロップダウン ============ -->
+  <section class="case">
+    <div class="case-head">
+      <h2>案D：縦ドロップダウン</h2>
+      <span class="badge-tag">選択タイルの真下にメニュー風の縦リスト</span>
+    </div>
+    <p class="note">
+      選択中アプリタイルの真下に、ウィンドウタイトルの縦リストをメニュー風に出す。タイトルは省略なしで最後まで読める（幅の上限までは）。
+    </p>
+    <div class="stage">
+      <div class="duo">
+        <figure><div class="panel" id="d-1"><div class="panelbg"></div><div class="content"></div></div><figcaption>(a) Slack（1枚）を選択中</figcaption></figure>
+        <figure><div class="panel" id="d-2"><div class="panelbg"></div><div class="content"></div></div><figcaption>(b) VS Code（3枚）を選択中</figcaption></figure>
+      </div>
+    </div>
+    <p class="hint">↑ 上段のアプリタイルをクリックすると、その案の中だけで選択が切り替わります（Safari やメモを選ぶと長いタイトルも試せます）</p>
+    <ul class="pros-cons">
+      <li class="pro"><b>長所:</b> タイトルが省略なしで最後まで読める（4案中これだけが「識別できない」問題を原理的に避けられる）。数字キー（⌘1〜）との対応がメニューの見た目そのものと一致し、直感的。</li>
+      <li class="con"><b>短所:</b> ドロップダウンの横幅はタイトルの長さに引っ張られるため、選択中アプリが画面端に近いタイルだとパネルの右端をはみ出しかねない（このモックでは実際にクランプして防いでいる）。3枚選択時は下1行のタイトル表示自体をドロップダウンに置き換える構造になり、1枚時とは要素の構成そのものが変わる（他案は「要素が増える」だけだが、この案は「要素が入れ替わる」）。</li>
+      <li class="cost"><b>実装コスト:</b> `tileRect` 自体は変わらないが、`panelSize` が「選択中アプリのウィンドウタイトルの実測幅」に依存するようになり、文字列幅の計測（`NSAttributedString.size()` 等）をレイアウト計算に持ち込む必要がある。現状の `SwitcherLayout` は文字列を一切見ない純粋な幾何関数群なので、ここだけ性質が変わり、パネル境界を意識したクランプ処理と合わせてユニットテストの書き方も変わる。</li>
+    </ul>
+  </section>
+
+  <footer>
+    次の判断ポイント: どの展開案を採るか、＋バッジ表記（数字のみ／⌘付き／なし）。<br>
+    実装コストだけで見るなら<strong>案A（下段ドロワー）</strong>が最有力— 既存のタイル描画（角丸+アイコン+バッジ）をそのまま複製するだけで新しい描画プリミティブが要らず、
+    案Cのようにライブキャプチャの経路を増やす必要もない。ただしパネルが上下に伸縮する見た目のコストは残るので、
+    「タイトルの読みやすさを最優先するなら案D、実装コストを最優先するなら案A」という軸で決める。
+  </footer>
+</div>
+
+<script>
+  'use strict';
+
+  // ------------------------------------------------------------------
+  // Layout constants, copied 1:1 (px = pt) from SwitcherLayout so this
+  // mock's geometry math matches the real panel's.
+  // ------------------------------------------------------------------
+  var TILE = 76, GAP = 8, MARGIN = 20;
+
+  // ------------------------------------------------------------------
+  // Fake app icons: a rounded color patch (CSS gradient) plus a small
+  // inline-SVG glyph, following the same "flat color + character/glyph"
+  // convention as the existing mockups. No external images or fonts.
+  // ------------------------------------------------------------------
+  var GLYPHS = {
+    safari: '<svg viewBox="0 0 100 100" style="position:absolute;inset:0;width:100%;height:100%" aria-hidden="true">' +
+      '<circle cx="50" cy="50" r="33" fill="none" stroke="#ffffff" stroke-opacity="0.9" stroke-width="4"/>' +
+      '<polygon points="50,20 58,50 42,50" fill="#ff5b4d"/>' +
+      '<polygon points="50,80 58,50 42,50" fill="#f2f4f8"/>' +
+      '</svg>',
+    vscode: '<svg viewBox="0 0 100 100" style="position:absolute;inset:0;width:100%;height:100%" aria-hidden="true">' +
+      '<polyline points="40,26 18,50 40,74" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.92"/>' +
+      '<polyline points="60,26 82,50 60,74" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.92"/>' +
+      '<line x1="56" y1="20" x2="44" y2="80" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-opacity="0.5"/>' +
+      '</svg>',
+    terminal: '<svg viewBox="0 0 100 100" style="position:absolute;inset:0;width:100%;height:100%" aria-hidden="true">' +
+      '<polyline points="26,32 52,50 26,68" fill="none" stroke="#6be675" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<rect x="56" y="62" width="26" height="8" rx="2" fill="#e8e8ec"/>' +
+      '</svg>',
+    slack: '<svg viewBox="0 0 100 100" style="position:absolute;inset:0;width:100%;height:100%" aria-hidden="true">' +
+      '<rect x="36" y="18" width="9" height="64" rx="4" fill="#ffffff" fill-opacity="0.94"/>' +
+      '<rect x="55" y="18" width="9" height="64" rx="4" fill="#ffffff" fill-opacity="0.94"/>' +
+      '<rect x="18" y="36" width="64" height="9" rx="4" fill="#ffffff" fill-opacity="0.94"/>' +
+      '<rect x="18" y="55" width="64" height="9" rx="4" fill="#ffffff" fill-opacity="0.94"/>' +
+      '</svg>',
+    finder: '',
+    mail: '<svg viewBox="0 0 100 100" style="position:absolute;inset:0;width:100%;height:100%" aria-hidden="true">' +
+      '<rect x="14" y="26" width="72" height="48" rx="7" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity="0.92"/>' +
+      '<polyline points="16,30 50,58 84,30" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.92"/>' +
+      '</svg>',
+    music: '<svg viewBox="0 0 100 100" style="position:absolute;inset:0;width:100%;height:100%" aria-hidden="true">' +
+      '<circle cx="34" cy="72" r="11" fill="#ffffff" fill-opacity="0.94"/>' +
+      '<rect x="42" y="22" width="6" height="52" fill="#ffffff" fill-opacity="0.94"/>' +
+      '<polygon points="48,22 76,30 76,44 48,36" fill="#ffffff" fill-opacity="0.94"/>' +
+      '</svg>',
+    notes: '<svg viewBox="0 0 100 100" style="position:absolute;inset:0;width:100%;height:100%" aria-hidden="true">' +
+      '<rect x="24" y="30" width="52" height="6" rx="3" fill="rgba(90,66,10,0.55)"/>' +
+      '<rect x="24" y="46" width="52" height="6" rx="3" fill="rgba(90,66,10,0.5)"/>' +
+      '<rect x="24" y="62" width="34" height="6" rx="3" fill="rgba(90,66,10,0.45)"/>' +
+      '<polygon points="78,18 90,18 90,30" fill="rgba(255,255,255,0.55)"/>' +
+      '</svg>'
+  };
+
+  function renderIcon(appId, px) {
+    var r = Math.round(px * 0.22);
+    var glyph = GLYPHS[appId] || '';
+    return '<div class="iconwrap ic-' + appId + '" style="width:' + px + 'px;height:' + px + 'px;border-radius:' + r + 'px">' + glyph + '</div>';
+  }
+
+  // ------------------------------------------------------------------
+  // Realistic test data: 8 apps, window counts deliberately uneven.
+  // Safari titles mix long (middle-ellipsis kicks in) and short ones.
+  // ------------------------------------------------------------------
+  var APPS = [
+    { id: 'safari', name: 'Safari', windows: [
+      'Bloomberg - Are Markets Pricing In Too Much Rate-Cut Optimism? - Bloomberg.com',
+      'GitHub - shakapachi/shakapachi: macOS cmd-tab replacement with app grouping',
+      'YouTube',
+      'The Swift Programming Language: The Basics — docs.swift.org Language Guide'
+    ]},
+    { id: 'vscode', name: 'Visual Studio Code', windows: [
+      'SwitcherListView.swift — shakapachi',
+      'SwitcherPanel.swift — shakapachi',
+      '● app-grouping-01-layouts.html — shakapachi'
+    ]},
+    { id: 'terminal', name: 'ターミナル', windows: [
+      'senkentarou@mbp: ~/work/shakapachi (feat/app-grouped-switcher)',
+      'senkentarou@mbp: ~/work/cmdtab'
+    ]},
+    { id: 'slack', name: 'Slack', windows: [
+      '#shakapachi-dev (Slack) - 3件の新着メッセージ'
+    ]},
+    { id: 'finder', name: 'Finder', windows: [
+      'shakapachi — Sources',
+      'ダウンロード'
+    ]},
+    { id: 'mail', name: 'メール', windows: [
+      '受信トレイ — 12件の未読'
+    ]},
+    { id: 'music', name: 'ミュージック', windows: [
+      'ミュージック'
+    ]},
+    { id: 'notes', name: 'メモ', windows: [
+      '買い物リスト',
+      'ShakaPachi 機能アイデア',
+      '会議メモ 8/17',
+      'パスワード再発行用メモ（一時）',
+      'Untitled Note'
+    ]}
+  ];
+
+  var ROW_W = MARGIN * 2 + APPS.length * TILE + (APPS.length - 1) * GAP; // total app-row width, all four options share it
+
+  // ------------------------------------------------------------------
+  // Badge mode, shared by all panel instances below.
+  // ------------------------------------------------------------------
+  var badgeMode = 'num'; // 'num' | 'cmd' | 'none'
+  var panelRenders = [];
+  function registerPanel(fn) { panelRenders.push(fn); }
+  function refreshAllPanels() { panelRenders.forEach(function (fn) { fn(); }); }
+
+  function badgeHTML(n) {
+    if (badgeMode === 'none') return '';
+    var text = badgeMode === 'cmd' ? '⌘' + n : String(n);
+    return '<span class="badge">' + text + '</span>';
+  }
+  function badgeText(n) {
+    if (badgeMode === 'none') return '';
+    return badgeMode === 'cmd' ? '⌘' + n : String(n);
+  }
+
+  // ------------------------------------------------------------------
+  // Shared app-row builder, used identically by all four layouts.
+  // customTileRenderer(tileEl, app), when given, replaces the default
+  // icon-only content of the *selected* tile (used by the inline-expand
+  // layout to grow it in place).
+  // ------------------------------------------------------------------
+  function buildAppRow(selectedIdx, onSelect, customTileRenderer) {
+    var row = document.createElement('div');
+    row.className = 'approw';
+    APPS.forEach(function (app, i) {
+      var t = document.createElement('button');
+      t.type = 'button';
+      t.className = 'apptile' + (i === selectedIdx ? ' sel' : '');
+      t.title = app.name;
+      if (customTileRenderer && i === selectedIdx) {
+        customTileRenderer(t, app);
+      } else {
+        t.innerHTML = renderIcon(app.id, 60);
+      }
+      t.addEventListener('click', function () { onSelect(i); });
+      row.appendChild(t);
+    });
+    return row;
+  }
+
+  function buildTitleRow(text) {
+    var d = document.createElement('div');
+    d.className = 'titlerow';
+    d.textContent = text;
+    return d;
+  }
+
+  // ================= 案A: 下段ドロワー =================
+  function createDrawerPanel(root, initialIdx) {
+    var idx = initialIdx;
+    var contentEl = root.querySelector('.content');
+
+    function render() {
+      contentEl.innerHTML = '';
+      contentEl.appendChild(buildAppRow(idx, function (i) { idx = i; render(); }));
+
+      var app = APPS[idx];
+      if (app.windows.length > 1) {
+        var drawer = document.createElement('div');
+        drawer.className = 'drawer';
+        app.windows.forEach(function (w, wi) {
+          var mt = document.createElement('div');
+          mt.className = 'minitile' + (wi === 0 ? ' sel' : '');
+          mt.title = w;
+          mt.innerHTML = renderIcon(app.id, 44) + badgeHTML(wi + 1);
+          drawer.appendChild(mt);
+        });
+        contentEl.appendChild(drawer);
+      }
+      contentEl.appendChild(buildTitleRow(app.windows[0] || ''));
+    }
+
+    render();
+    registerPanel(render);
+  }
+
+  // ================= 案B: インライン展開 =================
+  function createInlinePanel(root, initialIdx) {
+    var idx = initialIdx;
+    var contentEl = root.querySelector('.content');
+
+    function render() {
+      contentEl.innerHTML = '';
+      var row = buildAppRow(idx, function (i) { idx = i; render(); }, function (tileEl, app) {
+        if (app.windows.length > 1) {
+          tileEl.classList.add('expand');
+          var wrap = document.createElement('div');
+          wrap.className = 'expandwrap';
+          app.windows.forEach(function (w, wi) {
+            var mt = document.createElement('span');
+            mt.className = 'minitile inlinemini' + (wi === 0 ? ' focus' : '');
+            mt.title = w;
+            mt.innerHTML = renderIcon(app.id, 48) + badgeHTML(wi + 1);
+            wrap.appendChild(mt);
+          });
+          tileEl.appendChild(wrap);
+        } else {
+          tileEl.innerHTML = renderIcon(app.id, 60);
+        }
+      });
+      contentEl.appendChild(row);
+
+      var app = APPS[idx];
+      contentEl.appendChild(buildTitleRow(app.windows[0] || ''));
+    }
+
+    render();
+    registerPanel(render);
+  }
+
+  // ================= 案C: 下段ライブプレビュー並置 =================
+  function createPreviewPanel(root, initialIdx) {
+    var idx = initialIdx;
+    var contentEl = root.querySelector('.content');
+
+    function render() {
+      contentEl.innerHTML = '';
+      contentEl.appendChild(buildAppRow(idx, function (i) { idx = i; render(); }));
+
+      var app = APPS[idx];
+      contentEl.appendChild(buildTitleRow(app.windows[0] || ''));
+
+      var strip = document.createElement('div');
+      strip.className = 'previewstrip';
+      var n = app.windows.length;
+      var paneW, paneH;
+      if (n <= 1) {
+        paneW = 320; paneH = 200; // unchanged from today
+      } else {
+        var available = ROW_W - MARGIN * 2;
+        paneW = (available - (n - 1) * 10) / n;
+        paneH = paneW * 200 / 320; // keep 16:10
+      }
+      app.windows.forEach(function (w, wi) {
+        var pane = document.createElement('div');
+        pane.className = 'pane' + (wi === 0 ? ' sel' : '');
+        pane.style.width = paneW + 'px';
+        pane.style.height = paneH + 'px';
+        pane.title = w;
+        if (n > 1) pane.innerHTML = badgeHTML(wi + 1);
+        strip.appendChild(pane);
+      });
+      contentEl.appendChild(strip);
+    }
+
+    render();
+    registerPanel(render);
+  }
+
+  // ================= 案D: 縦ドロップダウン =================
+  function createDropdownPanel(root, initialIdx) {
+    var idx = initialIdx;
+    var contentEl = root.querySelector('.content');
+
+    function render() {
+      contentEl.innerHTML = '';
+      root.style.minWidth = '';
+      root.style.minHeight = '';
+
+      var rowWrap = document.createElement('div');
+      rowWrap.className = 'rowwrap';
+      rowWrap.appendChild(buildAppRow(idx, function (i) { idx = i; render(); }));
+      contentEl.appendChild(rowWrap);
+
+      var app = APPS[idx];
+      if (app.windows.length > 1) {
+        var dd = document.createElement('div');
+        dd.className = 'dropdown';
+        app.windows.forEach(function (w, wi) {
+          var r = document.createElement('div');
+          r.className = 'ddrow' + (wi === 0 ? ' sel' : '');
+          var titleSpan = document.createElement('span');
+          titleSpan.className = 'ddtitle';
+          titleSpan.textContent = w;
+          var badgeSpan = document.createElement('span');
+          badgeSpan.className = 'ddbadge';
+          badgeSpan.textContent = badgeText(wi + 1);
+          r.appendChild(titleSpan);
+          r.appendChild(badgeSpan);
+          dd.appendChild(r);
+        });
+        rowWrap.appendChild(dd);
+
+        // Anchor under the selected tile, then clamp so it never spills
+        // past the panel's own edges (a positioning concern the other
+        // three layouts don't have, since their extra rows never exceed
+        // the app row's own width).
+        var tileLeft = MARGIN + idx * (TILE + GAP);
+        dd.style.left = tileLeft + 'px';
+        dd.style.top = '102px'; // 20 (topPadding) + 76 (tile) + 6 (titleGap)
+        var ddWidth = dd.offsetWidth;
+        var maxLeft = Math.max(MARGIN, ROW_W - MARGIN - ddWidth);
+        var clampedLeft = Math.min(Math.max(tileLeft, MARGIN), maxLeft);
+        dd.style.left = clampedLeft + 'px';
+
+        var neededWidth = clampedLeft + ddWidth + MARGIN;
+        if (neededWidth > ROW_W) root.style.minWidth = neededWidth + 'px';
+
+        var neededHeight = 102 + dd.offsetHeight + 14; // + bottomPadding
+        var flowHeight = 20 + TILE + 14; // app row only, no title row in this branch
+        if (neededHeight > flowHeight) root.style.minHeight = neededHeight + 'px';
+      } else {
+        contentEl.appendChild(buildTitleRow(app.windows[0] || ''));
+      }
+    }
+
+    render();
+    registerPanel(render);
+  }
+
+  // ------------------------------------------------------------------
+  // Wire up the 8 panel instances: (a) = Slack (1 window), (b) = VS Code
+  // (3 windows), identical across all four options for a fair comparison.
+  // ------------------------------------------------------------------
+  createDrawerPanel(document.getElementById('a-1'), 3);
+  createDrawerPanel(document.getElementById('a-2'), 1);
+  createInlinePanel(document.getElementById('b-1'), 3);
+  createInlinePanel(document.getElementById('b-2'), 1);
+  createPreviewPanel(document.getElementById('c-1'), 3);
+  createPreviewPanel(document.getElementById('c-2'), 1);
+  createDropdownPanel(document.getElementById('d-1'), 3);
+  createDropdownPanel(document.getElementById('d-2'), 1);
+
+  // Badge-format bar toggles all panels at once.
+  document.querySelectorAll('.bar button[data-badge]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      badgeMode = btn.dataset.badge;
+      document.querySelectorAll('.bar button[data-badge]').forEach(function (b) {
+        b.classList.toggle('on', b === btn);
+      });
+      refreshAllPanels();
+    });
+  });
+</script>
+
+<style>
+  /* Fake app icon background colors, kept separate from the layout CSS
+     above for readability. Flat gradients only — no external assets. */
+  .ic-safari   { background: linear-gradient(135deg,#6fd6ff,#1c7ed6); }
+  .ic-vscode   { background: linear-gradient(135deg,#2f6fd6,#0a3f8f); }
+  .ic-terminal { background: linear-gradient(135deg,#3c3c3c,#0c0c0c); }
+  .ic-slack    { background: linear-gradient(135deg,#36c5f0 0%,#2eb67d 35%,#ecb22e 65%,#e01e5a 100%); }
+  .ic-finder   { background: linear-gradient(135deg,#57c4ff 50%,#f2f3f5 50%); }
+  .ic-mail     { background: linear-gradient(135deg,#6cc8ff,#0b7fd1); }
+  .ic-music    { background: linear-gradient(135deg,#fd7291,#e21d5c); }
+  .ic-notes    { background: linear-gradient(135deg,#ffe38a,#ffc93c); }
+</style>
+</body>
+</html>

@@ -44,6 +44,16 @@ enum KeyCode {
     static let upArrow: UInt16 = 126
     // Grave accent / backtick (`~) — used for same-app jump.
     static let grave: UInt16 = 50
+
+    /// Number-row keycodes for 1...9, in printed order.
+    /// Keycodes address a physical key rather than the character it produces,
+    /// so this holds on non-US layouts where the digits are unshifted anyway.
+    private static let digitRow: [UInt16] = [18, 19, 20, 21, 23, 22, 26, 28, 25]
+
+    /// The digit 1...9 printed on `keyCode`, or nil when it is not a number-row key.
+    static func digit(for keyCode: UInt16) -> Int? {
+        digitRow.firstIndex(of: keyCode).map { $0 + 1 }
+    }
 }
 
 // MARK: - CGEventFlags bit masks (subset used by SafetyGuard)

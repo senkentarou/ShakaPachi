@@ -27,10 +27,16 @@ enum SwitcherInput: Equatable {
     case modifierUp
     /// The trigger key (Tab) was pressed; shift indicates Shift+Tab.
     case trigger(shift: Bool)
-    /// Arrow right or arrow down — advance forward one step.
-    case arrowForward
-    /// Arrow left or arrow up — retreat one step.
-    case arrowBackward
+    // Arrows carry the physical direction rather than a forward/backward
+    // meaning: app-unit mode maps the two axes to different things (horizontal
+    // moves within a row, vertical crosses between rows), which a pre-collapsed
+    // forward/backward pair cannot express. Flat mode collapses them again below.
+    case arrowRight
+    case arrowLeft
+    case arrowDown
+    case arrowUp
+    /// A number-row key 1...9, used to jump straight to a visible window pane.
+    case digit(Int)
     /// Escape key: cancel and hide the panel.
     case escape
     /// Grave accent (`): jump to the next window of the same app.
@@ -98,6 +104,32 @@ final class SwitcherStateMachine {
     /// Resolver for `sameAppJump` input. Injected so tests can control it.
     var sameAppResolver: ((Int) -> Int?)?
 
+    /// Overrides where the selection starts when the panel is shown, given the
+    /// item count. Injected by the caller for app-unit mode, where "one tap
+    /// returns to the previous thing" means the previous APP rather than the
+    /// previous window, and that item is not at flat index 1.
+    var initialIndexProvider: ((Int) -> Int)?
+
+    /// Takes over every movement input while set, mapping an input and the
+    /// current flat index to a new flat index (nil = stay put).
+    ///
+    /// App-unit mode installs one because its cursor moves across two axes,
+    /// which the flat ±1 arithmetic below cannot express. Left unset, the
+    /// machine keeps its original flat behaviour verbatim.
+    var navigator: ((SwitcherInput, Int) -> Int?)?
+
+    /// Inputs the navigator owns when one is installed. Escape, modifier
+    /// transitions and pass-through keys keep their meaning in every mode, so
+    /// they are deliberately absent.
+    private static func isMovement(_ input: SwitcherInput) -> Bool {
+        switch input {
+        case .trigger, .arrowRight, .arrowLeft, .arrowDown, .arrowUp, .digit, .sameAppJump:
+            return true
+        case .escape, .modifierDown, .modifierUp, .otherKey:
+            return false
+        }
+    }
+
     // MARK: - Public API
 
     /// Process one input event.
@@ -135,7 +167,7 @@ final class SwitcherStateMachine {
                     // No windows — stay in MODIFIER_HELD, consume the key.
                     return (.none, true)
                 }
-                let initialIndex = count >= 2 ? 1 : 0
+                let initialIndex = initialIndexProvider.map { $0(count) } ?? (count >= 2 ? 1 : 0)
                 // Shift has no effect on the initial show transition, but
                 // we honour it for future extensibility (same as forward).
                 // The spec diagram shows trigger → index=1 with no shift branch here.
@@ -155,6 +187,16 @@ final class SwitcherStateMachine {
 
         // ── ACTIVE ────────────────────────────────────────────────────────
         case .active(let index, let count):
+            // Movement is delegated wholesale when a navigator is installed:
+            // its cursor, not this index, decides where the selection lands.
+            // Consumed either way — a defined transition swallows the key even
+            // when the cursor cannot move any further.
+            if let navigator, Self.isMovement(input) {
+                let newIndex = navigator(input, index) ?? index
+                state = .active(index: newIndex, count: count)
+                return (.moveSelection(to: newIndex), true)
+            }
+
             switch input {
             case .trigger(let shift):
                 let newIndex: Int
@@ -168,17 +210,21 @@ final class SwitcherStateMachine {
                 state = .active(index: newIndex, count: count)
                 return (.moveSelection(to: newIndex), true)
 
-            case .arrowForward:
-                // → / ↓: advance.
+            case .arrowRight, .arrowDown:
+                // Flat mode has one axis, so both directions collapse to advance.
                 let newIndex = (index + 1) % count
                 state = .active(index: newIndex, count: count)
                 return (.moveSelection(to: newIndex), true)
 
-            case .arrowBackward:
-                // ← / ↑: retreat.
+            case .arrowLeft, .arrowUp:
                 let newIndex = (index - 1 + count) % count
                 state = .active(index: newIndex, count: count)
                 return (.moveSelection(to: newIndex), true)
+
+            case .digit:
+                // Flat mode has nothing to number, so the key belongs to the
+                // front app (a held modifier plus a digit is a real shortcut there).
+                return (.none, false)
 
             case .escape:
                 state = .idle

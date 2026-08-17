@@ -72,6 +72,15 @@ final class SwitchCoordinator {
     // Derived from lastWindowInfos at show time; kept for the panel API.
     private var lastSwitcherItems: [SwitcherItem] = []
 
+    // App-unit mode state. Both are empty/nil in window-unit mode, which is what
+    // every branch below tests to decide how to present the same snapshot —
+    // the snapshot itself is identical in both modes.
+    private var appGroups: [AppGroup] = []
+    private var groupedSelection: AppGroupedSelection?
+    // Captured at show time so a later re-render agrees with the panel already
+    // on screen (the setting could change mid-session otherwise).
+    private var lastPreviewEnabled = false
+
     // MARK: - Init
 
     /// - Parameters:
@@ -141,8 +150,29 @@ final class SwitchCoordinator {
                 SwitcherItem(
                     icon: icons.icon(for: info.pid, bundleID: info.bundleID),
                     title: info.title,
-                    windowID: info.windowID
+                    windowID: info.windowID,
+                    appName: info.appName,
+                    bundleID: info.bundleID,
+                    pid: info.pid,
+                    bounds: info.bounds
                 )
+            }
+            // App-unit mode is a derived view over the same snapshot. The
+            // navigator is installed only for that mode, because installing it
+            // hands the machine's flat ±1 movement over wholesale.
+            if Settings.shared.switcherDisplayMode == .app {
+                self.appGroups = AppGroupedSelection.groups(from: infos)
+                self.machine.initialIndexProvider = { [weak self] _ in
+                    self?.appGroupedInitialIndex() ?? 0
+                }
+                self.machine.navigator = { [weak self] input, index in
+                    self?.appGroupedNavigate(input, from: index)
+                }
+            } else {
+                self.appGroups = []
+                self.groupedSelection = nil
+                self.machine.initialIndexProvider = nil
+                self.machine.navigator = nil
             }
             itemCount = infos.count
         } else {
@@ -166,41 +196,57 @@ final class SwitchCoordinator {
             let previewEnabled =
                 Settings.shared.showWindowPreview
                 && (self.permissionManager?.screenRecordingStatus() == .granted)
+            self.lastPreviewEnabled = previewEnabled
+            // The cursor is built here rather than at enumerate time because it
+            // needs the initial index the machine settled on.
+            let isGrouped = !self.appGroups.isEmpty
+            if isGrouped {
+                self.groupedSelection = AppGroupedSelection(
+                    groups: self.appGroups, flatIndex: initialIndex)
+            }
             // showDelayMs: delay the actual show by the configured number of
             // milliseconds. Default 0 means no delay, so there is no behavior
             // change for users who haven't set this. The N1 measurement still
             // reflects wall time from the tap entry (t0), so a non-zero delay
             // is visible in the log.
             let delayMs = showDelay
-            if delayMs <= 0 {
-                panel.show(
-                    items: items, selectedIndex: initialIndex,
-                    previewEnabled: previewEnabled)
+            let present: (Int) -> Void = { [weak self] delayed in
+                guard let self else { return }
+                let panel = self.switcherPanel
+                if isGrouped {
+                    self.renderAppGrouped(orderFront: true)
+                } else {
+                    panel.show(
+                        items: items, selectedIndex: initialIndex,
+                        previewEnabled: previewEnabled)
+                }
                 panel.displayIfNeeded()
                 let n1 = (CFAbsoluteTimeGetCurrent() - t0) * 1000.0
-                NSLog("[ShakaPachi] N1: %.2fms (callback→display, %d windows)", n1, items.count)
-            } else {
-                let capturedItems = items
-                let capturedIndex = initialIndex
-                let capturedT0 = t0
-                let capturedPreview = previewEnabled
-                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(delayMs)) { [weak self] in
-                    guard let self else { return }
-                    let panel = self.switcherPanel
-                    panel.show(
-                        items: capturedItems, selectedIndex: capturedIndex,
-                        previewEnabled: capturedPreview)
-                    panel.displayIfNeeded()
-                    let n1 = (CFAbsoluteTimeGetCurrent() - capturedT0) * 1000.0
+                if delayed > 0 {
                     NSLog(
                         "[ShakaPachi] N1: %.2fms (callback→display incl %dms delay, %d windows)",
-                        n1, delayMs, capturedItems.count)
+                        n1, delayed, items.count)
+                } else {
+                    NSLog("[ShakaPachi] N1: %.2fms (callback→display, %d windows)", n1, items.count)
+                }
+            }
+            if delayMs <= 0 {
+                present(0)
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(delayMs)) {
+                    present(delayMs)
                 }
             }
 
         case .moveSelection(let newIndex):
             let t2start = CFAbsoluteTimeGetCurrent()
-            panel.updateSelection(to: newIndex)
+            if groupedSelection != nil {
+                // The panel re-sizes as `+n` chips come and go, so app-unit mode
+                // re-renders instead of moving a highlight inside a fixed frame.
+                renderAppGrouped(orderFront: false)
+            } else {
+                panel.updateSelection(to: newIndex)
+            }
             panel.displayIfNeeded()
             let n2 = (CFAbsoluteTimeGetCurrent() - t2start) * 1000.0
             NSLog("[ShakaPachi] N2 redraw: %.2fms", n2)
@@ -238,13 +284,75 @@ final class SwitchCoordinator {
                     "[ShakaPachi] Confirm index %d out of range (count %d) — hide only",
                     index, infos.count)
             }
+            groupedSelection = nil
             panel.hide()
 
         case .cancel:
+            groupedSelection = nil
             panel.hide()
         }
 
         return consumed
+    }
+
+    // MARK: - App-unit mode
+
+    /// Where the selection starts in app-unit mode.
+    ///
+    /// One tap and release should land on the previous APP, matching what the
+    /// system switcher does. Flat index 1 would not: when the front app has
+    /// several windows, its own second window sits there.
+    private func appGroupedInitialIndex() -> Int {
+        guard !appGroups.isEmpty else { return 0 }
+        let group = appGroups.count >= 2 ? appGroups[1] : appGroups[0]
+        return group.windowIndices.first ?? 0
+    }
+
+    /// Drive the two-axis cursor and report where it landed as a flat index.
+    /// Installed as the machine's `navigator` only while app-unit mode is on.
+    private func appGroupedNavigate(_ input: SwitcherInput, from index: Int) -> Int? {
+        guard var selection = groupedSelection else { return nil }
+        switch input {
+        case .trigger(let shift):
+            // Tab crosses apps from either row, so the trigger keeps its
+            // "next thing" meaning at the level the mode is organised around.
+            if shift { selection.previousApp() } else { selection.nextApp() }
+        case .arrowRight:
+            selection.moveWithinRow(forward: true)
+        case .arrowLeft:
+            selection.moveWithinRow(forward: false)
+        case .arrowDown:
+            selection.descend()
+        case .arrowUp:
+            selection.ascend()
+        case .digit(let ordinal):
+            selection.selectVisible(ordinal)
+        case .sameAppJump:
+            // Grave keeps its old "next window of this app" meaning; here that
+            // is a descent into the strip followed by a step along it.
+            selection.descend()
+            selection.moveWithinRow(forward: true)
+        case .escape, .modifierDown, .modifierUp, .otherKey:
+            return nil
+        }
+        groupedSelection = selection
+        return selection.flatIndex ?? index
+    }
+
+    /// Push the whole cursor state to the panel. App-unit mode has no partial
+    /// update: which app, which pane, and whether the strip slid can all change
+    /// together, and the panel's own width changes with them.
+    private func renderAppGrouped(orderFront: Bool) {
+        guard let selection = groupedSelection, let flatIndex = selection.flatIndex else { return }
+        switcherPanel.showAppGrouped(
+            items: lastSwitcherItems,
+            groups: appGroups,
+            appIndex: selection.appIndex,
+            strip: selection.strip,
+            currentFlatIndex: flatIndex,
+            focusRow: selection.focusRow,
+            previewEnabled: lastPreviewEnabled,
+            orderFront: orderFront)
     }
 
     // MARK: - Helpers

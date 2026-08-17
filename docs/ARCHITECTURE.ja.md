@@ -197,9 +197,10 @@ flowchart TD
     SW --> OW
 ```
 
-**純ロジック**のパーツ(`SwitcherStateMachine`・`SafetyGuard`・`StreakStats`、加えて
-`WindowStore` / `Activator` 内の静的ヘルパー)は AppKit 依存を持たないため、ディスプレイ
-接続なしで直接ユニットテストできる。
+**純ロジック**のパーツ(`SwitcherStateMachine`・`AppGroupedSelection`・`SafetyGuard`・
+`StreakStats`、加えて `WindowStore` / `Activator` 内の静的ヘルパーと `SwitcherLayout`
+のジオメトリ)は AppKit 依存を持たないため、ディスプレイ接続なしで直接ユニットテスト
+できる。
 
 ---
 
@@ -333,7 +334,9 @@ stateDiagram-v2
 
     active --> active : trigger -> move forward (consumed)
     active --> active : trigger+shift -> move backward (consumed)
-    active --> active : arrowForward / arrowBackward -> move (consumed)
+    active --> active : arrowRight / arrowDown -> advance (consumed)
+    active --> active : arrowLeft / arrowUp -> retreat (consumed)
+    active --> active : digit -> no-op in window mode (NOT consumed)
     active --> active : sameAppJump -> next same-PID window (consumed)
     active --> active : otherKey (NOT consumed)
     active --> idle : modifierUp -> confirmSelection (not consumed)
@@ -344,6 +347,44 @@ stateDiagram-v2
 のすべての入力は `0` を渡し、ステートマシンはそれを無視する。`sameAppResolver`
 クロージャ — コーディネーターが自身の `lastWindowInfos` スナップショットを走査する
 よう配線する — が、ハイライト中のものと同じアプリに属する次のウィンドウを見つける。
+
+矢印はステートマシンへ前進/後退ではなく物理方向のまま届く。タップはどの表示モードが
+有効かを知らず、2 つのモードは縦軸の読み方が違うため、タップの側で軸を潰すと
+ステートマシンが必要とする情報が失われる。ウィンドウ単位モードは受け取った直後に
+また潰すので、既存の挙動は変わらない。
+
+## アプリ単位表示モード
+
+`Settings.switcherDisplayMode` が、全ウィンドウをフラットに並べる(`.window`、既定)
+か、アプリごとにまとめる(`.app`)かを切り替える。まとめる側は**同じスナップショット
+への派生ビュー**であって、2 本目のパイプラインではない。
+
+| 型 | 役割 |
+| --- | --- |
+| `AppGroup` | 1 つのアプリのウィンドウ群。*フラットなスナップショットへのインデックス*として保持する |
+| `WindowStrip` | いま描かれている 3 枚以下のペインと、左右それぞれに畳まれている枚数 |
+| `AppGroupedSelection` | 2 軸のカーソル(どのアプリ・どのウィンドウ・どちらの行か)と、アプリごとにカーソル位置を覚えておく記憶 |
+
+グループが持つのはコピーではなくインデックスなので、`confirmSelection` は従来どおり
+フラットなインデックスを受け取り、起動経路はこのモードの影響を受けない。
+
+ステートマシンは 2 軸用に作り替えていない。代わりに、`sameAppResolver` と同じ流儀で
+コーディネーターが 2 つのクロージャを注入する。
+
+- `navigator` はすべての移動入力を引き受け、(入力, 現在のフラットインデックス) を
+  新しいフラットインデックスへ写す。`active` の中のフラットな ±1 演算では 2 軸を
+  またぐカーソルを表現できないため、まるごと委譲する。これによりウィンドウ単位モードの
+  コードパスは文字どおり 1 行も変わらない。
+- `initialIndexProvider` は選択の開始位置を上書きする。1 回叩いて離したら前の
+  *アプリ*に戻るべきだが、そのウィンドウはフラットなインデックス 1 には無い —
+  前面アプリが複数ウィンドウを持つ場合、そこには自分自身の 2 枚目が居る。
+
+キーの意味は画面上の 2 段にそのまま従う。トリガーキーはどちらの行からでもアプリ間を
+移動し、左右は今いる行の中を移動し、下でウィンドウのストリップに降り、上でアプリの行に
+戻る。トリガー修飾キー + `1`〜`3` で表示中のペインへ直接飛ぶ。数字が指すのは
+ウィンドウではなくペインなので、ストリップがスライドすると指す先も動く。画面に見えて
+いるものだけを指すよう意図的に限っている。ウィンドウが 1 枚しかないアプリには降りる先が
+無いため、ウィンドウ単位モードが描いたのと同じパネルに収束する。
 
 ---
 

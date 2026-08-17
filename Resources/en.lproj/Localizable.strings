@@ -8,6 +8,7 @@
 "クレジット" = "Credits";
 "トリガー" = "Trigger";
 "並び順" = "Sort Order";
+"表示単位" = "Display Unit";
 "動作" = "Behavior";
 "ウィンドウプレビューを表示" = "Show Window Preview";
 "ログイン時に起動" = "Launch at Login";
@@ -75,6 +76,8 @@
 "Z オーダー" = "Z-order";
 "アプリ別" = "By app";
 "最近使ったアプリ順" = "By recently used app";
+"ウィンドウ単位" = "Window";
+"アプリ単位" = "App";
 "ライト" = "Light";
 "ダーク" = "Dark";
 "パール" = "Pearl";
@@ -133,6 +136,7 @@
 "macOS にログインすると常駐を始めます" = "Runs in the background once you log in to macOS";
 "切替ウィンドウを呼び出すキー" = "Key combination that opens the switcher";
 "切替リストに並べる順番" = "Order of windows in the switcher list";
+"切替リストの表示のまとめ方" = "How items are grouped in the switcher list";
 "ウィンドウの明るさ" = "Brightness of the window";
 "地色と選択行の色" = "Background tint and selection color";
 "アイコンサイズ" = "Icon Size";
