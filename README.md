@@ -10,6 +10,18 @@ app icons and window titles, release to activate. The selected window's live
 preview is shown below its title by default (when Screen Recording permission is
 granted); turn it off in Settings for a pure text list.
 
+Windows can also be grouped by app: set **Display Unit** to *App* in Settings
+(the default stays *Window*, the flat list above). The trigger key then steps
+between apps, and the selected app expands into a strip of up to three window
+previews — anything beyond that folds into a `+n` badge. Left/right moves along
+the current row, down enters the strip, up returns to the app row, and the
+trigger modifier with `1`–`3` jumps straight to a visible pane.
+
+This is not a way back to macOS's own Cmd+Tab, which only ever gets you as far
+as the app — you still land on one specific window, just via a shorter path when
+the flat list runs long. An app with a single window looks exactly as it always
+has.
+
 ## Demo
 
 ![Holding the trigger modifier, cycling the window list, and releasing to activate the selected window](docs/assets/demo.gif)
@@ -20,6 +32,7 @@ granted); turn it off in Settings for a pure text list.
 
 - Window-level switching (multiple windows of the same app are listed individually)
 - App icon + window title, plus a live preview of the selected window (on by default; toggleable off in Settings)
+- Display Unit: window-level (default) or app-grouped, with an expandable window-preview strip and direct-jump shortcuts
 - Selectable ordering: MRU (most recently used), Z-order, per-app, and recently-used-app order
 - Menu bar resident, no Dock icon
 - Safety: emergency stop hotkey (Ctrl+Option+Cmd+Esc) and an auto-stop deadman switch
