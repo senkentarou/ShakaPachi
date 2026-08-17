@@ -263,6 +263,15 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
         menu.addItem(.separator())
 
+        // Restart item — no keyEquivalent so it cannot collide with Quit's Cmd+Q.
+        let restartItem = NSMenuItem(
+            title: NSLocalizedString("再起動", comment: "Menu item: restart the app"),
+            action: #selector(restartApp),
+            keyEquivalent: ""
+        )
+        restartItem.target = self
+        menu.addItem(restartItem)
+
         // "Quit" item with Cmd+Q shortcut
         let quitItem = NSMenuItem(
             title: NSLocalizedString("終了", comment: "Menu item: quit"),
@@ -365,6 +374,14 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         // point (AppDelegate.showOnboarding) is used. This also ensures that
         // startTapIfPossible is called when permissions are granted via this path.
         NotificationCenter.default.post(name: .showOnboardingWindow, object: nil)
+    }
+
+    @objc private func restartApp() {
+        // Reuse the same .relaunchApp bus the language-switcher restart button
+        // posts to (SettingsWindow.swift), rather than a tray-specific relaunch
+        // path, so the app restarts the same way regardless of which menu the
+        // user triggered it from.
+        NotificationCenter.default.post(name: .relaunchApp, object: nil)
     }
 
     @objc private func quitApp() {
