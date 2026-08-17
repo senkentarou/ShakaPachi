@@ -642,7 +642,8 @@ final class SwitcherListView: NSView {
         currentFlatIndex: Int,
         focusRow: SwitcherFocusRow,
         modifierSymbol: String,
-        availableWidth: CGFloat = 0
+        availableWidth: CGFloat = 0,
+        baseTile: CGFloat = SwitcherLayout.tileSize
     ) {
         self.items = items
         self.isAppGrouped = true
@@ -654,9 +655,9 @@ final class SwitcherListView: NSView {
         self.modifierSymbol = modifierSymbol
         if availableWidth > 0 {
             effectiveTile = SwitcherLayout.effectiveTileSize(
-                itemCount: groups.count, availableWidth: availableWidth, baseTile: SwitcherLayout.tileSize)
+                itemCount: groups.count, availableWidth: availableWidth, baseTile: baseTile)
         } else {
-            effectiveTile = SwitcherLayout.tileSize
+            effectiveTile = baseTile
         }
         needsDisplay = true
         updateOpalRimLayout()

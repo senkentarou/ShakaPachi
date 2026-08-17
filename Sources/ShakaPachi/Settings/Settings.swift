@@ -48,6 +48,16 @@ public enum TriggerModifier: String, CaseIterable, Sendable {
         case .control: return "Control (^)"
         }
     }
+
+    /// Bare glyph for the switcher's own shortcut badges, where the name would
+    /// not fit and the surrounding context already says what it is.
+    public var symbol: String {
+        switch self {
+        case .command: return "⌘"
+        case .option: return "⌥"
+        case .control: return "^"
+        }
+    }
 }
 
 /// The key (in combination with the modifier) that triggers the switcher.

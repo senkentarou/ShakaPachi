@@ -60,7 +60,7 @@ final class SwitcherStateMachineTests: XCTestCase {
 
     func testIdleArrowForwardIsIgnored() {
         let m = makeMachine()
-        let (action, consumed) = m.handle(.arrowForward)
+        let (action, consumed) = m.handle(.arrowRight)
         XCTAssertEqual(action, .none)
         XCTAssertFalse(consumed)
         XCTAssertTrue(m.isIdle)
@@ -68,7 +68,7 @@ final class SwitcherStateMachineTests: XCTestCase {
 
     func testIdleArrowBackwardIsIgnored() {
         let m = makeMachine()
-        let (action, consumed) = m.handle(.arrowBackward)
+        let (action, consumed) = m.handle(.arrowLeft)
         XCTAssertEqual(action, .none)
         XCTAssertFalse(consumed)
         XCTAssertTrue(m.isIdle)
@@ -186,7 +186,7 @@ final class SwitcherStateMachineTests: XCTestCase {
     func testActiveArrowForwardAdvances() {
         let m = makeMachine()
         activateMachine(m, count: 4)  // index=1
-        let (action, consumed) = m.handle(.arrowForward)
+        let (action, consumed) = m.handle(.arrowRight)
         XCTAssertEqual(action, .moveSelection(to: 2))
         XCTAssertTrue(consumed)
     }
@@ -194,7 +194,7 @@ final class SwitcherStateMachineTests: XCTestCase {
     func testActiveArrowForwardWraps() {
         let m = makeMachine()
         activateMachine(m, count: 2)  // index=1
-        let (action, consumed) = m.handle(.arrowForward)  // →0 (wrap)
+        let (action, consumed) = m.handle(.arrowRight)  // →0 (wrap)
         XCTAssertEqual(action, .moveSelection(to: 0))
         XCTAssertTrue(consumed)
     }
@@ -202,7 +202,7 @@ final class SwitcherStateMachineTests: XCTestCase {
     func testActiveArrowBackwardRetreats() {
         let m = makeMachine()
         activateMachine(m, count: 4)  // index=1
-        let (action, consumed) = m.handle(.arrowBackward)  // →0
+        let (action, consumed) = m.handle(.arrowLeft)  // →0
         XCTAssertEqual(action, .moveSelection(to: 0))
         XCTAssertTrue(consumed)
     }
@@ -210,8 +210,8 @@ final class SwitcherStateMachineTests: XCTestCase {
     func testActiveArrowBackwardWraps() {
         let m = makeMachine()
         activateMachine(m, count: 3)  // index=1
-        m.handle(.arrowBackward)  // →0
-        let (action, consumed) = m.handle(.arrowBackward)  // →2 (wrap)
+        m.handle(.arrowLeft)  // →0
+        let (action, consumed) = m.handle(.arrowLeft)  // →2 (wrap)
         XCTAssertEqual(action, .moveSelection(to: 2))
         XCTAssertTrue(consumed)
     }
@@ -374,9 +374,9 @@ final class SwitcherStateMachineTests: XCTestCase {
         let m = makeMachine()
         m.handle(.modifierDown)
         m.handle(.trigger(shift: false), itemCount: 4)  // index=1
-        XCTAssertEqual(m.handle(.arrowForward).action, .moveSelection(to: 2))
-        XCTAssertEqual(m.handle(.arrowForward).action, .moveSelection(to: 3))
-        XCTAssertEqual(m.handle(.arrowBackward).action, .moveSelection(to: 2))
+        XCTAssertEqual(m.handle(.arrowRight).action, .moveSelection(to: 2))
+        XCTAssertEqual(m.handle(.arrowRight).action, .moveSelection(to: 3))
+        XCTAssertEqual(m.handle(.arrowLeft).action, .moveSelection(to: 2))
     }
 
     // MARK: - State reuse after cancel / confirm
@@ -458,8 +458,8 @@ final class SwitcherStateMachineTests: XCTestCase {
         let activeCases: [Case] = [
             .init(input: .trigger(shift: false), shouldConsume: true, label: "ACTIVE+trigger"),
             .init(input: .trigger(shift: true), shouldConsume: true, label: "ACTIVE+shiftTrigger"),
-            .init(input: .arrowForward, shouldConsume: true, label: "ACTIVE+arrowFwd"),
-            .init(input: .arrowBackward, shouldConsume: true, label: "ACTIVE+arrowBack"),
+            .init(input: .arrowRight, shouldConsume: true, label: "ACTIVE+arrowRight"),
+            .init(input: .arrowLeft, shouldConsume: true, label: "ACTIVE+arrowLeft"),
             .init(input: .escape, shouldConsume: true, label: "ACTIVE+escape"),
             .init(input: .sameAppJump, shouldConsume: true, label: "ACTIVE+sameAppJump"),
             .init(input: .otherKey, shouldConsume: false, label: "ACTIVE+otherKey"),
@@ -493,5 +493,76 @@ final class SwitcherStateMachineTests: XCTestCase {
         XCTAssertFalse(m.isModifierHeld)
         XCTAssertTrue(m.isActive)
         XCTAssertEqual(m.activeIndex, 1)
+    }
+
+    // MARK: - Vertical arrows and digits in flat mode
+
+    func testFlatModeCollapsesVerticalArrowsOntoTheSingleAxis() {
+        let m = makeMachine()
+        activateMachine(m, count: 4)  // index=1
+        XCTAssertEqual(m.handle(.arrowDown).action, .moveSelection(to: 2))
+        XCTAssertEqual(m.handle(.arrowUp).action, .moveSelection(to: 1))
+    }
+
+    func testFlatModeLeavesDigitsToTheFrontApp() {
+        let m = makeMachine()
+        activateMachine(m, count: 4)
+        let (action, consumed) = m.handle(.digit(2))
+        XCTAssertEqual(action, .none)
+        XCTAssertFalse(consumed, "modifier+digit is a real shortcut in the front app")
+        XCTAssertEqual(m.activeIndex, 1, "the selection must not move")
+    }
+
+    // MARK: - Injected navigator (app-unit mode)
+
+    func testNavigatorTakesOverEveryMovementInput() {
+        let m = makeMachine()
+        var seen: [SwitcherInput] = []
+        m.navigator = { input, _ in
+            seen.append(input)
+            return 3
+        }
+        activateMachine(m, count: 8)
+
+        for input in [SwitcherInput.arrowRight, .arrowLeft, .arrowUp, .arrowDown, .digit(2), .sameAppJump] {
+            let (action, consumed) = m.handle(input)
+            XCTAssertEqual(action, .moveSelection(to: 3), "\(input) should route through the navigator")
+            XCTAssertTrue(consumed, "\(input) is a defined transition and must be swallowed")
+        }
+        XCTAssertEqual(seen.count, 6)
+    }
+
+    func testNavigatorReturningNilHoldsTheSelectionStill() {
+        let m = makeMachine()
+        m.navigator = { _, _ in nil }
+        activateMachine(m, count: 8)  // index=1
+        let (action, consumed) = m.handle(.arrowRight)
+        XCTAssertEqual(action, .moveSelection(to: 1), "a cursor at its end stays put")
+        XCTAssertTrue(consumed, "still swallowed — the key is not the front app's")
+    }
+
+    func testNavigatorDoesNotOwnEscapeOrModifierRelease() {
+        let m = makeMachine()
+        m.navigator = { _, _ in 5 }
+        activateMachine(m, count: 8)
+        XCTAssertEqual(m.handle(.escape).action, .cancel)
+
+        let m2 = makeMachine()
+        m2.navigator = { _, _ in 5 }
+        activateMachine(m2, count: 8)
+        m2.handle(.arrowRight)
+        XCTAssertEqual(m2.handle(.modifierUp).action, .confirmSelection(index: 5))
+    }
+
+    func testInitialIndexProviderOverridesTheDefaultStartingIndex() {
+        let m = makeMachine()
+        m.initialIndexProvider = { count in
+            XCTAssertEqual(count, 6)
+            return 4
+        }
+        m.handle(.modifierDown)
+        let (action, _) = m.handle(.trigger(shift: false), itemCount: 6)
+        XCTAssertEqual(action, .showPanel(initialIndex: 4))
+        XCTAssertEqual(m.activeIndex, 4)
     }
 }
