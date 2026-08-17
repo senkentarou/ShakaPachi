@@ -279,6 +279,25 @@ struct BehaviorSettingsView: View {
                     .pickerStyle(.menu)
                     .fixedSize()
                 }
+
+                SettingsRowDivider()
+
+                SettingsRow(title: "表示単位", caption: "切替リストの表示のまとめ方") {
+                    Picker(
+                        "",
+                        selection: Binding(
+                            get: { settings.switcherDisplayMode },
+                            set: { Settings.shared.switcherDisplayMode = $0 }
+                        )
+                    ) {
+                        ForEach([SwitcherDisplayMode.window, .app], id: \.self) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                }
             }
         }
         .onAppear {
