@@ -131,9 +131,11 @@ final class AppGroupedSelectionTests: XCTestCase {
         XCTAssertEqual(selection.appIndex, 1)
         XCTAssertEqual(selection.focusRow, .app, "Landing on a single-window app must drop to .app row")
 
-        selection.nextApp()  // → C (2 windows), current focusRow (.app) is kept, not forced
+        selection.nextApp()  // → C (2 windows): arriving focuses the strip
         XCTAssertEqual(selection.appIndex, 2)
-        XCTAssertEqual(selection.focusRow, .app)
+        XCTAssertEqual(
+            selection.focusRow, .window,
+            "Landing on a multi-window app must focus its strip without a separate descend")
 
         selection.nextApp()  // → wraps past the last group back to A
         XCTAssertEqual(selection.appIndex, 0, "nextApp() must wrap around at the end")
@@ -228,7 +230,31 @@ final class AppGroupedSelectionTests: XCTestCase {
         let selection = AppGroupedSelection(groups: groups, flatIndex: 3)
         XCTAssertEqual(selection.appIndex, 2, "flatIndex 3 belongs to group C")
         XCTAssertEqual(selection.windowIndex, 0)
-        XCTAssertEqual(selection.focusRow, .app)
+        XCTAssertEqual(
+            selection.focusRow, .window,
+            "C has 2 windows, so opening on it focuses the strip straight away")
+    }
+
+    func testOpeningOnASingleWindowAppStaysOnTheAppRow() {
+        let windows = [
+            makeWindow(id: 1, bundleID: "com.a", appName: "A"),
+            makeWindow(id: 2, bundleID: "com.b", appName: "B"),
+        ]
+        let groups = AppGroupedSelection.groups(from: windows)
+        let selection = AppGroupedSelection(groups: groups, flatIndex: 0)
+        XCTAssertEqual(selection.focusRow, .app, "one window has no strip to focus")
+    }
+
+    func testAscendIsStillReachableAfterAutoFocus() {
+        let windows = [
+            makeWindow(id: 1, bundleID: "com.a", appName: "A"),
+            makeWindow(id: 2, bundleID: "com.a", appName: "A"),
+        ]
+        let groups = AppGroupedSelection.groups(from: windows)
+        var selection = AppGroupedSelection(groups: groups, flatIndex: 0)
+        XCTAssertEqual(selection.focusRow, .window)
+        selection.ascend()
+        XCTAssertEqual(selection.focusRow, .app, "auto-focus must not make the app row unreachable")
     }
 
     func testInitFallsBackToFrontForOutOfRangeFlatIndex() {

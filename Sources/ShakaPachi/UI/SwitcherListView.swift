@@ -926,12 +926,13 @@ final class SwitcherListView: NSView {
     private func drawAppGrouped(_ dirtyRect: NSRect) {
         let tile = effectiveTile
         let panelWidth = bounds.width
-        let hasLeftChip = strip.hiddenLeft > 0
-        let hasRightChip = strip.hiddenRight > 0
+        // Chip SLOTS are reserved per group; a chip is only painted when that
+        // side actually has something folded away (see `leftChipRect`).
+        let reservesChips = reservesChipSlots
         let appOffsetX = SwitcherLayout.tileRowOffsetX(
             itemCount: groups.count, effectiveTile: tile, boundsWidth: panelWidth)
         let paneOffsetX = SwitcherLayout.windowRowOffsetX(
-            visiblePaneCount: strip.visible.count, hasLeftChip: hasLeftChip, hasRightChip: hasRightChip,
+            visiblePaneCount: strip.visible.count, hasLeftChip: reservesChips, hasRightChip: reservesChips,
             panelWidth: panelWidth)
 
         // --- App tile row: one tile per group, icon = that group's first window's icon.
@@ -972,7 +973,7 @@ final class SwitcherListView: NSView {
             guard items.indices.contains(flatIndex) else { continue }
             let item = items[flatIndex]
             let paneRect = SwitcherLayout.paneRect(
-                ordinal: ordinal, hasLeftChip: hasLeftChip, effectiveTile: tile, rowOffsetX: paneOffsetX)
+                ordinal: ordinal, hasLeftChip: reservesChips, effectiveTile: tile, rowOffsetX: paneOffsetX)
             guard paneRect.insetBy(dx: -2, dy: -2).intersects(dirtyRect) else { continue }
 
             let isCurrentPane = flatIndex == currentFlatIndex
@@ -989,7 +990,7 @@ final class SwitcherListView: NSView {
             drawAppGroupedPane(item, in: paneRect)
 
             let paneTitle = SwitcherLayout.paneTitleRect(
-                ordinal: ordinal, hasLeftChip: hasLeftChip, effectiveTile: tile, rowOffsetX: paneOffsetX)
+                ordinal: ordinal, hasLeftChip: reservesChips, effectiveTile: tile, rowOffsetX: paneOffsetX)
             let titleAlpha: CGFloat = isCurrentPane ? 1.0 : AppGroupedLayout.unselectedTitleAlpha
             drawCenteredTruncatedText(
                 item.title, in: paneTitle, fontSize: 13,
@@ -1007,7 +1008,7 @@ final class SwitcherListView: NSView {
         }
         if let rightRect = SwitcherLayout.rightChipRect(
             hiddenRight: strip.hiddenRight, visiblePaneCount: strip.visible.count,
-            hasLeftChip: hasLeftChip, effectiveTile: tile, rowOffsetX: paneOffsetX)
+            hasLeftChip: reservesChips, effectiveTile: tile, rowOffsetX: paneOffsetX)
         {
             drawChip("+\(strip.hiddenRight)", in: rightRect)
         }
@@ -1206,13 +1207,24 @@ final class SwitcherListView: NSView {
     /// previewDidArrive and opalRimTarget so none of them can derive a
     /// different answer for "where is this pane".
     private func appGroupedPaneRect(ordinal: Int) -> NSRect {
-        let hasLeftChip = strip.hiddenLeft > 0
-        let hasRightChip = strip.hiddenRight > 0
         let offsetX = SwitcherLayout.windowRowOffsetX(
-            visiblePaneCount: strip.visible.count, hasLeftChip: hasLeftChip, hasRightChip: hasRightChip,
+            visiblePaneCount: strip.visible.count,
+            hasLeftChip: reservesChipSlots, hasRightChip: reservesChipSlots,
             panelWidth: bounds.width)
         return SwitcherLayout.paneRect(
-            ordinal: ordinal, hasLeftChip: hasLeftChip, effectiveTile: effectiveTile, rowOffsetX: offsetX)
+            ordinal: ordinal, hasLeftChip: reservesChipSlots, effectiveTile: effectiveTile,
+            rowOffsetX: offsetX)
+    }
+
+    /// Whether the current group lays out both `+n` chip slots.
+    ///
+    /// Decided per group rather than from `strip.hiddenLeft/Right`, which
+    /// change as the strip slides: keying the layout off those made every pane
+    /// jump sideways the moment a chip appeared or vanished mid-scroll. A group
+    /// that can never overflow reserves nothing, so short lists stay compact.
+    private var reservesChipSlots: Bool {
+        guard groups.indices.contains(appIndex) else { return false }
+        return groups[appIndex].windowIndices.count > AppGroupedLayout.maxVisibleWindows
     }
 
     /// Kick off (or refresh) captures for the selected window and its neighbors.
