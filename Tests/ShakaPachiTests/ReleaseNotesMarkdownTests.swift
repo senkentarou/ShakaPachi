@@ -224,4 +224,80 @@ final class ReleaseNotesMarkdownTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - localizedSection
+
+    func testLocalizedSection_noMarkersReturnsBodyUnchanged() {
+        let body = "## 変更\n\n- 何か直しました"
+        XCTAssertEqual(ReleaseNotesMarkdown.localizedSection(from: body, language: "ja"), body)
+        XCTAssertEqual(ReleaseNotesMarkdown.localizedSection(from: body, language: "en"), body)
+    }
+
+    func testLocalizedSection_selectsMatchingLanguage() {
+        let body = """
+            <!-- lang:en -->
+            ## Changes
+
+            - Fixed something
+
+            <!-- lang:ja -->
+            ## 変更
+
+            - 何か直しました
+            """
+
+        XCTAssertEqual(
+            ReleaseNotesMarkdown.localizedSection(from: body, language: "en"),
+            "## Changes\n\n- Fixed something")
+        XCTAssertEqual(
+            ReleaseNotesMarkdown.localizedSection(from: body, language: "ja"),
+            "## 変更\n\n- 何か直しました")
+    }
+
+    func testLocalizedSection_outputNeverContainsMarkerLines() {
+        let body = "<!-- lang:en -->\nEnglish\n<!-- lang:ja -->\n日本語"
+        let en = ReleaseNotesMarkdown.localizedSection(from: body, language: "en")
+        let ja = ReleaseNotesMarkdown.localizedSection(from: body, language: "ja")
+        XCTAssertFalse(en.contains("<!-- lang:"))
+        XCTAssertFalse(ja.contains("<!-- lang:"))
+    }
+
+    func testLocalizedSection_unmatchedLanguageFallsBackToFirstSection() {
+        let body = "<!-- lang:en -->\nEnglish\n<!-- lang:ja -->\n日本語"
+        XCTAssertEqual(ReleaseNotesMarkdown.localizedSection(from: body, language: "fr"), "English")
+    }
+
+    func testLocalizedSection_regionSubtagIsIgnored() {
+        let body = "<!-- lang:en -->\nEnglish\n<!-- lang:ja -->\n日本語"
+        XCTAssertEqual(ReleaseNotesMarkdown.localizedSection(from: body, language: "ja-JP"), "日本語")
+    }
+
+    func testLocalizedSection_preambleBeforeFirstMarkerIsKeptAheadOfTheSelectedSection() {
+        let body = """
+            # ShakaPachi v1.5.0
+
+            <!-- lang:en -->
+            ## Changes
+
+            <!-- lang:ja -->
+            ## 変更
+            """
+
+        XCTAssertEqual(
+            ReleaseNotesMarkdown.localizedSection(from: body, language: "ja"),
+            "# ShakaPachi v1.5.0\n\n## 変更")
+    }
+
+    func testLocalizedSection_extractedTextParsesIntoExpectedBlocks() {
+        let body = "<!-- lang:en -->\n## Changes\n\n- one\n<!-- lang:ja -->\n## 変更\n\n- 一つ"
+        let extracted = ReleaseNotesMarkdown.localizedSection(from: body, language: "en")
+        let blocks = ReleaseNotesMarkdown.parse(extracted)
+        XCTAssertEqual(
+            blocks,
+            [
+                .heading(level: 2, text: "Changes"),
+                .blank,
+                .listItem(indent: 0, marker: .bullet, text: "one"),
+            ])
+    }
 }
