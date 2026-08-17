@@ -76,6 +76,7 @@ struct AppGroupedSelection {
         windowIndex = located?.windowIndex ?? 0
         stripStart = 0
         focusRow = .app
+        adoptFocusRowForCurrentGroup()
         slideStripToShowWindowIndex()
     }
 
@@ -227,9 +228,23 @@ struct AppGroupedSelection {
         saveMemoryForCurrentGroup()
         appIndex = (appIndex + offset + groups.count) % groups.count
         restoreMemoryForCurrentGroup()
-        if let group = currentGroup, group.windowIndices.count < 2 {
+        adoptFocusRowForCurrentGroup()
+    }
+
+    /// Put the cursor on the row the group actually has something to offer.
+    ///
+    /// Landing on a multi-window app focuses its strip rather than the app
+    /// tile, so the arrows and the direct-jump shortcuts act on windows the
+    /// moment the app is reached. Requiring a separate keystroke to descend
+    /// made every visit to a multi-window app cost one extra press, which is
+    /// the opposite of what expanding the strip is for. `ascend()` still moves
+    /// back up deliberately; this only decides where arriving puts you.
+    private mutating func adoptFocusRowForCurrentGroup() {
+        guard let group = currentGroup else {
             focusRow = .app
+            return
         }
+        focusRow = group.windowIndices.count >= 2 ? .window : .app
     }
 
     private mutating func saveMemoryForCurrentGroup() {

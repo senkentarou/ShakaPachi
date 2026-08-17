@@ -322,11 +322,22 @@ final class SwitcherPanel {
 
         let effectiveTile = SwitcherLayout.effectiveTileSize(
             itemCount: groups.count, availableWidth: availableWidth, baseTile: baseTile)
+        // Size from the WIDEST app in this snapshot, not the selected one.
+        // Sizing per selection made the panel grow and shrink on every step
+        // between apps, which is exactly the moment the user is trying to track
+        // a tile in the row above it. Paying some empty width on narrow apps
+        // buys a panel that never moves for a whole switcher session.
+        let widestPaneCount = min(
+            AppGroupedLayout.maxVisibleWindows,
+            groups.map(\.windowIndices.count).max() ?? 1)
+        let anyGroupOverflows = groups.contains {
+            $0.windowIndices.count > AppGroupedLayout.maxVisibleWindows
+        }
         let size = SwitcherLayout.appGroupedPanelSize(
             groupCount: groups.count,
-            visiblePaneCount: strip.visible.count,
-            hasLeftChip: strip.hiddenLeft > 0,
-            hasRightChip: strip.hiddenRight > 0,
+            visiblePaneCount: widestPaneCount,
+            hasLeftChip: anyGroupOverflows,
+            hasRightChip: anyGroupOverflows,
             effectiveTile: effectiveTile)
         setPanelFrame(size: size, screenFrame: screenFrame)
 
