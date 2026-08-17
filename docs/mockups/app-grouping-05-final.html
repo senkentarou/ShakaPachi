@@ -1,0 +1,918 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShakaPachi — アプリ単位表示：確定仕様プロトタイプ</title>
+<style>
+  /* --------------------------------------------------------------------
+     Visual baseline copied 1:1 from app-grouping-01-layouts.html (CSS
+     variables, fake desktop, panel chrome, tile/badge recipe) so this
+     mock reads as the same series, plus the fake-window-content
+     convention from app-grouping-04-overflow.html (real px + var(--s),
+     no transform: scale()) for the live-preview panes.
+     -------------------------------------------------------------------- */
+  :root {
+    --accent-rgb: 76, 128, 191;
+    --tile: 76px;
+    --icon: 60px;
+    --gap: 8px;
+    --margin: 20px;
+    --radius-panel: 24px;
+    --radius-tile: 14px;      /* SwitcherLayout.selectionCornerRadius */
+    --pane-radius: 10px;      /* drawPreview's roundedRect radius */
+    --pane-w: 320px;          /* SwitcherLayout.previewWidth, shown at 1:1 (max 3 at once) */
+    --pane-h: 200px;          /* SwitcherLayout.previewHeight, 16:10 */
+    --row-gap: 10px;          /* SwitcherLayout.previewTopGap, reused between panes/chips */
+    --chip-w: 32px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    color: #e9e9ef;
+    background: #14141c;
+    position: relative;
+  }
+  button { font: inherit; background: none; border: none; padding: 0; margin: 0; color: inherit; cursor: pointer; }
+
+  /* fake desktop, same convention as the other mocks in this series */
+  .desktop { position: fixed; inset: 0; z-index: 0; }
+  .desktop::before {
+    content: ""; position: absolute; inset: -10%;
+    background:
+      radial-gradient(50% 55% at 18% 22%, #3b6ea5 0%, transparent 60%),
+      radial-gradient(45% 50% at 82% 18%, #8c4a7a 0%, transparent 62%),
+      radial-gradient(60% 60% at 70% 85%, #2f6b5e 0%, transparent 65%),
+      linear-gradient(160deg, #171722 0%, #0e0e16 100%);
+  }
+  .desktop::after {
+    content: ""; position: absolute; inset: 0; mix-blend-mode: overlay;
+    background:
+      linear-gradient(90deg, transparent 6%, rgba(255,255,255,.10) 6% 34%, transparent 34%),
+      linear-gradient(0deg, transparent 18%, rgba(0,0,0,.28) 18% 74%, transparent 74%),
+      linear-gradient(90deg, transparent 58%, rgba(255,255,255,.07) 58% 92%, transparent 92%);
+  }
+
+  .page { position: relative; z-index: 1; max-width: 1140px; margin: 0 auto; padding: 36px 24px 70px; }
+  h1 { font-size: 20px; font-weight: 650; margin: 0 0 6px; }
+  .lede { margin: 0; font-size: 13px; line-height: 1.8; color: rgba(233,233,239,.62); max-width: 84ch; }
+  .lede strong { color: rgba(233,233,239,.86); font-weight: 620; }
+
+  .decided {
+    margin: 16px 0 0; padding: 14px 18px; border-radius: 14px; list-style: none;
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12);
+    font-size: 12.5px; line-height: 1.85; color: rgba(233,233,239,.78); max-width: 92ch;
+  }
+  .decided li { padding-left: 1.4em; position: relative; }
+  .decided li::before { content: "✓"; position: absolute; left: 0; color: #8ff0c4; font-weight: 700; }
+  .decided b { color: rgba(233,233,239,.94); font-weight: 640; }
+  .decided code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px;
+    padding: 1px 5px; border-radius: 4px; background: rgba(255,255,255,.10);
+  }
+
+  /* ================= panel chrome (verbatim from 01/03) ================= */
+  .stage { display: flex; justify-content: center; padding: 34px 0 6px; overflow-x: auto; }
+  .panel { position: relative; display: inline-block; border-radius: var(--radius-panel); }
+  .panelbg {
+    position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    border-radius: var(--radius-panel); overflow: hidden;
+    backdrop-filter: blur(34px) saturate(1.5);
+    -webkit-backdrop-filter: blur(34px) saturate(1.5);
+    background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.18);
+    box-shadow: 0 26px 70px rgba(0,0,0,.46);
+  }
+  .panelbg::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.04) 40%, transparent 75%);
+  }
+  .content { position: relative; z-index: 1; padding-bottom: 14px; } /* SwitcherLayout.bottomPadding */
+
+  /* ---- app row (top row) ---- */
+  .approw { display: flex; gap: var(--gap); padding: 20px 20px 0; justify-content: center; } /* topPadding=20, horizontalMargin=20 */
+  .apptile {
+    width: var(--tile); height: var(--tile); border-radius: var(--radius-tile);
+    display: flex; align-items: center; justify-content: center;
+    position: relative; flex: none;
+  }
+  .apptile.sel {
+    background: rgba(var(--accent-rgb), .30); /* AccentColor.selectionHighlightAlpha */
+    box-shadow:
+      inset 0 0 0 1px rgba(0,0,0,.28),    /* outer ring: selectionRimDarkAlpha */
+      inset 0 0 0 2px rgba(255,255,255,.55); /* inner ring: selectionRimLightAlpha */
+  }
+  .iconwrap { position: relative; overflow: hidden; flex: none; box-shadow: 0 2px 5px rgba(0,0,0,.34); }
+
+  /* ---- middle text row: selected app's name (not a window title anymore) ---- */
+  .titlerow {
+    margin-top: 6px; height: 20px; line-height: 20px; /* titleGap=6, titleHeight=20 */
+    padding: 0 20px; font-size: 13px; font-weight: 600; text-align: center;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    text-shadow: 0 1px 2px rgba(0,0,0,.4);
+  }
+
+  /* ---- window row (bottom row): up to 3 live-preview panes + overflow chips ---- */
+  .windowrow { display: flex; align-items: flex-start; justify-content: center; gap: var(--row-gap); margin-top: var(--row-gap); padding: 0 20px; }
+  .panecol { display: flex; flex-direction: column; align-items: center; flex: none; }
+
+  .pane {
+    width: var(--pane-w); height: var(--pane-h); border-radius: var(--pane-radius);
+    overflow: hidden; position: relative; flex: none;
+    box-shadow: 0 8px 18px rgba(0,0,0,.35);
+    background: #121219; /* R2: dark-plate letterbox/pillarbox fill */
+  }
+  .pane.sel {
+    box-shadow:
+      0 8px 18px rgba(0,0,0,.35),
+      inset 0 0 0 1px rgba(0,0,0,.28),
+      inset 0 0 0 2px rgba(255,255,255,.55);
+  }
+  .pane-tint { position: absolute; inset: 0; z-index: 3; pointer-events: none; background: transparent; }
+  .pane.sel .pane-tint { background: rgba(var(--accent-rgb), .30); }
+  .pane .badge {
+    position: absolute; left: 7px; right: auto; top: auto; bottom: 7px; z-index: 4;
+    min-width: 15px; height: 15px; padding: 0 4px;
+    border-radius: 8px; background: rgba(0,0,0,.62); color: #fff; font-size: 9px; font-weight: 700;
+    line-height: 15px; text-align: center; box-shadow: 0 0 0 1.5px rgba(255,255,255,.4);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* T4: per-pane title below the pane, dimmed unless it's the app's current window */
+  .panetitle-below {
+    margin-top: 6px; width: var(--pane-w); font-size: 13px; line-height: 1.3; text-align: center;
+    white-space: nowrap; overflow: hidden; color: rgba(233,233,239,.94);
+  }
+  .panetitle-below.dim { opacity: .42; }
+
+  /* overflow chip: a thin, tall pill matching the pane height, muted styling */
+  .chip {
+    width: var(--chip-w); height: var(--pane-h); border-radius: 16px; flex: none;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    background: rgba(255,255,255,.055); border: 1px dashed rgba(255,255,255,.22);
+    color: rgba(233,233,239,.62); font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+    cursor: pointer;
+  }
+  .chip:hover { background: rgba(255,255,255,.1); color: rgba(233,233,239,.85); }
+  .chip .arrow { font-size: 11px; font-weight: 400; opacity: .6; }
+
+  /* ================= HUD: key legend + debug status line, below the panel ================= */
+  .hud { max-width: 1040px; margin: 22px auto 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 7px 18px; justify-content: center;
+    font-size: 11.5px; color: rgba(233,233,239,.68);
+    background: rgba(22,22,32,.6); border: 1px solid rgba(255,255,255,.12);
+    border-radius: 12px; padding: 10px 18px;
+  }
+  .legend .row { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .legend kbd {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+    padding: 2px 6px; border-radius: 5px; background: rgba(255,255,255,.11); color: #e9e9ef;
+    border: 1px solid rgba(255,255,255,.14);
+  }
+  .statusline {
+    font-size: 12px; color: rgba(233,233,239,.72); text-align: center;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .statusline .rowtag {
+    display: inline-block; padding: 1px 8px; border-radius: 999px; margin-right: 10px;
+    background: rgba(var(--accent-rgb), .32); color: #eef4ff; font-weight: 700;
+    font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; font-size: 11px;
+  }
+
+  footer { max-width: 1040px; margin: 46px auto 0; padding-top: 16px; border-top: 1px solid rgba(255,255,255,.12); font-size: 11.5px; line-height: 1.9; color: rgba(233,233,239,.5); }
+
+  /* ================= fake window content ==================
+     Real px + var(--s) convention copied from app-grouping-04-overflow.html:
+     each archetype is sized to its own true (native) box, then fitted into
+     the pane with contain-fit (never upscaled). --s carries the fit scale
+     into font-size via calc(), so all internal em-based metrics shrink
+     together — no transform: scale() anywhere. */
+  .wface { position: absolute; overflow: hidden; font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; line-height: 1.35; }
+  .wface .tb { display: flex; align-items: center; gap: .5em; height: 2.2em; padding: 0 .8em; flex: none; }
+  .wface .dot { width: .62em; height: .62em; border-radius: 50%; flex: none; }
+  .wface .dot.r { background: #ff5f57; } .wface .dot.y { background: #febc2e; } .wface .dot.g { background: #28c840; }
+  .wface .addr {
+    flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    text-align: center; font-size: .78em; padding: .2em .6em; border-radius: .5em;
+  }
+  .wface .bd { position: absolute; left: 0; right: 0; top: 2.2em; bottom: 0; overflow: hidden; }
+
+  /* Safari 風ライト: heading + paragraph */
+  .wface.arch-browser { background: #f6f7f9; color: #1d1d1f; font-size: calc(11px * var(--s, 1)); }
+  .wface.arch-browser .tb { background: #e7e9ed; }
+  .wface.arch-browser .addr { background: rgba(0,0,0,.07); color: #3a3f4a; }
+  .wface.arch-browser .bd { padding: .9em 1em; }
+  .wface.arch-browser .heading { font-size: 1.28em; font-weight: 700; margin-bottom: .5em; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wface.arch-browser .para { font-size: .86em; color: #555c68; margin-bottom: .32em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* VS Code 風ダーク: sidebar file tree + syntax-colored editor lines */
+  .wface.arch-code { background: #1e1e1e; color: #d4d4d4; font-size: calc(11px * var(--s, 1)); }
+  .wface.arch-code .tb { background: #2d2d2d; }
+  .wface.arch-code .addr { background: rgba(255,255,255,.08); color: #cfd3da; }
+  .wface.arch-code .bd { display: flex; padding: 0; }
+  .wface.arch-code .sidebar { width: 5.6em; flex: none; background: #252526; padding: .5em .35em; display: flex; flex-direction: column; gap: .3em; }
+  .wface.arch-code .sidebar .frow { font-size: .72em; color: #bbbbbb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: .18em .3em; border-radius: .25em; }
+  .wface.arch-code .sidebar .frow.active { background: rgba(255,255,255,.1); color: #fff; }
+  .wface.arch-code .editor { flex: 1 1 auto; min-width: 0; padding: .6em .75em; overflow: hidden; }
+  .wface.arch-code .cline { white-space: nowrap; overflow: hidden; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .86em; line-height: 1.7; }
+  .wface.arch-code .kw { color: #569cd6; } .wface.arch-code .str { color: #ce9178; } .wface.arch-code .com { color: #6a9955; }
+
+  /* ターミナル風の黒: monospace lines */
+  .wface.arch-terminal { background: #0b0c0f; font-size: calc(13px * var(--s, 1)); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .wface.arch-terminal .tb { background: #1c1d22; }
+  .wface.arch-terminal .bd { padding: .6em .9em; }
+  .wface.arch-terminal .line { white-space: nowrap; overflow: hidden; color: #d7dbe0; font-size: .9em; line-height: 1.85; }
+  .wface.arch-terminal .line.prompt { color: #6be675; }
+  .wface.arch-terminal .line.dim { color: #7d828c; }
+  .wface.arch-terminal .line.ok { color: #6be675; }
+
+  /* チャット風 (Slack): bubbles */
+  .wface.arch-chat { background: #1a1d29; font-size: calc(11px * var(--s, 1)); }
+  .wface.arch-chat .tb { background: #262a3a; }
+  .wface.arch-chat .addr { background: rgba(255,255,255,.08); color: #cfd3da; }
+  .wface.arch-chat .bd { padding: .6em .55em; display: flex; flex-direction: column; gap: .5em; }
+  .wface.arch-chat .msg .who { font-weight: 700; font-size: .82em; color: #e6e6ea; }
+  .wface.arch-chat .msg .txt { font-size: .8em; color: #cfcfda; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Finder 風ライト: sidebar + file grid */
+  .wface.arch-finder { background: #f6f7f9; color: #1d1d1f; font-size: calc(11px * var(--s, 1)); }
+  .wface.arch-finder .tb { background: #e7e9ed; }
+  .wface.arch-finder .addr { background: rgba(0,0,0,.06); color: #3a3f4a; }
+  .wface.arch-finder .bd { display: flex; padding: 0; }
+  .wface.arch-finder .sidebar { width: 6em; flex: none; background: #eef0f3; padding: .6em .5em; display: flex; flex-direction: column; gap: .4em; font-size: .78em; color: #5b6472; white-space: nowrap; overflow: hidden; }
+  .wface.arch-finder .files { flex: 1 1 auto; min-width: 0; padding: .7em .8em; display: flex; flex-wrap: wrap; gap: .7em; align-content: flex-start; overflow: hidden; }
+  .wface.arch-finder .file { width: 3.7em; display: flex; flex-direction: column; align-items: center; gap: .25em; font-size: .68em; text-align: center; }
+  .wface.arch-finder .file .ic { width: 2em; height: 1.6em; border-radius: .25em; background: linear-gradient(135deg,#8fc7ff,#3a86d8); }
+  .wface.arch-finder .file span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; color: #333844; }
+
+  /* メール風ライト: inbox rows */
+  .wface.arch-mail { background: #f6f7f9; color: #1d1d1f; font-size: calc(11px * var(--s, 1)); }
+  .wface.arch-mail .tb { background: #e7e9ed; }
+  .wface.arch-mail .addr { background: rgba(0,0,0,.06); color: #3a3f4a; }
+  .wface.arch-mail .bd { padding: .5em .6em; display: flex; flex-direction: column; gap: .45em; overflow: hidden; }
+  .wface.arch-mail .mrow { display: flex; flex-direction: column; gap: .08em; padding: .4em .5em; border-radius: .35em; background: #ffffff; box-shadow: 0 1px 0 rgba(0,0,0,.05); }
+  .wface.arch-mail .mrow .from { font-size: .82em; font-weight: 700; color: #1d1d1f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wface.arch-mail .mrow .subject { font-size: .76em; color: #3a3f4a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wface.arch-mail .mrow .snippet { font-size: .7em; color: #8a8f99; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ミュージック風: album art + track info */
+  .wface.arch-music { background: linear-gradient(160deg,#232634,#14151c); color: #eceef3; font-size: calc(11px * var(--s, 1)); }
+  .wface.arch-music .tb { background: rgba(255,255,255,.04); }
+  .wface.arch-music .bd { padding: .8em; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .5em; }
+  .wface.arch-music .art { width: 3.6em; height: 3.6em; border-radius: .4em; flex: none; background: linear-gradient(135deg,#fd7291,#e21d5c); }
+  .wface.arch-music .track { font-size: .92em; font-weight: 700; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .wface.arch-music .artist { font-size: .76em; color: #a9adba; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .wface.arch-music .bar { width: 80%; height: .3em; border-radius: .2em; background: rgba(255,255,255,.14); position: relative; flex: none; }
+  .wface.arch-music .bar::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 38%; border-radius: .2em; background: rgb(var(--accent-rgb)); }
+
+  /* メモ風: cream paper */
+  .wface.arch-notes { background: #fbf6df; color: #3a3320; font-size: calc(12px * var(--s, 1)); }
+  .wface.arch-notes .tb { background: rgba(0,0,0,.05); height: 1.8em; }
+  .wface.arch-notes .bd { top: 1.8em; padding: .9em 1em; overflow: hidden; }
+  .wface.arch-notes .heading { font-size: 1.15em; font-weight: 700; margin-bottom: .5em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wface.arch-notes .line { font-size: .86em; line-height: 1.7; color: #5c5236; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+<div class="desktop"></div>
+
+<div class="page">
+  <h1>アプリ単位表示：確定仕様の実物大プロトタイプ</h1>
+  <p class="lede">
+    これは選択肢の比較ではありません。<strong>これまでの検討(01〜04)で確定した仕様をそのまま実装した、キーボードで実際に動かせるプロトタイプ</strong>です。
+    下のパネルはフォーカスを持ち、<code>Tab</code>・矢印キー・数字キーで実際に操作できます。
+  </p>
+  <ul class="decided">
+    <li><b>レイアウト(C):</b> 2段構成。上段=アプリタイル(76px)、下段=選択中アプリのウィンドウのライブプレビュー。アプリ行はパネルより狭いとき中央寄せする。</li>
+    <li><b>タイトル(T4):</b> 各プレビューの直下に個別タイトルを1行、中央省略で表示。非選択ペインは不透明度を落とし、現在の選択だけ通常の明るさにする。</li>
+    <li><b>アスペクト比(R2):</b> プレビュー枠は320×200(16:10)固定。実アスペクトを保ったままレターボックスし、余白は暗い板で埋める(クロップしない)。</li>
+    <li><b>最大3枚 + 左右<code>+n</code>:</b> 同時表示は最大3枚、320×200の等倍のまま並ぶ(縮小しない)。4枚以上は左右に<code>+n</code>チップで折りたたみ、選択が窓の外へ出ると3枚がスライド追従する。</li>
+    <li><b>バッジ:</b> 表示中の3枚に<code>⌘1</code><code>⌘2</code><code>⌘3</code>を左から順に付け、スライドすると指す先も一緒に動く。</li>
+    <li><b>キー割り当て:</b> <code>Tab</code>/<code>Shift+Tab</code>は常にアプリ間、<code>←</code>/<code>→</code>はいまの行の中、<code>↓</code>/<code>↑</code>で行を移動、<code>1</code>〜<code>3</code>で表示中の窓を直接選択。詳細は下の凡例を参照。</li>
+  </ul>
+
+  <div class="stage">
+    <div class="panel" id="switcher" tabindex="0">
+      <div class="panelbg"></div>
+      <div class="content"></div>
+    </div>
+  </div>
+
+  <div class="hud">
+    <div class="legend">
+      <div class="row"><kbd>Tab</kbd><kbd>Shift+Tab</kbd><span>常にアプリ間を移動(末尾で先頭に回り込み)</span></div>
+      <div class="row"><kbd>←</kbd><kbd>→</kbd><span>いまの行の中を移動</span></div>
+      <div class="row"><kbd>↓</kbd><span>ウィンドウ行へ降りる</span></div>
+      <div class="row"><kbd>↑</kbd><span>アプリ行へ戻る</span></div>
+      <div class="row"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><span>表示中の1〜3枚目を選択(実機は⌘1〜⌘3)</span></div>
+      <div class="row"><kbd>Esc</kbd><span>選択をリセット(実機ではキャンセル)</span></div>
+      <div class="row"><span>クリック:</span><span>アプリタイル / ウィンドウペイン / +nチップも同じ操作ができます</span></div>
+    </div>
+    <div class="statusline">
+      <span class="rowtag" id="hud-row">アプリ行</span><span id="hud-range"></span>
+    </div>
+  </div>
+
+  <footer>
+    実装対象: <code>SwitcherLayout</code>(<code>Sources/ShakaPachi/UI/SwitcherListView.swift</code>) / <code>SwitcherPanel</code>。
+    比較検討の経緯は同ディレクトリの <code>app-grouping-01</code>〜<code>04</code> を参照(このファイルは変更しません)。
+  </footer>
+</div>
+
+<script>
+  'use strict';
+
+  // ------------------------------------------------------------------
+  // Layout constants, copied 1:1 (px = pt) from SwitcherLayout so this
+  // mock's geometry matches the real panel's.
+  // ------------------------------------------------------------------
+  var TILE = 76, ICON = 60, TILE_GAP = 8, MARGIN = 20;
+  var PANE_W = 320, PANE_H = 200, ROW_GAP = 10, CHIP_W = 32;
+  var APP_ROW_INNER_WIDTH; // set once APPS is known (tiles + gaps, no side margins)
+
+  // ------------------------------------------------------------------
+  // Fake app icons: SVG glyphs copied verbatim from app-grouping-01, so
+  // this mock's app row reads as the same series.
+  // ------------------------------------------------------------------
+  var GLYPHS = {
+    safari: '<svg viewBox="0 0 100 100" style="position:absolute;inset:0;width:100%;height:100%" aria-hidden="true">' +
+      '<circle cx="50" cy="50" r="33" fill="none" stroke="#ffffff" stroke-opacity="0.9" stroke-width="4"/>' +
+      '<polygon points="50,20 58,50 42,50" fill="#ff5b4d"/>' +
+      '<polygon points="50,80 58,50 42,50" fill="#f2f4f8"/>' +
+      '</svg>',
+    vscode: '<svg viewBox="0 0 100 100" style="position:absolute;inset:0;width:100%;height:100%" aria-hidden="true">' +
+      '<polyline points="40,26 18,50 40,74" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.92"/>' +
+      '<polyline points="60,26 82,50 60,74" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.92"/>' +
+      '<line x1="56" y1="20" x2="44" y2="80" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-opacity="0.5"/>' +
+      '</svg>',
+    terminal: '<svg viewBox="0 0 100 100" style="position:absolute;inset:0;width:100%;height:100%" aria-hidden="true">' +
+      '<polyline points="26,32 52,50 26,68" fill="none" stroke="#6be675" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<rect x="56" y="62" width="26" height="8" rx="2" fill="#e8e8ec"/>' +
+      '</svg>',
+    slack: '<svg viewBox="0 0 100 100" style="position:absolute;inset:0;width:100%;height:100%" aria-hidden="true">' +
+      '<rect x="36" y="18" width="9" height="64" rx="4" fill="#ffffff" fill-opacity="0.94"/>' +
+      '<rect x="55" y="18" width="9" height="64" rx="4" fill="#ffffff" fill-opacity="0.94"/>' +
+      '<rect x="18" y="36" width="64" height="9" rx="4" fill="#ffffff" fill-opacity="0.94"/>' +
+      '<rect x="18" y="55" width="64" height="9" rx="4" fill="#ffffff" fill-opacity="0.94"/>' +
+      '</svg>',
+    finder: '',
+    mail: '<svg viewBox="0 0 100 100" style="position:absolute;inset:0;width:100%;height:100%" aria-hidden="true">' +
+      '<rect x="14" y="26" width="72" height="48" rx="7" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity="0.92"/>' +
+      '<polyline points="16,30 50,58 84,30" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.92"/>' +
+      '</svg>',
+    music: '<svg viewBox="0 0 100 100" style="position:absolute;inset:0;width:100%;height:100%" aria-hidden="true">' +
+      '<circle cx="34" cy="72" r="11" fill="#ffffff" fill-opacity="0.94"/>' +
+      '<rect x="42" y="22" width="6" height="52" fill="#ffffff" fill-opacity="0.94"/>' +
+      '<polygon points="48,22 76,30 76,44 48,36" fill="#ffffff" fill-opacity="0.94"/>' +
+      '</svg>',
+    notes: '<svg viewBox="0 0 100 100" style="position:absolute;inset:0;width:100%;height:100%" aria-hidden="true">' +
+      '<rect x="24" y="30" width="52" height="6" rx="3" fill="rgba(90,66,10,0.55)"/>' +
+      '<rect x="24" y="46" width="52" height="6" rx="3" fill="rgba(90,66,10,0.5)"/>' +
+      '<rect x="24" y="62" width="34" height="6" rx="3" fill="rgba(90,66,10,0.45)"/>' +
+      '<polygon points="78,18 90,18 90,30" fill="rgba(255,255,255,0.55)"/>' +
+      '</svg>'
+  };
+  function renderIcon(appId, px) {
+    var r = Math.round(px * 0.22);
+    var glyph = GLYPHS[appId] || '';
+    return '<div class="iconwrap ic-' + appId + '" style="width:' + px + 'px;height:' + px + 'px;border-radius:' + r + 'px">' + glyph + '</div>';
+  }
+
+  // ------------------------------------------------------------------
+  // Text truncation: real middle-ellipsis via canvas measurement,
+  // matching NSLineBreakMode.byTruncatingMiddle (current impl). Copied
+  // from app-grouping-03/04.
+  // ------------------------------------------------------------------
+  var measureCanvas = document.createElement('canvas');
+  var measureCtx = measureCanvas.getContext('2d');
+  var BASE_FONT = '13px -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif';
+  function textWidth(text, font) {
+    measureCtx.font = font || BASE_FONT;
+    return measureCtx.measureText(text).width;
+  }
+  function truncateMiddle(text, maxWidth, font) {
+    font = font || BASE_FONT;
+    if (textWidth(text, font) <= maxWidth) return text;
+    var ell = '…';
+    var lo = 0, hi = Math.ceil(text.length / 2), best = ell;
+    while (lo <= hi) {
+      var mid = Math.floor((lo + hi) / 2);
+      var front = text.slice(0, mid);
+      var back = mid > 0 ? text.slice(text.length - mid) : '';
+      var candidate = front + ell + back;
+      if (textWidth(candidate, font) <= maxWidth) { best = candidate; lo = mid + 1; } else { hi = mid - 1; }
+    }
+    return best;
+  }
+  function setTruncatedText(el, fullText, maxWidth) {
+    el.textContent = truncateMiddle(fullText, maxWidth);
+    el.title = fullText;
+  }
+
+  // ------------------------------------------------------------------
+  // Fake window content archetypes. refW/refH are each app's *native*
+  // reference box; fitContain scales it into the 320x200 pane without
+  // ever upscaling, in real px, with the scale carried into --s so the
+  // internal em-based type shrinks together (no transform: scale()).
+  // Aspect ratios deliberately mixed: wide (terminal), exact 16:10
+  // (safari — the only one with zero letterbox), portrait (slack),
+  // near-square (music), plus four more for extra variety.
+  // ------------------------------------------------------------------
+  var ARCH = {
+    browser:  { refW: 384, refH: 240 }, // 16:10 exact — no letterbox bars
+    code:     { refW: 480, refH: 270 }, // 16:9 — mild letterbox
+    terminal: { refW: 640, refH: 270 }, // wide — strong top/bottom bars
+    chat:     { refW: 220, refH: 340 }, // portrait — strong left/right bars
+    finder:   { refW: 360, refH: 260 },
+    mail:     { refW: 340, refH: 260 },
+    music:    { refW: 260, refH: 250 }, // near-square — strong left/right bars
+    notes:    { refW: 260, refH: 300 }
+  };
+
+  function fitContain(paneW, paneH, refW, refH) {
+    var scale = Math.min(paneW / refW, paneH / refH, 1);
+    var w = Math.round(refW * scale), h = Math.round(refH * scale);
+    var left = Math.round((paneW - w) / 2), top = Math.round((paneH - h) / 2);
+    return { w: w, h: h, left: left, top: top, scale: scale };
+  }
+
+  function buildFaceEl(win, paneW, paneH) {
+    var fit = fitContain(paneW, paneH, ARCH[win.arch].refW, ARCH[win.arch].refH);
+    var el = document.createElement('div');
+    el.className = 'wface arch-' + win.arch;
+    el.style.width = fit.w + 'px';
+    el.style.height = fit.h + 'px';
+    el.style.left = fit.left + 'px';
+    el.style.top = fit.top + 'px';
+    el.style.setProperty('--s', fit.scale.toFixed(4));
+    el.innerHTML = win.html;
+    return el;
+  }
+
+  function dots() { return '<span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>'; }
+
+  function faceBrowser(url, heading, para1, para2) {
+    return '<div class="tb">' + dots() + '<div class="addr">' + url + '</div></div>' +
+      '<div class="bd"><div class="heading">' + heading + '</div>' +
+      '<div class="para">' + para1 + '</div>' +
+      (para2 ? '<div class="para">' + para2 + '</div>' : '') + '</div>';
+  }
+  function faceCode(filename, files, activeIdx, lines) {
+    var sidebar = files.map(function (f, i) {
+      return '<div class="frow' + (i === activeIdx ? ' active' : '') + '">' + f + '</div>';
+    }).join('');
+    var editor = lines.map(function (l) {
+      return '<div class="cline">' + (l.cls ? '<span class="' + l.cls + '">' + l.text + '</span>' : l.text) + '</div>';
+    }).join('');
+    return '<div class="tb">' + dots() + '<div class="addr">' + filename + '</div></div>' +
+      '<div class="bd"><div class="sidebar">' + sidebar + '</div><div class="editor">' + editor + '</div></div>';
+  }
+  function faceTerminal(lines) {
+    var bd = lines.map(function (l) { return '<div class="line ' + (l.c || '') + '">' + l.t + '</div>'; }).join('');
+    return '<div class="tb">' + dots() + '</div><div class="bd">' + bd + '</div>';
+  }
+  function faceChat(channel, msgs) {
+    var bd = msgs.map(function (m) {
+      return '<div class="msg"><div class="who">' + m.who + '</div><div class="txt">' + m.txt + '</div></div>';
+    }).join('');
+    return '<div class="tb">' + dots() + '<div class="addr">' + channel + '</div></div><div class="bd">' + bd + '</div>';
+  }
+  function faceFinder(path, files) {
+    var grid = files.map(function (f) {
+      return '<div class="file"><div class="ic"></div><span>' + f + '</span></div>';
+    }).join('');
+    return '<div class="tb">' + dots() + '<div class="addr">' + path + '</div></div>' +
+      '<div class="bd"><div class="sidebar">よく使う項目<br>Sources<br>ダウンロード</div><div class="files">' + grid + '</div></div>';
+  }
+  function faceMail(rows) {
+    var body = rows.map(function (r) {
+      return '<div class="mrow"><div class="from">' + r.from + '</div><div class="subject">' + r.subject + '</div><div class="snippet">' + r.snippet + '</div></div>';
+    }).join('');
+    return '<div class="tb">' + dots() + '<div class="addr">受信トレイ</div></div><div class="bd">' + body + '</div>';
+  }
+  function faceMusic(track, artist) {
+    return '<div class="tb">' + dots() + '</div>' +
+      '<div class="bd"><div class="art"></div><div class="track">' + track + '</div><div class="artist">' + artist + '</div><div class="bar"></div></div>';
+  }
+  function faceNotes(heading, lines) {
+    var body = lines.map(function (l) { return '<div class="line">' + l + '</div>'; }).join('');
+    return '<div class="tb">' + dots() + '</div><div class="bd"><div class="heading">' + heading + '</div>' + body + '</div>';
+  }
+
+  // ------------------------------------------------------------------
+  // App / window data. Window counts deliberately cover 1, 2, 3 and
+  // "4 or more" (Notes has 8, the overflow-chip demo case). Notes and
+  // VS Code each mix in windows that share a common *prefix* (same repo,
+  // same memo series) so the middle-ellipsis truncation in T4 visibly
+  // still leaves a distinguishing tail.
+  // ------------------------------------------------------------------
+  var APPS = [
+    {
+      id: 'safari', name: 'Safari',
+      windows: [
+        { title: 'GitHub - shakapachi/shakapachi: Issues · #52 ウィンドウタイトルの表示位置を統一する',
+          arch: 'browser', html: faceBrowser('github.com/…/issues/52', 'Issue #52', 'ウィンドウタイトルの表示位置を統一する', '18 comments · Open') },
+        { title: 'GitHub - shakapachi/shakapachi: Pull Requests · #61 feat: アプリ単位表示の確定仕様モックを追加する',
+          arch: 'browser', html: faceBrowser('github.com/…/pull/61', 'Pull Request #61', 'feat: アプリ単位表示の確定仕様モックを追加する', 'Files changed 1') },
+        { title: 'GitHub - shakapachi/shakapachi: Actions · Workflow run #204 が成功しました',
+          arch: 'browser', html: faceBrowser('github.com/…/actions/runs/204', 'Workflow run #204', 'swift build と swift test が成功しました', '2 jobs completed') },
+        { title: 'Bloomberg - Are Markets Pricing In Too Much Rate-Cut Optimism? - Bloomberg.com',
+          arch: 'browser', html: faceBrowser('bloomberg.com/markets/rate-cuts', 'Are Markets Pricing In Too Much Rate-Cut Optimism?', '投資家心理は依然として楽観に傾いたままだ') },
+        { title: 'YouTube',
+          arch: 'browser', html: faceBrowser('youtube.com', '人気の動画', '登録チャンネルの新着 12件') }
+      ]
+    },
+    {
+      id: 'vscode', name: 'Visual Studio Code',
+      windows: (function () {
+        var files = ['SwitcherListView.swift', 'SwitcherPanel.swift', 'AccentColor.swift', 'app-grouping-05-final.html'];
+        return [
+          { title: 'shakapachi — Sources/ShakaPachi/UI/SwitcherListView.swift', arch: 'code',
+            html: faceCode('SwitcherListView.swift', files, 0, [
+              { cls: 'kw', text: 'final class SwitcherListView: NSView {' },
+              { text: '  private var items: [SwitcherItem] = []' },
+              { cls: 'com', text: '  // Fully custom-drawn, no subviews.' }
+            ]) },
+          { title: 'shakapachi — Sources/ShakaPachi/UI/SwitcherPanel.swift', arch: 'code',
+            html: faceCode('SwitcherPanel.swift', files, 1, [
+              { cls: 'kw', text: 'final class SwitcherPanel {' },
+              { text: '  private let panel: NSPanel' },
+              { cls: 'com', text: '  // Created once, retained forever.' }
+            ]) },
+          { title: 'shakapachi — Sources/ShakaPachi/UI/AccentColor.swift', arch: 'code',
+            html: faceCode('AccentColor.swift', files, 2, [
+              { cls: 'kw', text: 'enum AccentColor {' },
+              { text: '  static let selectionHighlightAlpha: CGFloat = 0.30' },
+              { cls: 'com', text: '  // Two-tone hairline rim alphas.' }
+            ]) },
+          { title: 'shakapachi — docs/mockups/app-grouping-05-final.html', arch: 'code',
+            html: faceCode('app-grouping-05-final.html', files, 3, [
+              { text: '<!doctype html>' },
+              { cls: 'str', text: '"ShakaPachi — app-grouping-05-final"' },
+              { cls: 'com', text: '<!-- final spec prototype, not a comparison -->' }
+            ]) }
+        ];
+      })()
+    },
+    {
+      id: 'terminal', name: 'ターミナル',
+      windows: [
+        { title: 'senkentarou@mbp: ~/work/shakapachi (feat/app-grouped-switcher)', arch: 'terminal',
+          html: faceTerminal([
+            { c: 'prompt', t: 'senkentarou@mbp ~/work/shakapachi (feat/app-grouped-switcher) % swift test' },
+            { c: 'dim', t: "Test Suite 'SwitcherLayoutTests' started" },
+            { c: 'ok', t: 'Executed 18 tests, with 0 failures' }
+          ]) },
+        { title: 'senkentarou@mbp: ~/work/shakapachi (docs/mockups)', arch: 'terminal',
+          html: faceTerminal([
+            { c: 'prompt', t: 'senkentarou@mbp ~/work/shakapachi (docs/mockups) % ls' },
+            { c: 'dim', t: 'app-grouping-01-layouts.html  app-grouping-02-scaling.html' },
+            { c: 'dim', t: 'app-grouping-03-title-and-aspect.html  app-grouping-04-overflow.html' }
+          ]) },
+        { title: 'senkentarou@mbp: ~/work/cmdtab', arch: 'terminal',
+          html: faceTerminal([
+            { c: 'prompt', t: 'senkentarou@mbp ~/work/cmdtab % git status' },
+            { c: 'dim', t: 'On branch main, nothing to commit' }
+          ]) }
+      ]
+    },
+    {
+      id: 'slack', name: 'Slack',
+      windows: [
+        { title: '#shakapachi-dev (Slack) - 3件の新着メッセージ', arch: 'chat',
+          html: faceChat('#shakapachi-dev', [
+            { who: 'senkentarou', txt: 'アプリ単位表示の確定仕様、モックできました' },
+            { who: 'reviewer', txt: '見てみます、ありがとうございます🙏' },
+            { who: 'senkentarou', txt: 'キーボード操作も一通り動きます' }
+          ]) }
+      ]
+    },
+    {
+      id: 'finder', name: 'Finder',
+      windows: [
+        { title: 'shakapachi — Sources', arch: 'finder',
+          html: faceFinder('shakapachi › Sources › ShakaPachi › UI', ['SwitcherListView.swift', 'SwitcherPanel.swift', 'AccentColor.swift', 'WindowPreviewCache.swift', 'README.md']) },
+        { title: 'ダウンロード', arch: 'finder',
+          html: faceFinder('ダウンロード', ['release-v1.5.0.dmg', 'notes.txt', 'icon-1024.png']) }
+      ]
+    },
+    {
+      id: 'mail', name: 'メール',
+      windows: [
+        { title: '受信トレイ — 12件の未読', arch: 'mail',
+          html: faceMail([
+            { from: 'GitHub', subject: '[shakapachi] PR #61 merged', snippet: 'feat: アプリ単位表示の確定仕様モック…' },
+            { from: 'App Store Connect', subject: 'ShakaPachi 1.5.0 が承認されました', snippet: '審査が完了し、公開準備が整いました' },
+            { from: 'senkentarou', subject: 'Re: 週次定例のアジェンダ', snippet: '了解です、資料共有しておきます' }
+          ]) }
+      ]
+    },
+    {
+      id: 'music', name: 'ミュージック',
+      windows: [
+        { title: 'ミュージック', arch: 'music', html: faceMusic('Weightless', 'Marconi Union') }
+      ]
+    },
+    {
+      id: 'notes', name: 'メモ',
+      windows: [
+        { title: '買い物リスト', arch: 'notes', html: faceNotes('買い物リスト', ['牛乳・卵・パン', 'コーヒー豆']) },
+        { title: 'ShakaPachi 機能アイデア', arch: 'notes', html: faceNotes('ShakaPachi 機能アイデア', ['アプリ単位表示のウィンドウ折りたたみ', '設定にアイコンサイズのスライダー']) },
+        { title: '会議メモ 8/17 — 週次定例', arch: 'notes', html: faceNotes('会議メモ 8/17 — 週次定例', ['進捗共有・次スプリントの計画']) },
+        { title: '会議メモ 8/18 — スイッチャー仕様レビュー', arch: 'notes', html: faceNotes('会議メモ 8/18 — スイッチャー仕様レビュー', ['確定仕様のモックをレビュー']) },
+        { title: 'パスワード再発行用メモ（一時）', arch: 'notes', html: faceNotes('パスワード再発行用メモ（一時）', ['※確認後に削除すること']) },
+        { title: '議事録 - キックオフMTG', arch: 'notes', html: faceNotes('議事録 - キックオフMTG', ['プロジェクトの目的とスコープ確認']) },
+        { title: '議事録 - デザインレビューMTG', arch: 'notes', html: faceNotes('議事録 - デザインレビューMTG', ['UI案の比較とフィードバック']) },
+        { title: 'Untitled Note', arch: 'notes', html: faceNotes('Untitled Note', []) }
+      ]
+    }
+  ];
+  APP_ROW_INNER_WIDTH = APPS.length * TILE + (APPS.length - 1) * TILE_GAP;
+
+  // ------------------------------------------------------------------
+  // State: which app is selected, which row has keyboard focus, and
+  // (per app) which window is current + which 3-window slice is visible.
+  // ------------------------------------------------------------------
+  var state = {
+    focusRow: 'app',  // 'app' | 'window'
+    appIndex: 0,
+    windowIndex: APPS.map(function () { return 0; }),
+    visibleStart: APPS.map(function () { return 0; })
+  };
+
+  function currentApp() { return APPS[state.appIndex]; }
+
+  // Keep the visible 3-window slice containing the current window index,
+  // sliding it the minimum amount necessary (not re-centering) so the
+  // strip only moves when the selection actually walks off the edge.
+  function clampWindowSlide(appIdx) {
+    var W = APPS[appIdx].windows.length;
+    var paneCount = Math.min(W, 3);
+    var wi = state.windowIndex[appIdx];
+    var vs = state.visibleStart[appIdx];
+    if (wi < vs) vs = wi;
+    if (wi > vs + paneCount - 1) vs = wi - paneCount + 1;
+    vs = Math.max(0, Math.min(vs, W - paneCount));
+    state.visibleStart[appIdx] = vs;
+  }
+
+  // If we were focused on the window row and Tab lands on an app that has
+  // only one window (no window row to show), fall back to the app row —
+  // there's nothing else valid to focus.
+  function fixFocusRowForApp() {
+    if (state.focusRow === 'window' && currentApp().windows.length <= 1) {
+      state.focusRow = 'app';
+    }
+  }
+
+  function nextApp() { state.appIndex = (state.appIndex + 1) % APPS.length; fixFocusRowForApp(); }
+  function prevApp() { state.appIndex = (state.appIndex - 1 + APPS.length) % APPS.length; fixFocusRowForApp(); }
+
+  function moveWithinRow(delta) {
+    if (state.focusRow === 'app') {
+      state.appIndex = (state.appIndex + delta + APPS.length) % APPS.length;
+    } else {
+      var appIdx = state.appIndex;
+      var W = APPS[appIdx].windows.length;
+      if (W <= 1) return;
+      var wi = state.windowIndex[appIdx] + delta;
+      wi = Math.max(0, Math.min(wi, W - 1)); // no wraparound within the window row
+      state.windowIndex[appIdx] = wi;
+      clampWindowSlide(appIdx);
+    }
+  }
+
+  function descend() {
+    if (state.focusRow === 'app' && currentApp().windows.length > 1) state.focusRow = 'window';
+  }
+  function ascend() { state.focusRow = 'app'; }
+
+  function selectVisiblePane(n) {
+    var appIdx = state.appIndex;
+    var W = APPS[appIdx].windows.length;
+    if (W <= 1) return;
+    var paneCount = Math.min(W, 3);
+    if (n > paneCount) return;
+    state.windowIndex[appIdx] = state.visibleStart[appIdx] + (n - 1);
+    state.focusRow = 'window';
+    clampWindowSlide(appIdx);
+  }
+
+  function peekChip(direction) {
+    var appIdx = state.appIndex;
+    var W = APPS[appIdx].windows.length;
+    var paneCount = Math.min(W, 3);
+    var vs = state.visibleStart[appIdx];
+    var target = direction === 'left' ? vs - 1 : vs + paneCount;
+    if (target < 0 || target > W - 1) return;
+    state.windowIndex[appIdx] = target;
+    state.focusRow = 'window';
+    clampWindowSlide(appIdx);
+  }
+
+  function resetAll() {
+    state.focusRow = 'app';
+    state.appIndex = 0;
+    state.windowIndex = APPS.map(function () { return 0; });
+    state.visibleStart = APPS.map(function () { return 0; });
+  }
+
+  // ------------------------------------------------------------------
+  // Geometry helpers for the window row (panes + overflow chips).
+  // ------------------------------------------------------------------
+  function windowRowGeometry(app, vs) {
+    var W = app.windows.length;
+    var paneCount = Math.min(W, 3);
+    var showLeft = vs > 0;
+    var showRight = (vs + paneCount) < W;
+    var leftHidden = vs;
+    var rightHidden = W - paneCount - vs;
+    return { paneCount: paneCount, showLeft: showLeft, showRight: showRight, leftHidden: leftHidden, rightHidden: rightHidden };
+  }
+  function windowRowInnerWidth(geo) {
+    var w = geo.paneCount * PANE_W + (geo.paneCount - 1) * ROW_GAP;
+    if (geo.showLeft) w += CHIP_W + ROW_GAP;
+    if (geo.showRight) w += ROW_GAP + CHIP_W;
+    return w;
+  }
+
+  function buildChip(direction, hiddenCount, onClick) {
+    var chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.title = (direction === 'left' ? '左に' : '右に') + hiddenCount + '枚隠れています';
+    if (direction === 'left') {
+      chip.innerHTML = '<span class="arrow">‹</span><span>+' + hiddenCount + '</span>';
+    } else {
+      chip.innerHTML = '<span>+' + hiddenCount + '</span><span class="arrow">›</span>';
+    }
+    chip.addEventListener('click', onClick);
+    return chip;
+  }
+
+  var PANE_TITLE_MAXW = PANE_W - 8;
+
+  function buildPane(win, selected, badgeN) {
+    var pane = document.createElement('div');
+    pane.className = 'pane' + (selected ? ' sel' : '');
+    pane.title = win.title;
+    pane.appendChild(buildFaceEl(win, PANE_W, PANE_H));
+    var tint = document.createElement('div'); tint.className = 'pane-tint'; pane.appendChild(tint);
+    if (badgeN != null) {
+      var b = document.createElement('span'); b.className = 'badge'; b.textContent = '⌘' + badgeN;
+      pane.appendChild(b);
+    }
+    return pane;
+  }
+
+  // ------------------------------------------------------------------
+  // Render: full rebuild of the panel content + HUD status line, driven
+  // entirely by `state`. Mirrors the render-on-every-change pattern used
+  // by the other mocks in this series.
+  // ------------------------------------------------------------------
+  var switcherEl = document.getElementById('switcher');
+  var contentEl = switcherEl.querySelector('.content');
+  var hudRowEl = document.getElementById('hud-row');
+  var hudRangeEl = document.getElementById('hud-range');
+
+  function render() {
+    var appIdx = state.appIndex;
+    var app = APPS[appIdx];
+    var W = app.windows.length;
+    var wi = state.windowIndex[appIdx];
+    var vs = state.visibleStart[appIdx];
+    var showWindowRow = W > 1;
+    var geo = showWindowRow ? windowRowGeometry(app, vs) : null;
+    var windowInner = showWindowRow ? windowRowInnerWidth(geo) : 0;
+    var panelInner = Math.max(APP_ROW_INNER_WIDTH, windowInner);
+    var panelWidth = MARGIN * 2 + panelInner;
+
+    contentEl.innerHTML = '';
+
+    // ---- app row ----
+    var approw = document.createElement('div');
+    approw.className = 'approw';
+    approw.style.width = panelWidth + 'px';
+    APPS.forEach(function (a, i) {
+      var t = document.createElement('button');
+      t.type = 'button';
+      t.className = 'apptile' + (i === appIdx && state.focusRow === 'app' ? ' sel' : '');
+      t.title = a.name + '（' + a.windows.length + '枚）';
+      t.innerHTML = renderIcon(a.id, ICON);
+      t.addEventListener('click', function () { state.appIndex = i; state.focusRow = 'app'; render(); });
+      approw.appendChild(t);
+    });
+    contentEl.appendChild(approw);
+
+    // ---- middle text row: selected app's name ----
+    var titlerow = document.createElement('div');
+    titlerow.className = 'titlerow';
+    titlerow.textContent = app.name;
+    contentEl.appendChild(titlerow);
+
+    // ---- window row (only when the selected app has more than 1 window) ----
+    if (showWindowRow) {
+      var wrow = document.createElement('div');
+      wrow.className = 'windowrow';
+      wrow.style.width = panelWidth + 'px';
+
+      if (geo.showLeft) {
+        wrow.appendChild(buildChip('left', geo.leftHidden, function () { peekChip('left'); render(); }));
+      }
+      for (var k = 0; k < geo.paneCount; k++) {
+        var absIdx = vs + k;
+        var win = app.windows[absIdx];
+        var isCurrent = absIdx === wi;
+        var rimSelected = state.focusRow === 'window' && isCurrent;
+
+        var col = document.createElement('div');
+        col.className = 'panecol';
+        var pane = buildPane(win, rimSelected, k + 1);
+        pane.addEventListener('click', (function (ix) {
+          return function () {
+            state.windowIndex[appIdx] = ix;
+            state.focusRow = 'window';
+            clampWindowSlide(appIdx);
+            render();
+          };
+        })(absIdx));
+        col.appendChild(pane);
+
+        var titleEl = document.createElement('div');
+        titleEl.className = 'panetitle-below' + (isCurrent ? '' : ' dim');
+        setTruncatedText(titleEl, win.title, PANE_TITLE_MAXW);
+        col.appendChild(titleEl);
+
+        wrow.appendChild(col);
+      }
+      if (geo.showRight) {
+        wrow.appendChild(buildChip('right', geo.rightHidden, function () { peekChip('right'); render(); }));
+      }
+      contentEl.appendChild(wrow);
+    }
+
+    // ---- HUD: which row has focus, and the current app's window range ----
+    hudRowEl.textContent = state.focusRow === 'app' ? 'アプリ行' : 'ウィンドウ行';
+    if (!showWindowRow) {
+      hudRangeEl.textContent = app.name + ': ' + W + '枚（ウィンドウ段なし）';
+    } else {
+      hudRangeEl.textContent = app.name + ': ' + W + '枚中 ' + (vs + 1) + '-' + (vs + geo.paneCount) + '枚目を表示';
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Keyboard wiring. Default browser behavior (Tab focus traversal,
+  // arrow-key scrolling) is always suppressed for the keys we handle.
+  // ------------------------------------------------------------------
+  window.addEventListener('keydown', function (e) {
+    var handled = true;
+    switch (e.key) {
+      case 'Tab':
+        if (e.shiftKey) prevApp(); else nextApp();
+        break;
+      case 'ArrowLeft':
+        moveWithinRow(-1);
+        break;
+      case 'ArrowRight':
+        moveWithinRow(1);
+        break;
+      case 'ArrowDown':
+        descend();
+        break;
+      case 'ArrowUp':
+        ascend();
+        break;
+      case '1': case '2': case '3':
+        selectVisiblePane(parseInt(e.key, 10));
+        break;
+      case 'Escape':
+        resetAll();
+        break;
+      default:
+        handled = false;
+    }
+    if (handled) {
+      e.preventDefault();
+      render();
+    }
+  });
+
+  switcherEl.focus();
+  render();
+</script>
+
+<style>
+  /* Fake app icon background colors, copied verbatim from app-grouping-01. */
+  .ic-safari   { background: linear-gradient(135deg,#6fd6ff,#1c7ed6); }
+  .ic-vscode   { background: linear-gradient(135deg,#2f6fd6,#0a3f8f); }
+  .ic-terminal { background: linear-gradient(135deg,#3c3c3c,#0c0c0c); }
+  .ic-slack    { background: linear-gradient(135deg,#36c5f0 0%,#2eb67d 35%,#ecb22e 65%,#e01e5a 100%); }
+  .ic-finder   { background: linear-gradient(135deg,#57c4ff 50%,#f2f3f5 50%); }
+  .ic-mail     { background: linear-gradient(135deg,#6cc8ff,#0b7fd1); }
+  .ic-music    { background: linear-gradient(135deg,#fd7291,#e21d5c); }
+  .ic-notes    { background: linear-gradient(135deg,#ffe38a,#ffc93c); }
+</style>
+</body>
+</html>
