@@ -18,11 +18,32 @@ struct SwitcherItem: Equatable {
     /// CGWindowID for the window preview cache lookup.
     /// 0 is a safe sentinel for items that have no associated window (e.g. tests).
     let windowID: CGWindowID
+    /// App-unit mode fields below. Defaulted so every existing call site and
+    /// test (which only knows about single-window mode) keeps compiling
+    /// unchanged; app-unit mode is the only caller that fills them in.
+    let appName: String
+    let bundleID: String?
+    let pid: pid_t
+    /// Real window frame, used to letterbox the live preview at its true
+    /// aspect ratio instead of stretching it to the fixed pane size.
+    let bounds: CGRect
 
-    init(icon: NSImage?, title: String, windowID: CGWindowID = 0) {
+    init(
+        icon: NSImage?,
+        title: String,
+        windowID: CGWindowID = 0,
+        appName: String = "",
+        bundleID: String? = nil,
+        pid: pid_t = 0,
+        bounds: CGRect = .zero
+    ) {
         self.icon = icon
         self.title = title
         self.windowID = windowID
+        self.appName = appName
+        self.bundleID = bundleID
+        self.pid = pid
+        self.bounds = bounds
     }
 }
 
@@ -246,6 +267,171 @@ enum SwitcherLayout {
         if new != old { set.insert(new) }
         return set
     }
+
+    // MARK: - App-grouped mode geometry
+    //
+    // App-unit mode stacks a fixed vertical sequence (top to bottom): the app
+    // tile row (shrink-to-fit, same as single-window mode), the selected app's
+    // name, the window-pane row (never shrinks — panes stay at their native
+    // previewWidth x previewHeight and the strip scrolls instead), and each
+    // visible pane's own title. Panes are laid out side by side rather than
+    // stacked, so panel height never depends on how many panes are visible —
+    // only panel width does, alongside the app row's own natural width.
+
+    /// Total panel size for app-grouped mode.
+    ///
+    /// Width is the max of the app-tile row's natural width and the
+    /// window-pane row's natural width (the wider row dictates the panel;
+    /// the narrower one is then centered inside it via `tileRowOffsetX` /
+    /// `windowRowOffsetX`). Height is fixed given `effectiveTile` — panes sit
+    /// side by side, not stacked, so `visiblePaneCount` never affects it.
+    static func appGroupedPanelSize(
+        groupCount: Int,
+        visiblePaneCount: Int,
+        hasLeftChip: Bool,
+        hasRightChip: Bool,
+        effectiveTile: CGFloat = tileSize
+    ) -> NSSize {
+        let appRowWidth = panelSize(itemCount: groupCount, baseTile: effectiveTile).width
+        let windowRowWidth = appGroupedWindowRowWidth(
+            visiblePaneCount: visiblePaneCount, hasLeftChip: hasLeftChip, hasRightChip: hasRightChip)
+        let height =
+            topPadding + effectiveTile + titleGap + titleHeight
+            + previewTopGap + previewHeight
+            + AppGroupedLayout.paneTitleGap + AppGroupedLayout.paneTitleHeight
+            + bottomPadding
+        return NSSize(width: max(appRowWidth, windowRowWidth), height: height)
+    }
+
+    /// Natural (unclamped) width of the window-pane row alone: margins, the
+    /// optional chips, `n` panes and the `n-1` gaps between them. Shared by
+    /// `appGroupedPanelSize` and `windowRowOffsetX` so "how wide is the pane
+    /// row" is computed in exactly one place.
+    private static func appGroupedWindowRowWidth(
+        visiblePaneCount: Int, hasLeftChip: Bool, hasRightChip: Bool
+    ) -> CGFloat {
+        let n = max(visiblePaneCount, 0)
+        var width = horizontalMargin * 2 + CGFloat(n) * previewWidth
+        if n > 1 { width += CGFloat(n - 1) * AppGroupedLayout.paneSpacing }
+        if hasLeftChip { width += AppGroupedLayout.chipWidth + AppGroupedLayout.chipSpacing }
+        if hasRightChip { width += AppGroupedLayout.chipSpacing + AppGroupedLayout.chipWidth }
+        return width
+    }
+
+    /// Horizontal offset to center the window-pane row within `panelWidth`,
+    /// mirroring what `tileRowOffsetX` already does for the app-tile row (that
+    /// existing function is reused as-is for the app row — it never assumed
+    /// anything preview-specific). Never negative: if the pane row is wider
+    /// than `panelWidth` it is left-aligned rather than pushed off-screen.
+    static func windowRowOffsetX(
+        visiblePaneCount: Int, hasLeftChip: Bool, hasRightChip: Bool, panelWidth: CGFloat
+    ) -> CGFloat {
+        let rowWidth = appGroupedWindowRowWidth(
+            visiblePaneCount: visiblePaneCount, hasLeftChip: hasLeftChip, hasRightChip: hasRightChip)
+        return max((panelWidth - rowWidth) / 2, 0)
+    }
+
+    /// Top y of the window-pane row (flipped coordinates) — the y every
+    /// pane, chip and pane-title rect below shares.
+    private static func appGroupedPaneRowTop(effectiveTile: CGFloat) -> CGFloat {
+        topPadding + effectiveTile + titleGap + titleHeight + previewTopGap
+    }
+
+    /// Rect for the `ordinal`-th (0-based) visible pane. `rowOffsetX` is the
+    /// value `windowRowOffsetX` returned for the current strip/panel width —
+    /// callers compute it once per draw pass and pass it to every pane/chip
+    /// rect call rather than each rect re-deriving it.
+    static func paneRect(
+        ordinal: Int, hasLeftChip: Bool, effectiveTile: CGFloat, rowOffsetX: CGFloat
+    ) -> NSRect {
+        var x = rowOffsetX + horizontalMargin
+        if hasLeftChip { x += AppGroupedLayout.chipWidth + AppGroupedLayout.chipSpacing }
+        x += CGFloat(ordinal) * (previewWidth + AppGroupedLayout.paneSpacing)
+        return NSRect(
+            x: x, y: appGroupedPaneRowTop(effectiveTile: effectiveTile),
+            width: previewWidth, height: previewHeight)
+    }
+
+    /// Left `+n` chip rect, or nil when `hiddenLeft` is 0 (nothing folded away
+    /// to the left, so there is nothing for the chip to summarize).
+    static func leftChipRect(
+        hiddenLeft: Int, effectiveTile: CGFloat, rowOffsetX: CGFloat
+    ) -> NSRect? {
+        guard hiddenLeft > 0 else { return nil }
+        return NSRect(
+            x: rowOffsetX + horizontalMargin,
+            y: appGroupedPaneRowTop(effectiveTile: effectiveTile),
+            width: AppGroupedLayout.chipWidth,
+            height: previewHeight
+        )
+    }
+
+    /// Right `+n` chip rect, or nil when `hiddenRight` is 0.
+    static func rightChipRect(
+        hiddenRight: Int,
+        visiblePaneCount: Int,
+        hasLeftChip: Bool,
+        effectiveTile: CGFloat,
+        rowOffsetX: CGFloat
+    ) -> NSRect? {
+        guard hiddenRight > 0 else { return nil }
+        var x = rowOffsetX + horizontalMargin
+        if hasLeftChip { x += AppGroupedLayout.chipWidth + AppGroupedLayout.chipSpacing }
+        let n = max(visiblePaneCount, 0)
+        x += CGFloat(n) * previewWidth
+        if n > 1 { x += CGFloat(n - 1) * AppGroupedLayout.paneSpacing }
+        x += AppGroupedLayout.chipSpacing
+        return NSRect(
+            x: x, y: appGroupedPaneRowTop(effectiveTile: effectiveTile),
+            width: AppGroupedLayout.chipWidth, height: previewHeight)
+    }
+
+    /// Rect for the `ordinal`-th pane's own title line, directly beneath it.
+    static func paneTitleRect(
+        ordinal: Int, hasLeftChip: Bool, effectiveTile: CGFloat, rowOffsetX: CGFloat
+    ) -> NSRect {
+        let pane = paneRect(
+            ordinal: ordinal, hasLeftChip: hasLeftChip, effectiveTile: effectiveTile,
+            rowOffsetX: rowOffsetX)
+        return NSRect(
+            x: pane.origin.x,
+            y: pane.origin.y + previewHeight + AppGroupedLayout.paneTitleGap,
+            width: pane.width,
+            height: AppGroupedLayout.paneTitleHeight
+        )
+    }
+
+    /// Rect for the selected app's name line, spanning the full panel width
+    /// (same shape as single-window mode's title line).
+    static func appNameRect(panelWidth: CGFloat, effectiveTile: CGFloat) -> NSRect {
+        NSRect(
+            x: 0,
+            y: topPadding + effectiveTile + titleGap,
+            width: panelWidth,
+            height: titleHeight
+        )
+    }
+
+    /// Fits `windowBounds`'s aspect ratio inside `paneRect` (contain, never
+    /// crop), centered on both axes — a real window is almost never exactly
+    /// 16:10, so the capture is letterboxed rather than stretched or cropped.
+    /// Falls back to `paneRect` itself when `windowBounds` has a
+    /// non-positive width or height (e.g. not resolved yet), which is safer
+    /// than dividing by zero or drawing a degenerate rect.
+    static func letterboxRect(for windowBounds: CGRect, in paneRect: NSRect) -> NSRect {
+        guard windowBounds.width > 0, windowBounds.height > 0 else { return paneRect }
+        let scale = min(
+            paneRect.width / windowBounds.width,
+            paneRect.height / windowBounds.height)
+        let fitW = windowBounds.width * scale
+        let fitH = windowBounds.height * scale
+        return NSRect(
+            x: paneRect.midX - fitW / 2,
+            y: paneRect.midY - fitH / 2,
+            width: fitW,
+            height: fitH
+        )
+    }
 }
 
 // MARK: - SwitcherListView
@@ -258,9 +444,24 @@ final class SwitcherListView: NSView {
 
     private var items: [SwitcherItem] = []
     private(set) var selectedIndex: Int = 0
-    // Effective tile edge, set by setItems; may be < tileSize when shrink-to-fit
-    // kicks in for wide lists.
+    // Effective tile edge, set by setItems/setAppGrouped; may be < tileSize
+    // when shrink-to-fit kicks in for wide lists.
     private var effectiveTile: CGFloat = SwitcherLayout.tileSize
+
+    // MARK: App-grouped mode state
+    //
+    // Set only by setAppGrouped(); setItems() resets isAppGrouped to false so
+    // draw() always reflects whichever setter ran most recently. Single-window
+    // mode's own state (items/selectedIndex/effectiveTile) is reused rather
+    // than duplicated — app-grouped mode's `items` is the same flat snapshot,
+    // just presented differently.
+    private var isAppGrouped = false
+    private var groups: [AppGroup] = []
+    private var appIndex = 0
+    private var strip = WindowStrip(visible: [], hiddenLeft: 0, hiddenRight: 0)
+    private var currentFlatIndex = 0
+    private var focusRow: SwitcherFocusRow = .app
+    private var modifierSymbol = ""
 
     // Pushed by SwitcherPanel before each show so draw() stays pure — it reads
     // a stored value rather than calling into Settings during the draw pass.
@@ -300,8 +501,48 @@ final class SwitcherListView: NSView {
     /// highlight and the opal rim's ring mask so the two can never diverge.
     private static let selectionCornerRadius: CGFloat = 14
 
+    /// Corner radius of a selected window pane's highlight in app-grouped
+    /// mode. Deliberately not `selectionCornerRadius`: panes are wide 320x200
+    /// rectangles rather than near-square tiles, and the tile radius reads as
+    /// too tight on them.
+    private static let paneSelectionCornerRadius: CGFloat = 10
+
     /// Animation key for the opal rim's rotation, so it can be removed on hide.
     private static let opalRimAnimationKey = "opalRimSpin"
+
+    // MARK: App-grouped mode drawing constants
+    //
+    // Grouped here (rather than inlined at each call site) because these are
+    // the values expected to be tuned after a first visual pass — a single
+    // named spot to change per knob.
+
+    /// Corner radius of a preview pane's own rounded rect (the letterbox
+    /// plate and its image clip).
+    private static let paneCornerRadius: CGFloat = 10
+
+    /// Direct-jump badge (e.g. "⌘1") drawn in a pane's top-left corner.
+    private static let badgeInset: CGFloat = 6
+    private static let badgeHeight: CGFloat = 16
+    private static let badgeHorizontalPadding: CGFloat = 5
+    private static let badgeCornerRadius: CGFloat = 5
+    private static let badgeFontSize: CGFloat = 11
+    private static let badgeBackgroundAlpha: CGFloat = 0.55
+    private static let badgeTextColor = NSColor.white
+
+    /// `+n` chip beside the pane row.
+    private static let chipFontSize: CGFloat = 14
+    private static let chipBackgroundAlpha: CGFloat = 0.35
+    private static let chipTextColor = NSColor.white
+
+    /// Outline-only "this is the current window" indicator drawn on the
+    /// current pane while the cursor is on the app row (see
+    /// `drawWeakOutline`).
+    private static let weakPaneOutlineAlpha: CGFloat = 0.35
+    private static let weakPaneOutlineWidth: CGFloat = 1.5
+
+    /// Horizontal inset for a pane's own title text — smaller than the panel
+    /// margin used for the app-name line since a pane is only 320pt wide.
+    private static let paneTitleHorizontalInset: CGFloat = 6
 
     // Iridescent rim for the `.opal` accent. Two layers, deliberately:
     //   opalRimContainer — frame = the selected tile, masked to a 1px rounded
@@ -364,6 +605,7 @@ final class SwitcherListView: NSView {
         baseTile: CGFloat = SwitcherLayout.tileSize
     ) {
         self.items = items
+        self.isAppGrouped = false
         self.selectedIndex = clamp(selectedIndex, count: items.count)
         if availableWidth > 0 {
             effectiveTile = SwitcherLayout.effectiveTileSize(
@@ -374,6 +616,51 @@ final class SwitcherListView: NSView {
         needsDisplay = true
         updateOpalRimLayout()
         if previewEnabled { requestPreviews() }
+    }
+
+    /// Replace the full app-grouped presentation: the app tile row, the
+    /// selected app's window-pane strip, and which row the keyboard cursor is
+    /// on. `items` is the same flat snapshot `setItems` would receive —
+    /// `groups`/`strip` only describe how to present it, never copy it.
+    ///
+    /// Unlike `moveSelection`, every call does a full redraw: app-grouped mode
+    /// has no equivalent of "just the two affected tiles" (which row changed,
+    /// which app, which pane, and whether the strip slid can each move
+    /// different rects), so partial invalidation would need to reconstruct
+    /// that diff for marginal benefit on a view this small.
+    ///
+    /// - Parameter availableWidth: Screen-width constraint for the app tile
+    ///   row's shrink-to-fit, same role as `setItems`'s parameter of the same
+    ///   name. Zero (the default) means "use the nominal tile size" — the
+    ///   window-pane row never shrinks regardless, so this only ever affects
+    ///   the app row.
+    func setAppGrouped(
+        items: [SwitcherItem],
+        groups: [AppGroup],
+        appIndex: Int,
+        strip: WindowStrip,
+        currentFlatIndex: Int,
+        focusRow: SwitcherFocusRow,
+        modifierSymbol: String,
+        availableWidth: CGFloat = 0
+    ) {
+        self.items = items
+        self.isAppGrouped = true
+        self.groups = groups
+        self.appIndex = groups.indices.contains(appIndex) ? appIndex : 0
+        self.strip = strip
+        self.currentFlatIndex = currentFlatIndex
+        self.focusRow = focusRow
+        self.modifierSymbol = modifierSymbol
+        if availableWidth > 0 {
+            effectiveTile = SwitcherLayout.effectiveTileSize(
+                itemCount: groups.count, availableWidth: availableWidth, baseTile: SwitcherLayout.tileSize)
+        } else {
+            effectiveTile = SwitcherLayout.tileSize
+        }
+        needsDisplay = true
+        updateOpalRimLayout()
+        if previewEnabled { requestAppGroupedPreviews() }
     }
 
     /// Move the selection highlight, invalidating only the two affected tiles
@@ -413,10 +700,38 @@ final class SwitcherListView: NSView {
 
     // MARK: - Opal rim
 
-    /// Park the opal rim over the currently selected tile and rebuild its ring
-    /// mask. No-op for every other accent.
+    /// The rect + corner radius the opal rim should currently sit on, or nil
+    /// when there is nothing selected to sit on. Single source of truth for
+    /// all three selection targets the rim can track: the single-window tile,
+    /// the app-grouped app tile, and the app-grouped window pane — so the rim
+    /// always follows whichever rect draw(_:) is currently drawing the strong
+    /// highlight on.
+    private var opalRimTarget: (rect: NSRect, radius: CGFloat)? {
+        guard isAppGrouped else {
+            guard items.indices.contains(selectedIndex) else { return nil }
+            let rect = SwitcherLayout.tileRect(
+                index: selectedIndex, effectiveTile: effectiveTile, offsetX: tileRowOffsetX)
+            return (rect, Self.selectionCornerRadius)
+        }
+        switch focusRow {
+        case .app:
+            guard groups.indices.contains(appIndex) else { return nil }
+            let offsetX = SwitcherLayout.tileRowOffsetX(
+                itemCount: groups.count, effectiveTile: effectiveTile, boundsWidth: bounds.width)
+            let rect = SwitcherLayout.tileRect(index: appIndex, effectiveTile: effectiveTile, offsetX: offsetX)
+            return (rect, Self.selectionCornerRadius)
+        case .window:
+            guard let ordinal = strip.visible.firstIndex(of: currentFlatIndex) else { return nil }
+            let rect = appGroupedPaneRect(ordinal: ordinal)
+            return (rect, Self.paneSelectionCornerRadius)
+        }
+    }
+
+    /// Park the opal rim over `opalRimTarget` and rebuild its ring mask.
+    /// No-op for every other accent.
     private func updateOpalRimLayout() {
-        let visible = opalRimEnabled && items.indices.contains(selectedIndex)
+        let target = opalRimEnabled ? opalRimTarget : nil
+        let visible = target != nil
         // Free for every other accent: this is called from the selection-move
         // path, and once the rim is hidden its frame stops mattering.
         guard visible || !opalRimContainer.isHidden else { return }
@@ -425,10 +740,9 @@ final class SwitcherListView: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         opalRimContainer.isHidden = !visible
-        if visible {
-            let radius = Self.selectionCornerRadius
-            let rect = SwitcherLayout.tileRect(
-                index: selectedIndex, effectiveTile: effectiveTile, offsetX: tileRowOffsetX)
+        if let target {
+            let rect = target.rect
+            let radius = target.radius
             opalRimContainer.frame = rect
             opalRimMask.frame = opalRimContainer.bounds
             opalRimMask.path = Self.rimRingPath(in: opalRimContainer.bounds, radius: radius)
@@ -481,6 +795,10 @@ final class SwitcherListView: NSView {
     // MARK: Drawing
 
     override func draw(_ dirtyRect: NSRect) {
+        if isAppGrouped {
+            drawAppGrouped(dirtyRect)
+            return
+        }
         let tile = effectiveTile
         let iconEdge = SwitcherLayout.effectiveIconSize(for: tile)
         let offsetX = tileRowOffsetX
@@ -489,39 +807,7 @@ final class SwitcherListView: NSView {
             guard tileRect.insetBy(dx: -2, dy: -2).intersects(dirtyRect) else { continue }
 
             if index == selectedIndex {
-                // Accent-tinted rounded highlight — clearly shows the chosen
-                // accent colour while staying tasteful. Color is pushed by the
-                // panel before each show so this path stays pure/fast.
-                let radius = Self.selectionCornerRadius
-                let highlight = NSBezierPath(roundedRect: tileRect, xRadius: radius, yRadius: radius)
-                accentColor.withAlphaComponent(AccentColor.selectionHighlightAlpha).setFill()
-                highlight.fill()
-
-                // The opal accent supplies the rim from its rotating gradient
-                // layer instead (see updateOpalRimLayout), so the hairline is
-                // skipped rather than drawn underneath it.
-                if !opalRimEnabled {
-                    // Two-tone hairline rim over the fill. The fill alone is a
-                    // source-over blend, so it disappears whenever the panel's
-                    // .behindWindow material lands on the accent's own luminance;
-                    // a dark line with a light line immediately inside it always
-                    // leaves one of the two contrasting. Strokes straddle their path,
-                    // so both are inset by half a line width to stay inside tileRect
-                    // (and well within moveSelection's 2pt redraw margin).
-                    let darkRim = NSBezierPath(
-                        roundedRect: tileRect.insetBy(dx: 0.5, dy: 0.5),
-                        xRadius: radius - 0.5, yRadius: radius - 0.5)
-                    darkRim.lineWidth = 1
-                    NSColor.black.withAlphaComponent(AccentColor.selectionRimDarkAlpha).setStroke()
-                    darkRim.stroke()
-
-                    let lightRim = NSBezierPath(
-                        roundedRect: tileRect.insetBy(dx: 1.5, dy: 1.5),
-                        xRadius: radius - 1.5, yRadius: radius - 1.5)
-                    lightRim.lineWidth = 1
-                    NSColor.white.withAlphaComponent(AccentColor.selectionRimLightAlpha).setStroke()
-                    lightRim.stroke()
-                }
+                drawStrongSelection(in: tileRect, cornerRadius: Self.selectionCornerRadius)
             }
 
             let inset = (tile - iconEdge) / 2
@@ -558,6 +844,248 @@ final class SwitcherListView: NSView {
         {
             drawPreview(in: previewRect, for: items[selectedIndex])
         }
+    }
+
+    /// The accent-tinted fill + rim highlight shared by every "strongly
+    /// selected" shape: the single-window tile, the app-grouped app tile, and
+    /// the app-grouped current pane. Factored out of the single-window path
+    /// above rather than duplicated so app-grouped mode's highlight can never
+    /// visually drift from it.
+    private func drawStrongSelection(in rect: NSRect, cornerRadius radius: CGFloat) {
+        // Accent-tinted rounded highlight — clearly shows the chosen accent
+        // colour while staying tasteful. Color is pushed by the panel before
+        // each show so this path stays pure/fast.
+        let highlight = NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
+        accentColor.withAlphaComponent(AccentColor.selectionHighlightAlpha).setFill()
+        highlight.fill()
+
+        // The opal accent supplies the rim from its rotating gradient layer
+        // instead (see updateOpalRimLayout), so the hairline is skipped
+        // rather than drawn underneath it.
+        if !opalRimEnabled {
+            // Two-tone hairline rim over the fill. The fill alone is a
+            // source-over blend, so it disappears whenever the panel's
+            // .behindWindow material lands on the accent's own luminance; a
+            // dark line with a light line immediately inside it always leaves
+            // one of the two contrasting. Strokes straddle their path, so
+            // both are inset by half a line width to stay inside rect.
+            let darkRim = NSBezierPath(
+                roundedRect: rect.insetBy(dx: 0.5, dy: 0.5),
+                xRadius: radius - 0.5, yRadius: radius - 0.5)
+            darkRim.lineWidth = 1
+            NSColor.black.withAlphaComponent(AccentColor.selectionRimDarkAlpha).setStroke()
+            darkRim.stroke()
+
+            let lightRim = NSBezierPath(
+                roundedRect: rect.insetBy(dx: 1.5, dy: 1.5),
+                xRadius: radius - 1.5, yRadius: radius - 1.5)
+            lightRim.lineWidth = 1
+            NSColor.white.withAlphaComponent(AccentColor.selectionRimLightAlpha).setStroke()
+            lightRim.stroke()
+        }
+    }
+
+    /// Outline-only "this is the current window" indicator: no fill, so it
+    /// reads as secondary information rather than competing with whichever
+    /// row currently has the strong highlight.
+    private func drawWeakOutline(in rect: NSRect, cornerRadius radius: CGFloat) {
+        let outline = NSBezierPath(
+            roundedRect: rect.insetBy(dx: 0.5, dy: 0.5),
+            xRadius: radius - 0.5, yRadius: radius - 0.5)
+        outline.lineWidth = Self.weakPaneOutlineWidth
+        accentColor.withAlphaComponent(Self.weakPaneOutlineAlpha).setStroke()
+        outline.stroke()
+    }
+
+    /// Centered, middle-truncated single-line text — the app name line and
+    /// each pane's own title both use this, differing only in inset (a pane
+    /// is much narrower than the full panel) and color (an unselected pane's
+    /// title is dimmed).
+    private func drawCenteredTruncatedText(
+        _ text: String, in rect: NSRect, fontSize: CGFloat, color: NSColor, horizontalInset: CGFloat
+    ) {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        paragraph.lineBreakMode = .byTruncatingMiddle
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: fontSize),
+            .foregroundColor: color,
+            .paragraphStyle: paragraph,
+        ]
+        let textRect = rect.insetBy(dx: horizontalInset, dy: 0)
+        (text as NSString).draw(in: textRect, withAttributes: attributes)
+    }
+
+    /// Draw the app-grouped presentation: the app tile row, the selected
+    /// app's name, the window-pane strip (each pane letterboxed + titled +
+    /// badged), and the `+n` chips when the strip has folded panes on either
+    /// side. Mirrors draw()'s single-window path in spirit — pure/fast, reads
+    /// only from state already pushed by setAppGrouped/setItems-style setters
+    /// and the preview cache, never triggers a capture itself.
+    private func drawAppGrouped(_ dirtyRect: NSRect) {
+        let tile = effectiveTile
+        let panelWidth = bounds.width
+        let hasLeftChip = strip.hiddenLeft > 0
+        let hasRightChip = strip.hiddenRight > 0
+        let appOffsetX = SwitcherLayout.tileRowOffsetX(
+            itemCount: groups.count, effectiveTile: tile, boundsWidth: panelWidth)
+        let paneOffsetX = SwitcherLayout.windowRowOffsetX(
+            visiblePaneCount: strip.visible.count, hasLeftChip: hasLeftChip, hasRightChip: hasRightChip,
+            panelWidth: panelWidth)
+
+        // --- App tile row: one tile per group, icon = that group's first window's icon.
+        let iconEdge = SwitcherLayout.effectiveIconSize(for: tile)
+        for (groupOrdinal, group) in groups.enumerated() {
+            let tileRect = SwitcherLayout.tileRect(index: groupOrdinal, effectiveTile: tile, offsetX: appOffsetX)
+            guard tileRect.insetBy(dx: -2, dy: -2).intersects(dirtyRect) else { continue }
+
+            if groupOrdinal == appIndex {
+                drawStrongSelection(in: tileRect, cornerRadius: Self.selectionCornerRadius)
+            }
+
+            guard let firstFlatIndex = group.windowIndices.first, items.indices.contains(firstFlatIndex) else {
+                continue
+            }
+            let inset = (tile - iconEdge) / 2
+            let iconRect = tileRect.insetBy(dx: inset, dy: inset)
+            items[firstFlatIndex].icon?.draw(
+                in: iconRect,
+                from: .zero,
+                operation: .sourceOver,
+                fraction: 1.0,
+                respectFlipped: true,
+                hints: [.interpolation: NSImageInterpolation.high.rawValue]
+            )
+        }
+
+        // --- Selected app's name.
+        let nameRect = SwitcherLayout.appNameRect(panelWidth: panelWidth, effectiveTile: tile)
+        if nameRect.intersects(dirtyRect), groups.indices.contains(appIndex) {
+            drawCenteredTruncatedText(
+                groups[appIndex].appName, in: nameRect, fontSize: 13, color: .labelColor,
+                horizontalInset: SwitcherLayout.horizontalMargin)
+        }
+
+        // --- Window-pane row.
+        for (ordinal, flatIndex) in strip.visible.enumerated() {
+            guard items.indices.contains(flatIndex) else { continue }
+            let item = items[flatIndex]
+            let paneRect = SwitcherLayout.paneRect(
+                ordinal: ordinal, hasLeftChip: hasLeftChip, effectiveTile: tile, rowOffsetX: paneOffsetX)
+            guard paneRect.insetBy(dx: -2, dy: -2).intersects(dirtyRect) else { continue }
+
+            let isCurrentPane = flatIndex == currentFlatIndex
+            if isCurrentPane {
+                drawStrongSelection(in: paneRect, cornerRadius: Self.paneSelectionCornerRadius)
+                if focusRow == .app {
+                    // The strong highlight above is on the app tile, not this
+                    // pane — draw a lighter outline so "which window is
+                    // current" survives even while the cursor is on the app row.
+                    drawWeakOutline(in: paneRect, cornerRadius: Self.paneSelectionCornerRadius)
+                }
+            }
+
+            drawAppGroupedPane(item, in: paneRect)
+
+            let paneTitle = SwitcherLayout.paneTitleRect(
+                ordinal: ordinal, hasLeftChip: hasLeftChip, effectiveTile: tile, rowOffsetX: paneOffsetX)
+            let titleAlpha: CGFloat = isCurrentPane ? 1.0 : AppGroupedLayout.unselectedTitleAlpha
+            drawCenteredTruncatedText(
+                item.title, in: paneTitle, fontSize: 13,
+                color: NSColor.labelColor.withAlphaComponent(titleAlpha),
+                horizontalInset: Self.paneTitleHorizontalInset)
+
+            drawBadge("\(modifierSymbol)\(ordinal + 1)", in: paneRect)
+        }
+
+        // --- `+n` chips.
+        if let leftRect = SwitcherLayout.leftChipRect(
+            hiddenLeft: strip.hiddenLeft, effectiveTile: tile, rowOffsetX: paneOffsetX)
+        {
+            drawChip("+\(strip.hiddenLeft)", in: leftRect)
+        }
+        if let rightRect = SwitcherLayout.rightChipRect(
+            hiddenRight: strip.hiddenRight, visiblePaneCount: strip.visible.count,
+            hasLeftChip: hasLeftChip, effectiveTile: tile, rowOffsetX: paneOffsetX)
+        {
+            drawChip("+\(strip.hiddenRight)", in: rightRect)
+        }
+    }
+
+    /// Draw one pane's contents: a dark letterbox plate, then the cached
+    /// capture (if any) fit to `item.bounds`'s real aspect ratio and clipped
+    /// to the pane's rounded rect. No cached image yet (not captured, or
+    /// preview disabled) simply leaves the plate showing — the same
+    /// "placeholder before real content" strategy `drawPreview` uses for
+    /// single-window mode, minus the dimmed-icon treatment (three small panes
+    /// side by side read as busy with three faded icons layered in).
+    private func drawAppGroupedPane(_ item: SwitcherItem, in paneRect: NSRect) {
+        let plate = NSBezierPath(roundedRect: paneRect, xRadius: Self.paneCornerRadius, yRadius: Self.paneCornerRadius)
+        NSColor.black.withAlphaComponent(AppGroupedLayout.letterboxPlateAlpha).setFill()
+        plate.fill()
+
+        guard let img = previewCache?.cachedImage(for: item.windowID) else { return }
+        let fitRect = SwitcherLayout.letterboxRect(for: item.bounds, in: paneRect)
+        // Saved/restored around the clip (rather than the `setClip()` single-shot
+        // single-window drawPreview uses) because this runs once per pane in a
+        // loop — an un-restored clip would keep shrinking and corrupt every
+        // pane drawn after the first.
+        NSGraphicsContext.saveGraphicsState()
+        plate.setClip()
+        img.draw(
+            in: fitRect,
+            from: .zero,
+            operation: .sourceOver,
+            fraction: 1.0,
+            respectFlipped: true,
+            hints: [.interpolation: NSImageInterpolation.high.rawValue]
+        )
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    /// Direct-jump badge (e.g. "⌘2") in a pane's top-left corner.
+    private func drawBadge(_ text: String, in paneRect: NSRect) {
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: Self.badgeFontSize, weight: .semibold),
+            .foregroundColor: Self.badgeTextColor,
+        ]
+        let textSize = (text as NSString).size(withAttributes: attributes)
+        let badgeRect = NSRect(
+            x: paneRect.minX + Self.badgeInset,
+            y: paneRect.minY + Self.badgeInset,
+            width: textSize.width + Self.badgeHorizontalPadding * 2,
+            height: Self.badgeHeight
+        )
+        let background = NSBezierPath(
+            roundedRect: badgeRect, xRadius: Self.badgeCornerRadius, yRadius: Self.badgeCornerRadius)
+        NSColor.black.withAlphaComponent(Self.badgeBackgroundAlpha).setFill()
+        background.fill()
+        let textOrigin = NSPoint(
+            x: badgeRect.minX + Self.badgeHorizontalPadding,
+            y: badgeRect.minY + (badgeRect.height - textSize.height) / 2)
+        (text as NSString).draw(at: textOrigin, withAttributes: attributes)
+    }
+
+    /// `+n` chip beside the pane row, summarizing panes folded off-screen.
+    private func drawChip(_ text: String, in rect: NSRect) {
+        let background = NSBezierPath(
+            roundedRect: rect, xRadius: AppGroupedLayout.chipCornerRadius,
+            yRadius: AppGroupedLayout.chipCornerRadius)
+        NSColor.black.withAlphaComponent(Self.chipBackgroundAlpha).setFill()
+        background.fill()
+
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: Self.chipFontSize, weight: .medium),
+            .foregroundColor: Self.chipTextColor,
+            .paragraphStyle: paragraph,
+        ]
+        let textHeight = (text as NSString).size(withAttributes: attributes).height
+        let textRect = NSRect(
+            x: rect.minX, y: rect.minY + (rect.height - textHeight) / 2,
+            width: rect.width, height: textHeight)
+        (text as NSString).draw(in: textRect, withAttributes: attributes)
     }
 
     /// Draw the preview pane for the given item.
@@ -633,8 +1161,17 @@ final class SwitcherListView: NSView {
     // MARK: - Preview callbacks
 
     /// Called by the panel when the cache delivers a new image.
-    /// Invalidates only the preview rect so a full tile-row redraw is avoided.
+    /// Invalidates only the affected rect so a full-view redraw is avoided.
     func previewDidArrive(for id: CGWindowID) {
+        if isAppGrouped {
+            guard
+                let ordinal = strip.visible.firstIndex(where: {
+                    items.indices.contains($0) && items[$0].windowID == id
+                })
+            else { return }
+            setNeedsDisplay(appGroupedPaneRect(ordinal: ordinal))
+            return
+        }
         guard items.indices.contains(selectedIndex),
             items[selectedIndex].windowID == id
         else { return }
@@ -663,6 +1200,20 @@ final class SwitcherListView: NSView {
             previewPaneHeight: previewPaneHeight)
     }
 
+    /// Rect for the `ordinal`-th visible pane under the *current* app-grouped
+    /// state (strip/effectiveTile/bounds). Shared by drawAppGrouped,
+    /// previewDidArrive and opalRimTarget so none of them can derive a
+    /// different answer for "where is this pane".
+    private func appGroupedPaneRect(ordinal: Int) -> NSRect {
+        let hasLeftChip = strip.hiddenLeft > 0
+        let hasRightChip = strip.hiddenRight > 0
+        let offsetX = SwitcherLayout.windowRowOffsetX(
+            visiblePaneCount: strip.visible.count, hasLeftChip: hasLeftChip, hasRightChip: hasRightChip,
+            panelWidth: bounds.width)
+        return SwitcherLayout.paneRect(
+            ordinal: ordinal, hasLeftChip: hasLeftChip, effectiveTile: effectiveTile, rowOffsetX: offsetX)
+    }
+
     /// Kick off (or refresh) captures for the selected window and its neighbors.
     private func requestPreviews() {
         guard previewEnabled, items.indices.contains(selectedIndex) else { return }
@@ -674,6 +1225,18 @@ final class SwitcherListView: NSView {
         }
         if selectedIndex < items.count - 1 {
             previewCache?.prefetch(items[selectedIndex + 1].windowID, force: false)
+        }
+    }
+
+    /// Kick off (or refresh) captures for every pane currently visible in the
+    /// strip. Unlike `requestPreviews`, there is no single "selected index" to
+    /// force-refresh and neighbors to soft-prefetch — every visible pane is
+    /// equally on screen, so the current window (the one the trigger key
+    /// would activate) is force-refreshed and the rest are soft-prefetched.
+    private func requestAppGroupedPreviews() {
+        guard previewEnabled else { return }
+        for flatIndex in strip.visible where items.indices.contains(flatIndex) {
+            previewCache?.prefetch(items[flatIndex].windowID, force: flatIndex == currentFlatIndex)
         }
     }
 
