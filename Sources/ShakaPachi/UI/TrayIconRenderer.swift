@@ -59,11 +59,11 @@ enum TrayIconState: CaseIterable {
 
     /// Colour of the dot beside the menu heading. Coloured states reuse the icon
     /// fill so the dot and the menu-bar icon always read as the same state; normal
-    /// uses a muted grey instead of `fillColor`'s `.labelColor`, which at full
-    /// strength would make the disabled heading look like a clickable item.
+    /// uses a fixed soft green instead of `fillColor`'s `.labelColor`, signalling
+    /// "actively running" in the same soft-toned style as the other states.
     var headingDotColor: NSColor {
         switch self {
-        case .normal: return .tertiaryLabelColor
+        case .normal: return NSColor(srgbRed: 0.45, green: 0.78, blue: 0.55, alpha: 1.0)  // soft green
         default: return fillColor
         }
     }
