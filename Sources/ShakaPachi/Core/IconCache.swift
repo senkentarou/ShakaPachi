@@ -62,16 +62,58 @@ final class IconCache {
         bundleID ?? "pid:\(pid)"
     }
 
-    /// Retrieve the raw icon from NSRunningApplication, falling back to the
-    /// generic application bundle icon provided by NSWorkspace.
+    /// Retrieve the icon for the given process, preferring a direct read of
+    /// the bundled .icns over `NSRunningApplication.icon`. The latter is
+    /// served from macOS's IconServices cache, which keeps returning a stale
+    /// icon after the bundled icns changes (until the system icon cache is
+    /// cleared), so a rebuilt icon would not show here. Reading the file
+    /// directly always reflects the shipped icon.
     private func resolveIcon(for pid: pid_t) -> NSImage {
-        if let app = NSRunningApplication(processIdentifier: pid),
-            let icon = app.icon
+        let app = NSRunningApplication(processIdentifier: pid)
+        if let bundleURL = app?.bundleURL,
+            let iconURL = IconCache.bundledIconURL(forBundleAt: bundleURL),
+            let image = NSImage(contentsOf: iconURL)
         {
+            return image
+        }
+        // Fallback: apps that ship their icon only inside an asset catalog
+        // (no .icns file under Contents/Resources) have nothing for
+        // `bundledIconURL` to find; `NSRunningApplication.icon` is the only
+        // source available for those, stale-cache risk notwithstanding.
+        if let icon = app?.icon {
             return icon
         }
         // Fallback: generic app icon that NSWorkspace provides for any .app bundle.
         return NSWorkspace.shared.icon(for: .application)
+    }
+
+    /// Resolve the .icns file inside an application bundle, or nil when the
+    /// bundle ships its icon only inside an asset catalog.
+    ///
+    /// `CFBundleIconFile` in Info.plist may or may not include the `.icns`
+    /// extension (in practice it's usually omitted, e.g. "AppIcon"), so the
+    /// extension is appended when missing. When Info.plist has no
+    /// `CFBundleIconFile` key at all, "AppIcon.icns" — the common convention
+    /// — is tried as a last-resort candidate. Either way, the candidate is
+    /// only returned once its existence on disk is confirmed.
+    static func bundledIconURL(forBundleAt bundleURL: URL) -> URL? {
+        let resourcesURL = bundleURL.appendingPathComponent("Contents/Resources")
+        let infoPlistURL = bundleURL.appendingPathComponent("Contents/Info.plist")
+
+        var candidateName: String?
+        if let data = try? Data(contentsOf: infoPlistURL),
+            let plist = try? PropertyListSerialization.propertyList(from: data, format: nil)
+                as? [String: Any],
+            let iconFile = plist["CFBundleIconFile"] as? String
+        {
+            candidateName = iconFile
+        }
+
+        let name = candidateName ?? "AppIcon"
+        let fileName = name.hasSuffix(".icns") ? name : name + ".icns"
+        let iconURL = resourcesURL.appendingPathComponent(fileName)
+
+        return FileManager.default.fileExists(atPath: iconURL.path) ? iconURL : nil
     }
 
     /// Draw `source` into a new `size × size` bitmap, returning the result.
