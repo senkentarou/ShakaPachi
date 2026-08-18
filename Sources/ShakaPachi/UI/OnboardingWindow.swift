@@ -168,7 +168,12 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
     }
 
     private func makeHeader() -> NSView {
-        let iconView = NSImageView(image: Self.makeAppIconTile())
+        // The shipped icon itself (see AppIconImage), not a hand-drawn look-alike:
+        // the tile this used to draw had its own corner radius, flat accent-colour
+        // background and larger glyph, so the first screen the user ever sees
+        // showed an icon that did not match the app's real one.
+        let iconView = NSImageView(image: AppIconImage.bundled)
+        iconView.imageScaling = .scaleProportionallyUpOrDown
         iconView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             iconView.widthAnchor.constraint(equalToConstant: 64),
@@ -220,32 +225,6 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
         // stretch, pushing the buttons to the trailing edge.
         footer.distribution = .fill
         return footer
-    }
-
-    /// Draws a 64x64 rounded app-icon tile with the overlapping-windows glyph.
-    /// Uses TrayIconRenderer.drawGlyph so this tile, the menu-bar icon and the
-    /// app icon all share one glyph definition. The accent-blue tile background
-    /// is drawn here; the glyph is white on top.
-    /// Note: consolidating onto drawGlyph changes this tile in two intentional
-    /// ways — (1) the front window is now filled white (was accent-blue),
-    /// matching the tray/app icon's white front card that this tile previously
-    /// diverged from; (2) window proportions follow drawGlyph (back 0.078-0.672,
-    /// front 0.328-0.922), so the windows are slightly larger and more offset.
-    private static func makeAppIconTile() -> NSImage {
-        let size = NSSize(width: 64, height: 64)
-        return NSImage(size: size, flipped: false) { bounds in
-            // Tile background: rounded rect filled with the system accent colour.
-            let tile = NSBezierPath(
-                roundedRect: bounds,
-                xRadius: 14, yRadius: 14
-            )
-            NSColor.controlAccentColor.setFill()
-            tile.fill()
-
-            // Glyph: back window outline + solid white front window.
-            TrayIconRenderer.drawGlyph(in: bounds, outline: .white, fill: .white)
-            return true
-        }
     }
 
     // MARK: - Button actions
