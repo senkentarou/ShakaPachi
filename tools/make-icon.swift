@@ -21,10 +21,14 @@ func renderIcon(size: CGFloat) -> Data {
     image.lockFocus()
     let ctx = NSGraphicsContext.current!.cgContext
 
-    // Rounded tile with a subtle vertical gradient (accent blue).
-    let inset = size * 0.06
-    let rect = NSRect(x: inset, y: inset, width: size - inset * 2, height: size - inset * 2)
-    let corner = size * 0.22
+    // Rounded tile with a subtle vertical gradient (accent blue), laid out on
+    // Apple's macOS icon grid: the body covers 824 of the 1024pt canvas and the
+    // rest stays transparent margin. That margin is what makes the icon read at
+    // the same size as system apps in Dock and Launchpad.
+    let body = size * (824.0 / 1024.0)
+    let origin = (size - body) / 2
+    let rect = NSRect(x: origin, y: origin, width: body, height: body)
+    let corner = body * 0.25
     let tile = NSBezierPath(roundedRect: rect, xRadius: corner, yRadius: corner)
     tile.addClip()
     let top = NSColor(calibratedRed: 0.30, green: 0.55, blue: 1.0, alpha: 1)
@@ -32,20 +36,23 @@ func renderIcon(size: CGFloat) -> Data {
     let gradient = NSGradient(starting: top, ending: bottom)!
     gradient.draw(in: rect, angle: -90)
 
-    // Two overlapping rounded window frames in white.
+    // Two overlapping rounded window frames in white. Measured against the tile
+    // rather than the canvas so the glyph keeps its proportions inside the body
+    // whatever margin the grid asks for.
     ctx.resetClip()
-    let w = size * 0.34
-    let r = size * 0.05
-    let line = max(size * 0.05, 1)
+    func onTile(_ fraction: CGFloat) -> CGFloat { origin + body * fraction }
+    let w = body * 0.386
+    let r = body * 0.057
+    let line = max(body * 0.057, 1)
     NSColor.white.withAlphaComponent(0.95).setStroke()
 
     let back = NSBezierPath(
-        roundedRect: NSRect(x: size * 0.24, y: size * 0.24, width: w, height: w),
+        roundedRect: NSRect(x: onTile(0.205), y: onTile(0.205), width: w, height: w),
         xRadius: r, yRadius: r)
     back.lineWidth = line
     back.stroke()
 
-    let frontRect = NSRect(x: size * 0.42, y: size * 0.42, width: w, height: w)
+    let frontRect = NSRect(x: onTile(0.409), y: onTile(0.409), width: w, height: w)
     let front = NSBezierPath(roundedRect: frontRect, xRadius: r, yRadius: r)
     NSColor.white.setFill()
     front.fill()
