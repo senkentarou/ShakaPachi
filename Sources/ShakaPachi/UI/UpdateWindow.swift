@@ -264,6 +264,13 @@ struct UpdateView: View {
             .foregroundColor(.secondary)
             Spacer()
             HStack {
+                if UpdateManager.shared.latestRelease != nil {
+                    Button(NSLocalizedString("GitHub で開く", comment: "Link: open release page on GitHub")) {
+                        UpdateManager.shared.openReleasePage()
+                    }
+                    .buttonStyle(.link)
+                    .font(.caption)
+                }
                 Spacer()
                 Button(NSLocalizedString("閉じる", comment: "Button: close")) { onClose() }
                     .keyboardShortcut(.defaultAction)

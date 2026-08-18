@@ -40,6 +40,12 @@ final class UpdateManager {
     /// The release available for installation (non-nil when status == .available).
     private(set) var availableRelease: ReleaseInfo?
 
+    /// The most recently fetched release, set on every successful check
+    /// regardless of whether it is newer than `currentVersion`. Used by
+    /// `openReleasePage()` so the release page can be opened even when the
+    /// app is already up to date.
+    private(set) var latestRelease: ReleaseInfo?
+
     // MARK: - Current version
 
     /// The version of the running app bundle, parsed once at init.
@@ -121,6 +127,7 @@ final class UpdateManager {
 
                 await MainActor.run {
                     UserDefaults.standard.set(Date(), forKey: DefaultsKey.lastCheck)
+                    self.latestRelease = release
 
                     if release.version > self.currentVersion {
                         self.availableRelease = release
@@ -209,7 +216,7 @@ final class UpdateManager {
 
     /// Opens the GitHub release page in the default browser.
     func openReleasePage() {
-        guard let release = availableRelease else { return }
+        guard let release = latestRelease else { return }
         NSWorkspace.shared.open(release.htmlURL)
     }
 }

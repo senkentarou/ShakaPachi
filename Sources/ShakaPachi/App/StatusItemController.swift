@@ -263,12 +263,13 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
         menu.addItem(.separator())
 
-        // Restart item — no keyEquivalent so it cannot collide with Quit's Cmd+Q.
+        // Restart item — Cmd+R, an unused key that does not collide with Quit's Cmd+Q.
         let restartItem = NSMenuItem(
             title: NSLocalizedString("再起動", comment: "Menu item: restart the app"),
             action: #selector(restartApp),
-            keyEquivalent: ""
+            keyEquivalent: "r"
         )
+        restartItem.keyEquivalentModifierMask = .command
         restartItem.target = self
         menu.addItem(restartItem)
 
